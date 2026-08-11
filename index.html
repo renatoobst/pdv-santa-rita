@@ -6,6 +6,8 @@
     <title>PDV Pro - Santuário Santa Rita</title>
     <link rel="stylesheet" href="css/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- BIBLIOTECA PARA GERAR PDF DIRETO -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body>
 
@@ -53,7 +55,7 @@
         <div class="modal-content">
             <h3 style="margin-top:0; border-bottom: 2px solid #e5e7eb; padding-bottom:10px; color:var(--primary);">🔄 Trocar Item (Balcão)</h3>
             <p id="modal-troca-info" style="font-size: 0.9rem; color: #4b5563; font-weight: bold;"></p>
-            <label style="font-size: 0.85rem; font-weight: bold;">Selecione o novo produto da mesma categoria:</label>
+            <label style="font-size: 0.85rem; font-weight: bold;">Selecione o novo produto (Mesma Categoria e Mesmo Valor):</label>
             <select id="select-novo-item-troca" style="margin-bottom: 15px; width: 100%; padding: 8px; font-weight: bold;"></select>
             <div style="display:flex; gap:10px;">
                 <button class="btn btn-success" style="flex:1;" onclick="confirmarTrocaItemBalcao()">Confirmar Troca ✅</button>
@@ -146,6 +148,11 @@
         <div id="tela-pedido" class="tab-content active">
             <div class="layout-pedido">
                 <div>
+                    <!-- BARRA DE BUSCA DE PRODUTOS -->
+                    <div style="margin-bottom: 12px;">
+                        <input type="text" id="busca-produto-menu" placeholder="🔍 Pesquisar produto ou combo por nome..." oninput="filtrarMenuBusca()" style="margin-bottom: 0; padding: 10px; font-weight: bold; background: white; border: 2px solid #cbd5e1;">
+                    </div>
+
                     <div class="menu-categorias" id="menu-categorias-container"></div>
                     <div class="menu-grid" id="menu-produtos"></div>
                 </div>
@@ -161,6 +168,17 @@
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                         <h2 style="font-size: 1.2rem; margin: 0; border: none; padding: 0;" id="titulo-painel-carrinho">Pedido Atual</h2>
                         <button class="btn btn-info" style="font-size: 0.8rem; padding: 6px 12px;" onclick="abrirModalTodosPedidos()">📋 Ver Todos os Pedidos</button>
+                    </div>
+
+                    <!-- CAMPO DINÂMICO PARA ALTERAR STATUS DO PEDIDO DURANTE A EDIÇÃO -->
+                    <div id="box-status-edicao" style="display: none; background: #e0f2fe; padding: 10px; border-radius: 8px; border: 1px solid #0284c7; margin-bottom: 10px;">
+                        <label style="font-size: 0.85rem; font-weight: bold; color: #0369a1; display: block; margin-bottom: 4px;">Status do Pedido:</label>
+                        <select id="status-pedido-edicao" style="margin-bottom: 0; font-weight: bold; background: white;">
+                            <option value="entregue">✅ Finalizado / Entregue</option>
+                            <option value="preparando">👨‍🍳 Na Cozinha (Em Preparo)</option>
+                            <option value="pronto">📺 Pronto na TV</option>
+                            <option value="nenhum">🛍️ Balcão Pendente</option>
+                        </select>
                     </div>
                     
                     <div style="margin-bottom: 10px;">
@@ -179,19 +197,61 @@
                             <span>R$ <span id="total-carrinho">0.00</span></span>
                         </div>
                         
-                        <label style="font-size: 0.85rem; font-weight: bold;">Forma de Pagamento:</label>
+                        <label style="font-size: 0.85rem; font-weight: bold; color: #dc2626;">Forma de Pagamento *:</label>
                         <select id="forma-pagto" onchange="toggleCampoDinheiro()" style="margin-bottom: 10px; font-weight: bold;">
-                            <option value="Pix">📱 Pix</option>
-                            <option value="Cartão Crédito">💳 Cartão Crédito</option>
+                            <option value="">-- Selecione a Forma de Pagamento --</option>
                             <option value="Cartão Débito">💳 Cartão Débito</option>
+                            <option value="Cartão Crédito">💳 Cartão Crédito</option>
+                            <option value="Pix">📱 Pix (Máquina)</option>
                             <option value="Dinheiro">💵 Dinheiro</option>
+                            <option value="Misto">🔀 2 Formas de Pagamento</option>
+                            <option value="Pix Direto">📲 Pix Direto (Conta)</option>
                             <option value="Bonificação">🎁 Bonificação</option>
                         </select>
+
+                        <!-- BOX DE PAGAMENTO MISTO (2 FORMAS DE PAGAMENTO) -->
+                        <div id="box-pagamento-misto" style="display: none; background: #f0fdf4; padding: 12px; border-radius: 8px; border: 1px solid #16a34a; margin-bottom: 15px;">
+                            <div style="font-size: 0.85rem; font-weight: bold; color: #166534; margin-bottom: 8px;">Dividir Pagamento em 2 Formas:</div>
+                            
+                            <div class="row-inputs" style="margin-bottom: 8px;">
+                                <div style="flex: 1.2;">
+                                    <label style="font-size: 0.75rem; font-weight: bold;">1ª Forma:</label>
+                                    <select id="misto-forma-1" onchange="atualizarValoresMisto(); toggleCampoDinheiro();" style="margin-bottom: 0; padding: 6px; font-weight: bold;">
+                                        <option value="Cartão Débito">💳 Cartão Débito</option>
+                                        <option value="Cartão Crédito">💳 Cartão Crédito</option>
+                                        <option value="Pix">📱 Pix (Máquina)</option>
+                                        <option value="Dinheiro">💵 Dinheiro</option>
+                                        <option value="Pix Direto">📲 Pix Direto (Conta)</option>
+                                    </select>
+                                </div>
+                                <div style="flex: 1;">
+                                    <label style="font-size: 0.75rem; font-weight: bold;">Valor 1 (R$):</label>
+                                    <input type="number" id="misto-valor-1" placeholder="0.00" step="0.01" oninput="atualizarValoresMisto('1')" style="margin-bottom: 0; padding: 6px; background: white;">
+                                </div>
+                            </div>
+
+                            <div class="row-inputs" style="margin-bottom: 0;">
+                                <div style="flex: 1.2;">
+                                    <label style="font-size: 0.75rem; font-weight: bold;">2ª Forma:</label>
+                                    <select id="misto-forma-2" onchange="toggleCampoDinheiro();" style="margin-bottom: 0; padding: 6px; font-weight: bold;">
+                                        <option value="Dinheiro">💵 Dinheiro</option>
+                                        <option value="Cartão Débito">💳 Cartão Débito</option>
+                                        <option value="Cartão Crédito">💳 Cartão Crédito</option>
+                                        <option value="Pix">📱 Pix (Máquina)</option>
+                                        <option value="Pix Direto">📲 Pix Direto (Conta)</option>
+                                    </select>
+                                </div>
+                                <div style="flex: 1;">
+                                    <label style="font-size: 0.75rem; font-weight: bold;">Valor 2 (R$):</label>
+                                    <input type="number" id="misto-valor-2" placeholder="0.00" step="0.01" oninput="atualizarValoresMisto('2')" style="margin-bottom: 0; padding: 6px; background: white;">
+                                </div>
+                            </div>
+                        </div>
 
                         <div id="box-dinheiro-troco" style="display: none; background: #e0f2fe; padding: 10px; border-radius: 8px; border: 1px solid #0284c7; margin-bottom: 15px;">
                             <div class="row-inputs" style="margin-bottom: 0;">
                                 <div style="flex: 1;">
-                                    <label style="font-size: 0.8rem; font-weight: bold; color: #0369a1;">Valor Recebido (R$):</label>
+                                    <label style="font-size: 0.8rem; font-weight: bold; color: #0369a1;">Valor Recebido em Dinheiro (R$):</label>
                                     <input type="number" id="valor-recebido-dinheiro" placeholder="0.00" step="0.01" oninput="calcularTroco()" style="margin-bottom: 0; background: white;">
                                 </div>
                                 <div style="flex: 1; text-align: right;">
@@ -207,18 +267,20 @@
                         </div>
 
                         <div style="background: #fef08a; padding: 10px; border-radius: 6px; margin-bottom: 15px; border: 1px solid #facc15;">
-                            <label style="font-size: 0.85rem; font-weight: bold; display: block; margin-bottom: 5px; color: #854d0e;">Modo de Retirada (Global):</label>
+                            <label style="font-size: 0.85rem; font-weight: bold; display: block; margin-bottom: 5px; color: #dc2626;">Modo de Retirada (Global) *:</label>
                             <select id="tipo-retirada-global" onchange="mudarTipoRetiradaGlobal()" style="margin-bottom: 10px; font-weight: bold; background: white;">
+                                <option value="">-- Selecione o Modo de Retirada --</option>
                                 <option value="agora">🟢 Retirar Agora (Cozinha)</option>
                                 <option value="mais_tarde">📦 Retirar Tudo Mais Tarde (Ficha)</option>
                                 <option value="parcial">✂️ Retirada Parcial (Escolher item a item)</option>
                                 <option id="opt-sem-cozinha" value="agora_sem_cozinha">⚡ Retirar Agora (Sem Cozinha)</option>
                             </select>
 
-                            <label style="font-size: 0.85rem; font-weight: bold; display: block; margin-bottom: 5px; color: #854d0e;">Tipo de Retirada:</label>
+                            <label style="font-size: 0.85rem; font-weight: bold; display: block; margin-bottom: 5px; color: #dc2626;">Tipo de Retirada *:</label>
                             <select id="tipo-atendimento" style="margin-bottom: 0; font-weight: bold; background: white;">
-                                <option value="Comer no Local">🍽️ Comer no Local</option>
+                                <option value="">-- Selecione o Tipo de Retirada --</option>
                                 <option value="Levar (Viagem)">🛍️ Levar (Viagem)</option>
+                                <option value="Comer no Local">🍽️ Comer no Local</option>
                             </select>
                         </div>
 
@@ -238,16 +300,38 @@
             <div class="grid-pedidos" id="fila-agendados"></div>
         </div>
 
-        <!-- TELA 3: COZINHA -->
+        <!-- TELA 3: COZINHA COM SIDEBAR RESUMO -->
         <div id="tela-preparo" class="tab-content">
             <h2>Fila da Cozinha (Apenas Leitura)</h2>
-            <div class="grid-pedidos" id="fila-cozinha"></div>
+            <div class="layout-balcao-container">
+                <div class="balcao-principal">
+                    <div class="grid-pedidos" id="fila-cozinha"></div>
+                </div>
+                <!-- SIDEBAR EM FORMATO DE TABELA/RESUMO DA COZINHA -->
+                <div class="sidebar-resumo-balcao">
+                    <h3>🍳 Produção Cozinha</h3>
+                    <div id="corpo-resumo-cozinha">
+                        <p style="color:gray; font-size:0.8rem;">Nenhum item em preparo.</p>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <!-- TELA 4: BALCÃO / ENTREGA -->
+        <!-- TELA 4: BALCÃO / ENTREGA COM SIDEBAR EM TABELA NO CANTO -->
         <div id="tela-entrega" class="tab-content">
             <h2>Painel de Entrega (Balcão/Entrega)</h2>
-            <div class="grid-pedidos" id="fila-entrega"></div>
+            <div class="layout-balcao-container">
+                <div class="balcao-principal">
+                    <div class="grid-pedidos" id="fila-entrega"></div>
+                </div>
+                <!-- SIDEBAR EM FORMATO DE PLANILHA/TABELA -->
+                <div class="sidebar-resumo-balcao">
+                    <h3>📊 Resumo dos Itens</h3>
+                    <div id="corpo-resumo-balcao">
+                        <p style="color:gray; font-size:0.8rem;">Nenhum item ativo.</p>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- TELA 5: PAINEL DE TV -->
@@ -295,7 +379,10 @@
         <div id="tela-produtos" class="tab-content">
             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 20px;">
                 <h2 style="border: none; padding: 0; margin: 0;">Gerenciar Produtos, Combos, Categorias & Estoque</h2>
-                <button class="btn btn-primary" onclick="imprimirEstoquePorCategoria()">🖨️ Imprimir Estoque por Categoria</button>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn btn-primary" onclick="imprimirEstoquePorCategoria()">🖨️ Imprimir Estoque por Categoria</button>
+                    <button class="btn btn-success" onclick="gerarPDFEstoquePorCategoria()" style="background:#0d9488;">📄 Baixar PDF Estoque</button>
+                </div>
             </div>
             
             <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start;">
@@ -321,6 +408,12 @@
                     <label style="font-size: 0.85rem; font-weight: bold;">Nome (Produto ou Combo):</label>
                     <input type="text" id="novo-prod-nome" placeholder="Ex: X-Bacon" required>
                     
+                    <label style="font-size: 0.85rem; font-weight: bold;">Status do Produto (Visibilidade no PDV):</label>
+                    <select id="novo-prod-ativo" style="margin-bottom: 15px; font-weight: bold;">
+                        <option value="true">🟢 ATIVO (Aparece nas Vendas)</option>
+                        <option value="false">🔴 INATIVO (Oculto das Vendas)</option>
+                    </select>
+
                     <label style="font-size: 0.85rem; font-weight: bold;">Carregar Foto do Computador:</label>
                     <input type="file" id="file-prod-foto" accept="image/*" style="margin-bottom: 5px;" onchange="processarUploadFoto(this)">
                     <input type="hidden" id="novo-prod-foto">
@@ -374,6 +467,7 @@
                             <tr style="border-bottom: 2px solid #e5e7eb;">
                                 <th style="padding: 10px;">Cód</th>
                                 <th>Foto</th>
+                                <th>Status</th>
                                 <th>Nome / Descrição</th>
                                 <th>Categoria</th>
                                 <th>Preço</th>
@@ -387,7 +481,7 @@
             </div>
         </div>
 
-        <!-- TELA NOVE: DASHBOARD DE TECLAS DE ATALHO -->
+        <!-- TELA: DASHBOARD DE TECLAS DE ATALHO -->
         <div id="tela-atalhos" class="tab-content">
             <h2>⌨️ Configuração de Teclas de Atalho (Painel do Balcão)</h2>
             <p style="color: gray; margin-bottom: 20px;">Clique em qualquer comando abaixo para gravar a tecla que deseja usar para acioná-lo no teclado durante o atendimento no Balcão/Entrega.</p>
@@ -432,19 +526,32 @@
         <!-- TELA 6: GESTÃO DETALHADA -->
         <div id="tela-gestao" class="tab-content">
             <h2>Gestão Interna de Pedidos</h2>
-            <div style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center;">
-                <div style="flex: 1;">
+            <div style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 200px;">
                     <label style="font-size: 0.85rem; font-weight: bold;">🔍 Pesquisar Pedido ou Cliente:</label>
                     <input type="text" id="filtro-texto-gestao" placeholder="Ex: João, #15..." oninput="atualizarFiltrosGestao()" style="margin-bottom: 0;">
                 </div>
-                <div style="width: 200px;">
+                <div style="width: 180px;">
                     <label style="font-size: 0.85rem; font-weight: bold;">📅 Filtrar por Data:</label>
                     <input type="date" id="filtro-data-gestao" onchange="atualizarFiltrosGestao()" style="margin-bottom: 0;">
                 </div>
-                <div style="width: 200px;">
+                <div style="width: 180px;">
+                    <label style="font-size: 0.85rem; font-weight: bold;">💳 Pagamento:</label>
+                    <select id="filtro-pagto-gestao" onchange="atualizarFiltrosGestao()" style="margin-bottom: 0;">
+                        <option value="Todos">Todos os Pagamentos</option>
+                        <option value="Cartão Débito">Cartão Débito</option>
+                        <option value="Cartão Crédito">Cartão Crédito</option>
+                        <option value="Pix">Pix (Máquina)</option>
+                        <option value="Dinheiro">Dinheiro</option>
+                        <option value="Pix Direto">Pix Direto (Conta)</option>
+                        <option value="Bonificação">Bonificação</option>
+                        <option value="Misto">Misto (2 Formas)</option>
+                    </select>
+                </div>
+                <div style="width: 180px;">
                     <label style="font-size: 0.85rem; font-weight: bold;">📋 Status:</label>
                     <select id="filtro-status-gestao" onchange="atualizarFiltrosGestao()" style="margin-bottom: 0;">
-                        <option value="Todos">Todos</option>
+                        <option value="Todos">Todos os Status</option>
                         <option value="entregue">✅ Finalizados</option>
                         <option value="preparando">👨‍🍳 Em Andamento</option>
                         <option value="cancelado">❌ Cancelados</option>
@@ -473,7 +580,13 @@
 
         <!-- TELA 7: DASHBOARD E ABERTURA DE CAIXA -->
         <div id="tela-relatorio" class="tab-content">
-            <h2>Dashboard Analytics & Gestão de Caixa</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 20px;">
+                <h2 style="border: none; padding: 0; margin: 0;">Dashboard Analytics & Gestão de Caixa</h2>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn btn-primary" onclick="imprimirRelatorioCaixaAtual()" style="background: #0d9488;">🖨️ Imprimir Caixa Atual</button>
+                    <button class="btn btn-success" onclick="gerarPDFCaixaAtual()" style="background: #2563eb;">📄 Baixar PDF Caixa Atual (A4)</button>
+                </div>
+            </div>
             
             <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; border-left: 5px solid var(--info);">
                 <h3 style="margin-top: 0; color: var(--info);">💵 Abertura de Caixa (Fundo Inicial)</h3>
@@ -509,26 +622,38 @@
             </div>
 
             <h3 style="margin-top: 30px; color: #1f2937;">Detalhamento por Forma de Pagamento</h3>
-            <div style="display: flex; gap: 15px; margin-bottom: 20px;">
-                <div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex: 1; border-left: 4px solid #06b6d4;">
-                    <p style="margin: 0; font-size: 0.85rem; color: gray; font-weight: bold;">📱 Pix</p>
-                    <p style="margin: 5px 0 0 0; font-size: 1.4rem; font-weight: bold;">R$ <span id="rel-pix">0.00</span></p>
-                </div>
-                <div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex: 1; border-left: 4px solid #f59e0b;">
-                    <p style="margin: 0; font-size: 0.85rem; color: gray; font-weight: bold;">💳 Cartão Crédito</p>
-                    <p style="margin: 5px 0 0 0; font-size: 1.4rem; font-weight: bold;">R$ <span id="rel-credito">0.00</span></p>
-                </div>
-                <div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex: 1; border-left: 4px solid #8b5cf6;">
+            <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
+                <div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex: 1; min-width: 150px; border-left: 4px solid #8b5cf6;">
                     <p style="margin: 0; font-size: 0.85rem; color: gray; font-weight: bold;">💳 Cartão Débito</p>
                     <p style="margin: 5px 0 0 0; font-size: 1.4rem; font-weight: bold;">R$ <span id="rel-debito">0.00</span></p>
                 </div>
-                <div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex: 1; border-left: 4px solid #10b981;">
+                <div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex: 1; min-width: 150px; border-left: 4px solid #f59e0b;">
+                    <p style="margin: 0; font-size: 0.85rem; color: gray; font-weight: bold;">💳 Cartão Crédito</p>
+                    <p style="margin: 5px 0 0 0; font-size: 1.4rem; font-weight: bold;">R$ <span id="rel-credito">0.00</span></p>
+                </div>
+                <div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex: 1; min-width: 150px; border-left: 4px solid #06b6d4;">
+                    <p style="margin: 0; font-size: 0.85rem; color: gray; font-weight: bold;">📱 Pix (Máquina)</p>
+                    <p style="margin: 5px 0 0 0; font-size: 1.4rem; font-weight: bold;">R$ <span id="rel-pix">0.00</span></p>
+                </div>
+                <div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex: 1; min-width: 150px; border-left: 4px solid #10b981;">
                     <p style="margin: 0; font-size: 0.85rem; color: gray; font-weight: bold;">💵 Dinheiro (Vendas)</p>
                     <p style="margin: 5px 0 0 0; font-size: 1.4rem; font-weight: bold;">R$ <span id="rel-dinheiro-vendas">0.00</span></p>
                 </div>
-                <div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex: 1; border-left: 4px solid #f59e0b;">
-                    <p style="margin: 0; font-size: 0.85rem; color: gray; font-weight: bold;">🎁 Bonificação</p>
-                    <p style="margin: 5px 0 0 0; font-size: 1.4rem; font-weight: bold;">R$ <span id="rel-bonificacao">0.00</span></p>
+                <div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex: 1; min-width: 150px; border-left: 4px solid #0284c7;">
+                    <p style="margin: 0; font-size: 0.85rem; color: gray; font-weight: bold;">📲 Pix Direto (Conta)</p>
+                    <p style="margin: 5px 0 0 0; font-size: 1.4rem; font-weight: bold;">R$ <span id="rel-pix-direto">0.00</span></p>
+                </div>
+                <div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex: 1; min-width: 150px; border-left: 4px solid #ef4444;">
+                    <p style="margin: 0; font-size: 0.85rem; color: gray; font-weight: bold;">🎁 Qtd Pedidos Bonificação</p>
+                    <p style="margin: 5px 0 0 0; font-size: 1.4rem; font-weight: bold;"><span id="rel-qtd-bonificacao">0</span> ped.</p>
+                </div>
+            </div>
+
+            <!-- PAINEL EXCLUSIVO PARA RELATÓRIO DE BONIFICAÇÕES -->
+            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; border-left: 5px solid #ef4444;">
+                <h3 style="margin-top: 0; color: #dc2626;">🎁 Relatório de Bonificações / Cortesias (Sem Valor Monetário)</h3>
+                <div id="painel-resumo-bonificacoes" style="max-height: 200px; overflow-y: auto;">
+                    <p style="color: gray;">Nenhuma bonificação registrada no caixa atual.</p>
                 </div>
             </div>
             
@@ -565,9 +690,8 @@
 
     </div>
 
-    <!-- Estrutura da Impressora Térmica -->
+    <!-- Estrutura da Impressora Térmica e de Relatórios PDF -->
     <div id="area-impressao"></div>
-
 
     <!-- Supabase JS -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

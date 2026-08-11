@@ -24,5 +24,20 @@ A chave em `js/config.js` é uma *publishable key* do Supabase (prefixo `sb_publ
 ser exposta no navegador, como a antiga anon key. A segurança dos dados vem das políticas de
 Row Level Security (RLS) no projeto Supabase, não de esconder essa string.
 
+## Funcionalidades
+
+- Busca de produtos por nome na tela de Pedido.
+- Formas de pagamento: Cartão Débito, Cartão Crédito, Pix (Máquina), Pix Direto (Conta), Dinheiro,
+  Bonificação e **Misto** (divide o valor entre 2 formas de pagamento). Forma de pagamento e modo de
+  retirada agora são de preenchimento obrigatório (sem valor padrão pré-selecionado).
+- Edição de pedido: permite alterar o status (Finalizado / Na Cozinha / Pronto na TV / Balcão Pendente)
+  diretamente na tela de edição.
+- Cozinha e Balcão/Entrega: painel lateral com resumo em tabela dos itens em produção/pendentes.
+- Produtos & Estoque: campo Ativo/Inativo por produto (controla se aparece nas vendas) e exportação do
+  relatório de estoque em PDF (via `html2pdf.js`).
+- Dashboard: impressão e exportação em PDF (A4) do fechamento de caixa atual, e painel dedicado de
+  bonificações/cortesias (pedidos sem valor monetário).
+- Gestão de Pedidos: filtro por forma de pagamento.
+
 ## Versionamento
 Este repositório foi criado para versionar a aplicação PDV Santa Rita.
