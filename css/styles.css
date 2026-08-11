@@ -30,9 +30,9 @@
         .btn-show-menu:hover { opacity: 1; }
 
         .badge { background: red; color: white; border-radius: 50%; padding: 2px 6px; font-size: 12px; margin-left: 8px; display: none; font-weight: bold; }
-        .container { padding: 20px; max-width: 1400px; margin: 0 auto; box-sizing: border-box; }
+        .container { padding: 20px; max-width: 100%; margin: 0 auto; box-sizing: border-box; }
         
-        .container.container-tv { padding: 0 !important; max-width: 100% !important; margin: 0 !important; width: 100vw; }
+        .container.container-tv, .container.container-vw { padding: 0 !important; max-width: 100% !important; margin: 0 !important; width: 100vw; }
 
         .tab-content { display: none; animation: fadeIn 0.3s; }
         .tab-content.active { display: block; }
@@ -76,7 +76,7 @@
         .item-carrinho { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; border-bottom: 1px solid #f3f4f6; font-size: 0.9rem; }
         .qtd-controle { display: flex; align-items: center; gap: 8px; }
 
-        .grid-pedidos { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; width: 100%; }
+        .grid-pedidos { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; width: 100%; }
         .card-pedido { background: var(--card-bg); padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; border: 3px solid transparent; transition: all 0.2s ease; }
         .card-pedido.card-selecionado-teclado { border-color: var(--primary) !important; box-shadow: 0 0 15px rgba(37, 99, 235, 0.4) !important; transform: scale(1.02); }
 
@@ -86,7 +86,18 @@
         .bg-pronto { background-color: var(--success); }
         .lista-itens { background: #f9fafb; padding: 10px; border-radius: 6px; margin: 10px 0; font-size: 0.95rem; flex-grow: 1; }
 
-        /* PAINEL DE TV - 100% PREENCHIMENTO COMPLETO */
+        /* LAYOUT BALCÃO / COZINHA COM SIDEBAR NO CANTO DIREITO */
+        .layout-balcao-container { display: flex; gap: 15px; width: 100%; align-items: flex-start; }
+        .balcao-principal { flex: 1; }
+        .sidebar-resumo-balcao { width: 280px; min-width: 250px; background: white; padding: 12px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); max-height: calc(100vh - 140px); overflow-y: auto; border: 1px solid #cbd5e1; }
+        .sidebar-resumo-balcao h3 { margin-top: 0; font-size: 0.95rem; border-bottom: 2px solid #2563eb; padding-bottom: 6px; color: #1f2937; text-transform: uppercase; }
+        
+        .tabela-resumo-canto { width: 100%; border-collapse: collapse; font-size: 0.78rem; text-align: left; }
+        .tabela-resumo-canto th { background: #f1f5f9; padding: 4px; border: 1px solid #cbd5e1; text-align: center; font-weight: bold; }
+        .tabela-resumo-canto td { padding: 4px; border: 1px solid #e2e8f0; }
+        .tabela-resumo-canto .cat-row { background: #eff6ff; font-weight: bold; color: #1e40af; text-transform: uppercase; font-size: 0.72rem; }
+
+        /* PAINEL DE TV */
         #tela-tv.active { padding: 0; margin: 0; width: 100vw; height: calc(100vh - 65px); background: #000; }
         .mc-tv-layout { display: flex; height: 100%; width: 100%; background: #000; color: #fff; border-radius: 0; overflow: hidden; }
         .mc-tv-col { flex: 1; padding: 2%; display: flex; flex-direction: column; overflow-y: auto; box-sizing: border-box; }
@@ -110,12 +121,14 @@
 
         .cat-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #e5e7eb; transition: background 0.2s; }
         .cat-item:hover { background: #f9fafb; }
-        .cat-acoes button { background: none; border: none; cursor: pointer; font-size: 1.1rem; opacity: 0.6; }
+        .cat-acoes button { background: none; border: none; cursor: pointer; font-size: 1rem; opacity: 0.7; margin-left: 2px; }
         .cat-acoes button:hover { opacity: 1; transform: scale(1.1); }
 
-        .videowall-container { display: grid; grid-template-columns: 50vw 50vw; grid-template-rows: 50vh 50vh; gap: 0; margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; }
-        .vw-quadrant { background: var(--card-bg); overflow: hidden; display: flex; flex-direction: column; border: none; border-radius: 0; box-shadow: none; margin: 0; padding: 0; }
-        .vw-header { padding: 10px; font-weight: bold; text-align: center; font-size: 1.2rem; text-transform: uppercase; letter-spacing: 1px; }
+        /* MULTIVIEW 4X4 */
+        #tela-videowall.active { padding: 0; margin: 0; width: 100vw; height: calc(100vh - 65px); background: #0f172a; overflow: hidden; }
+        .videowall-container { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; width: 100vw; height: calc(100vh - 65px); gap: 2px; background: #334155; box-sizing: border-box; }
+        .vw-quadrant { background: #f8fafc; overflow: hidden; display: flex; flex-direction: column; position: relative; height: 100%; width: 100%; box-sizing: border-box; }
+        .vw-header { padding: 8px 12px; font-weight: 900; text-align: center; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 1px; flex-shrink: 0; }
         .vw-body { padding: 10px; overflow-y: auto; flex-grow: 1; box-sizing: border-box; }
         .btn-exit-vw { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.8); color: white; border: 1px solid #333; padding: 10px 15px; border-radius: 6px; cursor: pointer; z-index: 100000; font-weight: bold; opacity: 0.05; transition: opacity 0.3s; }
         .btn-exit-vw:hover { opacity: 1; }
@@ -129,7 +142,6 @@
 
         .modal-content { background:white; padding:25px; border-radius:12px; width:450px; max-width:90%; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
 
-        /* DASHBOARD TECLAS DE ATALHO */
         .grid-atalhos { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 15px; margin-top: 15px; }
         .card-atalho { background: white; border: 2px solid #e5e7eb; padding: 15px; border-radius: 10px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         .card-atalho.gravando { border-color: var(--warning); background: #fefce8; animation: blink-tv 1.2s infinite; }
@@ -139,10 +151,11 @@
         @media print {
             body * { visibility: hidden; }
             #area-impressao, #area-impressao * { visibility: visible; }
-            #area-impressao { display: block; position: absolute; left: 0; top: 0; width: 80mm; padding: 5mm; font-family: 'Courier New', Courier, monospace; font-size: 12px; background: white; color: black; }
+            #area-impressao { display: block; position: absolute; left: 0; top: 0; width: 80mm; padding: 5mm; font-family: Arial, sans-serif; font-size: 13px; font-weight: bold; color: black; background: white; }
             .print-center { text-align: center; }
-            .print-bold { font-weight: bold; }
-            .print-divider { border-top: 1px dashed black; margin: 8px 0; }
-            .print-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+            .print-bold { font-weight: 900; }
+            .print-divider { border-top: 2px dashed black; margin: 8px 0; }
+            .print-row { display: flex; justify-content: space-between; margin-bottom: 4px; font-weight: bold; }
+            .print-pagto-box { font-size: 18px !important; font-weight: 900 !important; margin: 8px 0 !important; text-transform: uppercase; background: #000 !important; color: #fff !important; padding: 6px 2px !important; text-align: center; border: 2px solid #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             @page { margin: 0; }
         }
