@@ -449,10 +449,14 @@
                             <input type="number" id="novo-prod-preco" placeholder="0.00" step="0.01" required>
                         </div>
                         <div style="flex: 1;" id="box-estoque-simples">
-                            <label style="font-size: 0.85rem; font-weight: bold;">Estoque Inicial:</label>
+                            <label style="font-size: 0.85rem; font-weight: bold;">Estoque nesta barraca:</label>
                             <input type="number" id="novo-prod-estoque" placeholder="Vazio = Livre">
                         </div>
                     </div>
+
+                    <label style="font-size: 0.85rem; font-weight: bold;">🏪 Barracas onde este produto aparece:</label>
+                    <p style="font-size: 0.75rem; color: #6b7280; margin: 0 0 8px 0;">O produto é único — cadastrado uma vez, mas só é vendido nas barracas marcadas aqui. Cada barraca marcada controla seu próprio estoque dele.</p>
+                    <div id="checklist-barracas-produto" style="display:flex; flex-wrap:wrap; gap:6px 14px; margin-bottom:15px; background:#f9fafb; padding:10px; border-radius:6px; border:1px solid #e5e7eb;"></div>
 
                     <div id="box-itens-combo" style="display:none; background: #fef08a; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
                         <label style="font-size: 0.85rem; font-weight: bold; color: #854d0e;">Itens Inclusos no Combo:</label>
@@ -492,8 +496,9 @@
                                 <th>Status</th>
                                 <th>Nome / Descrição</th>
                                 <th>Categoria</th>
+                                <th>Barracas</th>
                                 <th>Preço</th>
-                                <th>Estoque</th>
+                                <th>Estoque (aqui)</th>
                                 <th>Ações</th>
                             </tr>
                         </thead>
