@@ -13,7 +13,8 @@ export const SUPABASE_KEY = 'sb_publishable_zArjtVDcnjxpJkxEBk1bNQ_ijlY7T4H';
 
 export const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Identifica a linha de estado compartilhado no Supabase e este cliente/aba
-// específico (usado para ignorar eco de atualizações que a própria aba enviou).
-export const PDV_STATE_ID = 'main';
+// Identifica este cliente/aba (usado para ignorar eco de atualizações que a
+// própria aba enviou). Não confundir com o id da barraca ativa — esse é
+// dinâmico (o dispositivo escolhe/troca de barraca em tempo de execução) e
+// por isso vive em js/barracas.js, não aqui.
 export const PDV_CLIENT_ID = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);

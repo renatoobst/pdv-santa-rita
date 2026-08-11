@@ -5,9 +5,10 @@ Aplicação de ponto de venda (PDV) conectada ao Supabase.
 ## Arquivos
 - `index.html` — estrutura (markup) das telas, modais e navegação.
 - `css/styles.css` — todos os estilos da aplicação.
-- `js/config.js` — conexão com o Supabase (URL + chave pública) e identificadores de sincronização.
-- `js/data.js` — categorias e produtos padrão usados na primeira execução.
-- `js/app.js` — estado da aplicação e toda a lógica (pedidos, cozinha, caixa, estoque, relatórios, etc.), como módulo ES.
+- `js/config.js` — conexão com o Supabase (URL + chave pública) e identificador deste cliente/aba.
+- `js/data.js` — categorias e produtos padrão usados na primeira execução de uma barraca.
+- `js/app.js` — estado e lógica de uma barraca (pedidos, cozinha, caixa, estoque, relatórios, etc.), como módulo ES.
+- `js/barracas.js` — suporte a múltiplas barracas: seleção/troca, cadastro (criar/renomear/remover) e o Dashboard Geral que soma todas.
 
 A aplicação não tem passo de build: `index.html` carrega `js/app.js` via `<script type="module">`.
 Por isso ela **precisa ser servida por um servidor HTTP** (não abrir o arquivo direto com duplo clique) —
@@ -38,6 +39,27 @@ Row Level Security (RLS) no projeto Supabase, não de esconder essa string.
 - Dashboard: impressão e exportação em PDF (A4) do fechamento de caixa atual, e painel dedicado de
   bonificações/cortesias (pedidos sem valor monetário).
 - Gestão de Pedidos: filtro por forma de pagamento.
+
+## Múltiplas barracas
+
+O PDV suporta várias "barracas" (bancas/estandes) usando o mesmo app, cada uma **totalmente isolada**:
+cardápio, pedidos, caixa e fila de despacho próprios. Serve para eventos (ex: uma festa/feira da igreja)
+em que cada barraca vende coisas diferentes e fecha seu próprio caixa.
+
+- **Como funciona por baixo dos panos**: cada barraca é uma linha própria na tabela `pdv_state` do
+  Supabase, identificada pelo `id` da barraca (o mesmo mecanismo que antes guardava só a barraca única
+  como `id = 'main'` — por isso a barraca original virou automaticamente "Barraca Principal", sem
+  precisar migrar nada no Supabase). Uma linha reservada, `id = '__registry__'`, guarda só a lista de
+  barracas cadastradas (nome, id, data de criação).
+- **Ao abrir o app pela primeira vez num dispositivo**, aparece uma tela para escolher (ou criar) a
+  barraca em que ele vai trabalhar; a escolha fica salva naquele navegador/dispositivo até ser trocada
+  manualmente pelo seletor no canto superior direito do menu. Dispositivos que já usavam o PDV antes
+  dessa funcionalidade existir continuam entrando direto na "Barraca Principal", sem interrupção.
+- **🏪 Barracas** (menu superior): tela para criar, renomear e remover barracas da lista. Remover só
+  tira da lista de seleção — os dados no Supabase não são apagados.
+- **🏬 Dashboard Geral** (dentro de Relatórios): soma pedidos e faturamento de todas as barracas
+  cadastradas, direto do Supabase, sem interferir no que está em uso em nenhuma delas — útil para o
+  fechamento geral do evento.
 
 ## Versionamento
 Este repositório foi criado para versionar a aplicação PDV Santa Rita.

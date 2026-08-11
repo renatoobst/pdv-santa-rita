@@ -6,27 +6,35 @@
 // são expostas em 'window' no final do arquivo, pois módulos ES não vazam
 // suas declarações para o escopo global automaticamente.
 
-import { supabaseClient, PDV_STATE_ID, PDV_CLIENT_ID } from './config.js';
+import { supabaseClient, PDV_CLIENT_ID } from './config.js';
 import { categoriasPadrao, produtosPadrao } from './data.js';
+import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCacheAtalhos, renderizarPainelBarracas, carregarDashboardGeral, iniciarRealtimeRegistroBarracas } from './barracas.js';
 
-        let categoriasDB = JSON.parse(localStorage.getItem('pdv_categorias')) || JSON.parse(JSON.stringify(categoriasPadrao));
-        let produtosDB = JSON.parse(localStorage.getItem('pdv_produtos')) || JSON.parse(JSON.stringify(produtosPadrao));
+        // Id da barraca ativa neste dispositivo (linha correspondente na tabela
+        // `pdv_state` do Supabase). Só é conhecido depois que resolverBarracaAtiva()
+        // roda no window.onload — antes disso o app não deve ler/gravar estado
+        // nenhum, por isso os valores abaixo começam nos padrões "vazios" e só são
+        // preenchidos por carregarCacheLocalDaBarraca()/carregarEstadoSupabase().
+        let barracaStateId = null;
+
+        let categoriasDB = JSON.parse(JSON.stringify(categoriasPadrao));
+        let produtosDB = JSON.parse(JSON.stringify(produtosPadrao));
         produtosDB.forEach(p => { if (p.ativo === undefined) p.ativo = true; });
 
-        let pedidosGerais = JSON.parse(localStorage.getItem('pdv_pedidos')) || [];
-        let contadorPedidos = parseInt(localStorage.getItem('pdv_contador')) || 1;
-        let historicoCaixasDB = JSON.parse(localStorage.getItem('pdv_historico_caixas')) || [];
+        let pedidosGerais = [];
+        let contadorPedidos = 1;
+        let historicoCaixasDB = [];
 
-        let caixaAberto = JSON.parse(localStorage.getItem('pdv_caixa_aberto')) || false;
-        let valorFundoCaixa = parseFloat(localStorage.getItem('pdv_fundo_caixa')) || 0.00;
-        let dataHoraAberturaCaixa = localStorage.getItem('pdv_hora_abertura_caixa') || null;
+        let caixaAberto = false;
+        let valorFundoCaixa = 0.00;
+        let dataHoraAberturaCaixa = null;
 
         let supabaseDisponivel = true;
         let carregandoEstadoRemoto = false;
         let ultimaAtualizacaoRemota = null;
 
         // TECLAS DE ATALHO PADRÃO
-        let atalhosConfig = JSON.parse(localStorage.getItem('pdv_atalhos')) || {
+        let atalhosConfig = {
             direita: '1',
             esquerda: '2',
             chamar: '3',
@@ -80,16 +88,30 @@ import { categoriasPadrao, produtosPadrao } from './data.js';
         }
 
         function salvarCacheLocal() {
-            localStorage.setItem('pdv_categorias', JSON.stringify(categoriasDB));
-            localStorage.setItem('pdv_produtos', JSON.stringify(produtosDB));
-            localStorage.setItem('pdv_pedidos', JSON.stringify(pedidosGerais));
-            localStorage.setItem('pdv_contador', contadorPedidos);
-            localStorage.setItem('pdv_historico_caixas', JSON.stringify(historicoCaixasDB));
-            localStorage.setItem('pdv_caixa_aberto', JSON.stringify(caixaAberto));
-            localStorage.setItem('pdv_fundo_caixa', valorFundoCaixa);
-            localStorage.setItem('pdv_atalhos', JSON.stringify(atalhosConfig));
-            if (dataHoraAberturaCaixa) localStorage.setItem('pdv_hora_abertura_caixa', dataHoraAberturaCaixa);
-            else localStorage.removeItem('pdv_hora_abertura_caixa');
+            // Cache com escopo por barraca (chaveCacheEstado inclui o barracaStateId),
+            // para que duas barracas usadas no mesmo navegador/dispositivo nunca
+            // se misturem no cache local — só o que vem do Supabase é compartilhado,
+            // e mesmo assim cada barraca tem sua própria linha lá.
+            localStorage.setItem(chaveCacheEstado(barracaStateId), JSON.stringify(montarEstadoAtual()));
+            localStorage.setItem(chaveCacheAtalhos(barracaStateId), JSON.stringify(atalhosConfig));
+        }
+
+        // Pinta a tela imediatamente com o que já está em cache local desta
+        // barraca (se houver), antes/independente da resposta do Supabase.
+        // Chamada uma vez, logo depois que barracaStateId é resolvido.
+        function carregarCacheLocalDaBarraca() {
+            try {
+                const raw = localStorage.getItem(chaveCacheEstado(barracaStateId));
+                if (raw) aplicarEstado(JSON.parse(raw), false);
+            } catch (erro) {
+                console.error('Cache local de estado corrompido, ignorando:', erro);
+            }
+            try {
+                const rawAtalhos = localStorage.getItem(chaveCacheAtalhos(barracaStateId));
+                if (rawAtalhos) atalhosConfig = JSON.parse(rawAtalhos);
+            } catch (erro) {
+                console.error('Cache local de atalhos corrompido, ignorando:', erro);
+            }
         }
 
         function aplicarEstado(estado, atualizarUI = true) {
@@ -131,7 +153,7 @@ import { categoriasPadrao, produtosPadrao } from './data.js';
             try {
                 const { error } = await supabaseClient
                     .from('pdv_state')
-                    .upsert({ id: PDV_STATE_ID, data: estado, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+                    .upsert({ id: barracaStateId, data: estado, updated_at: new Date().toISOString() }, { onConflict: 'id' });
                 if (error) throw error;
                 supabaseDisponivel = true;
             } catch (erro) {
@@ -145,7 +167,7 @@ import { categoriasPadrao, produtosPadrao } from './data.js';
                 const { data, error } = await supabaseClient
                     .from('pdv_state')
                     .select('data, updated_at')
-                    .eq('id', PDV_STATE_ID)
+                    .eq('id', barracaStateId)
                     .maybeSingle();
 
                 if (error) throw error;
@@ -172,7 +194,7 @@ import { categoriasPadrao, produtosPadrao } from './data.js';
                     event: '*',
                     schema: 'public',
                     table: 'pdv_state',
-                    filter: `id=eq.${PDV_STATE_ID}`
+                    filter: `id=eq.${barracaStateId}`
                 }, payload => {
                     const estado = payload.new && payload.new.data;
                     if (!estado || estado.origem === PDV_CLIENT_ID) return;
@@ -254,6 +276,8 @@ import { categoriasPadrao, produtosPadrao } from './data.js';
             if(idAba === 'tela-videowall') atualizarTelas(); 
             if(idAba === 'tela-entrega') atualizarTelas();
             if(idAba === 'tela-preparo') atualizarTelas();
+            if(idAba === 'tela-barracas') renderizarPainelBarracas();
+            if(idAba === 'tela-dashboard-geral') carregarDashboardGeral();
         }
         function sairVideoWall() { mudarAba('tela-pedido', document.querySelectorAll('nav button')[0]); }
 
@@ -1404,57 +1428,11 @@ import { categoriasPadrao, produtosPadrao } from './data.js';
             `;
         }
 
+        // O cálculo em si mora em barracas.js (calcularResumoPedidos), como uma
+        // função pura, para poder ser reaproveitado pelo Dashboard Geral com os
+        // dados de QUALQUER barraca — aqui só repassamos o estado ao vivo desta.
         function obterDadosRelatorioCaixa() {
-            const validos = pedidosGerais.filter(p => p.statusPainel !== 'cancelado');
-            const validosVendas = validos.filter(p => p.pagamento && !p.pagamento.startsWith('Bonificação'));
-            const totalVendas = validosVendas.reduce((a, p) => a + p.total, 0);
-
-            let fatPix = 0, fatPixDireto = 0, fatCredito = 0, fatDebito = 0, fatDinheiro = 0;
-            let resumoProdutosVendidos = {};
-            let bonificacoesLista = [];
-
-            validos.forEach(p => {
-                const ehBonificacao = p.pagamento && p.pagamento.startsWith('Bonificação');
-
-                if (ehBonificacao) {
-                    bonificacoesLista.push(p);
-                } else {
-                    if (p.detalhesMisto && Array.isArray(p.detalhesMisto)) {
-                        p.detalhesMisto.forEach(d => {
-                            if (d.forma === 'Pix') fatPix += d.valor;
-                            if (d.forma === 'Pix Direto') fatPixDireto += d.valor;
-                            if (d.forma === 'Cartão Crédito') fatCredito += d.valor;
-                            if (d.forma === 'Cartão Débito') fatDebito += d.valor;
-                            if (d.forma === 'Dinheiro') fatDinheiro += d.valor;
-                        });
-                    } else if (p.pagamento) {
-                        if (p.pagamento === 'Pix') fatPix += p.total;
-                        else if (p.pagamento === 'Pix Direto') fatPixDireto += p.total;
-                        else if (p.pagamento === 'Cartão Crédito') fatCredito += p.total;
-                        else if (p.pagamento === 'Cartão Débito') fatDebito += p.total;
-                        else if (p.pagamento === 'Dinheiro') fatDinheiro += p.total;
-                    }
-
-                    p.itens.forEach(i => {
-                        resumoProdutosVendidos[i.nome] = (resumoProdutosVendidos[i.nome] || 0) + i.qtd;
-                    });
-                }
-            });
-
-            return {
-                validos,
-                validosVendas,
-                totalVendas,
-                fatPix,
-                fatPixDireto,
-                fatCredito,
-                fatDebito,
-                fatDinheiro,
-                qtdBonificacoes: bonificacoesLista.length,
-                bonificacoesLista,
-                totalGaveta: caixaAberto ? (valorFundoCaixa + fatDinheiro) : 0.00,
-                resumoProdutosVendidos
-            };
+            return calcularResumoPedidos(pedidosGerais, caixaAberto, valorFundoCaixa);
         }
 
         function imprimirRelatorioCaixaAtual() {
@@ -2524,6 +2502,13 @@ import { categoriasPadrao, produtosPadrao } from './data.js';
         }
 
         window.onload = async () => {
+            // Antes de qualquer coisa: descobre em qual barraca este dispositivo
+            // trabalha (mostra a tela de seleção e aguarda, se for a primeira vez).
+            // Só depois disso barracaStateId existe e é seguro ler/gravar estado.
+            const barraca = await resolverBarracaAtiva();
+            barracaStateId = barraca.id;
+
+            carregarCacheLocalDaBarraca();
             await carregarEstadoSupabase();
             atualizarInterfaceCaixa();
             renderizarCategoriasUI();
@@ -2532,6 +2517,7 @@ import { categoriasPadrao, produtosPadrao } from './data.js';
             atualizarFiltrosGestao();
             renderizarHistoricoCaixas();
             iniciarRealtimeSupabase();
+            iniciarRealtimeRegistroBarracas();
         };
 
 // --- Shim exigido pela conversão para módulo ES (não existe no arquivo-fonte) ---
