@@ -8,7 +8,7 @@
 
 import { supabaseClient, PDV_CLIENT_ID } from './config.js';
 import { categoriasPadrao, produtosPadrao } from './data.js';
-import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCacheAtalhos, renderizarPainelBarracas, carregarDashboardGeral, iniciarRealtimeRegistroBarracas } from './barracas.js';
+import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCacheAtalhos, renderizarPainelBarracas, carregarDashboardGeral, iniciarRealtimeRegistroBarracas, registroBarracas } from './barracas.js';
 
         // Id da barraca ativa neste dispositivo (linha correspondente na tabela
         // `pdv_state` do Supabase). Só é conhecido depois que resolverBarracaAtiva()
@@ -17,9 +17,24 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
         // preenchidos por carregarCacheLocalDaBarraca()/carregarEstadoSupabase().
         let barracaStateId = null;
 
+        // Catálogo de produtos e categorias: ÚNICO, compartilhado entre todas as
+        // barracas (não faz parte do estado de uma barraca específica). Vive numa
+        // linha própria no Supabase (id = CATALOGO_ID, ver mais abaixo), separada
+        // da linha de estado de cada barraca. Cada produto tem um campo
+        // `barracas: string[]` com os ids das barracas onde ele deve aparecer.
+        const CATALOGO_ID = '__catalogo__';
         let categoriasDB = JSON.parse(JSON.stringify(categoriasPadrao));
-        let produtosDB = JSON.parse(JSON.stringify(produtosPadrao));
+        let produtosDB = JSON.parse(JSON.stringify(produtosPadrao)).map(p => {
+            const { estoque, ...resto } = p; // estoque não é mais um campo do produto — é por barraca (estoquePorProduto)
+            return { ...resto, barracas: [] };
+        });
         produtosDB.forEach(p => { if (p.ativo === undefined) p.ativo = true; });
+        let carregandoCatalogoRemoto = false;
+
+        // Estoque É por barraca: { [idProduto]: quantidade|null }. null = estoque
+        // livre/não controlado (mesmo significado que produto.estoque === null tinha
+        // antes). Faz parte do estado desta barraca, não do catálogo compartilhado.
+        let estoquePorProduto = {};
 
         let pedidosGerais = [];
         let contadorPedidos = 1;
@@ -72,16 +87,18 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             }
         }
 
+        // Estado desta barraca: pedidos, caixa, estoque. NÃO inclui mais
+        // categoriasDB/produtosDB — isso é o catálogo compartilhado, sincronizado
+        // separadamente (ver montarCatalogoAtual/salvarCatalogo mais abaixo).
         function montarEstadoAtual() {
             return {
-                categoriasDB,
-                produtosDB,
                 pedidosGerais,
                 contadorPedidos,
                 historicoCaixasDB,
                 caixaAberto,
                 valorFundoCaixa,
                 dataHoraAberturaCaixa,
+                estoquePorProduto,
                 origem: PDV_CLIENT_ID,
                 salvoEm: new Date().toISOString()
             };
@@ -117,9 +134,6 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
         function aplicarEstado(estado, atualizarUI = true) {
             if (!estado) return;
             carregandoEstadoRemoto = true;
-            categoriasDB = Array.isArray(estado.categoriasDB) ? estado.categoriasDB : categoriasDB;
-            produtosDB = Array.isArray(estado.produtosDB) ? estado.produtosDB : produtosDB;
-            produtosDB.forEach(p => { if (p.ativo === undefined) p.ativo = true; });
 
             pedidosGerais = Array.isArray(estado.pedidosGerais) ? estado.pedidosGerais : pedidosGerais;
             contadorPedidos = Number.isFinite(Number(estado.contadorPedidos)) ? Number(estado.contadorPedidos) : contadorPedidos;
@@ -127,13 +141,26 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             caixaAberto = typeof estado.caixaAberto === 'boolean' ? estado.caixaAberto : caixaAberto;
             valorFundoCaixa = Number.isFinite(Number(estado.valorFundoCaixa)) ? Number(estado.valorFundoCaixa) : valorFundoCaixa;
             dataHoraAberturaCaixa = estado.dataHoraAberturaCaixa || null;
+
+            if (estado.estoquePorProduto && typeof estado.estoquePorProduto === 'object') {
+                estoquePorProduto = estado.estoquePorProduto;
+            } else if (Array.isArray(estado.produtosDB)) {
+                // Migração automática: linha ainda no formato antigo (de antes do
+                // catálogo único existir), onde cada produto carregava seu próprio
+                // `estoque`. Extrai esses valores para o novo formato por barraca.
+                // A partir do próximo salvarNoBancoLocal() esta linha já sai no
+                // formato novo (produtosDB/categoriasDB somem daqui, vão só para
+                // o catálogo compartilhado).
+                estoquePorProduto = {};
+                estado.produtosDB.forEach(p => { estoquePorProduto[p.id] = (p.estoque === undefined ? null : p.estoque); });
+            }
+
             ultimaAtualizacaoRemota = estado.salvoEm || null;
             salvarCacheLocal();
             carregandoEstadoRemoto = false;
 
             if (atualizarUI) {
                 atualizarInterfaceCaixa();
-                renderizarCategoriasUI();
                 renderizarMenu(categoriaFiltroAtual);
                 renderizarTabelaProdutos();
                 atualizarTelas();
@@ -205,6 +232,143 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                 });
         }
 
+        // --- Catálogo compartilhado (categorias + produtos) ---
+        // Sincronizado numa linha própria (CATALOGO_ID), independente da barraca
+        // ativa — todas as barracas leem e escrevem a mesma linha. A visibilidade
+        // por barraca é feita pelo campo `barracas` de cada produto, não por linhas
+        // separadas.
+        function montarCatalogoAtual() {
+            return {
+                categoriasDB,
+                produtosDB,
+                origem: PDV_CLIENT_ID,
+                salvoEm: new Date().toISOString()
+            };
+        }
+
+        function salvarCatalogoCacheLocal() {
+            localStorage.setItem('pdv_catalogo_cache', JSON.stringify(montarCatalogoAtual()));
+        }
+
+        function aplicarCatalogo(catalogo, atualizarUI = true) {
+            if (!catalogo) return;
+            carregandoCatalogoRemoto = true;
+            categoriasDB = Array.isArray(catalogo.categoriasDB) ? catalogo.categoriasDB : categoriasDB;
+            produtosDB = Array.isArray(catalogo.produtosDB) ? catalogo.produtosDB : produtosDB;
+            produtosDB.forEach(p => {
+                if (p.ativo === undefined) p.ativo = true;
+                if (!Array.isArray(p.barracas)) p.barracas = [];
+            });
+            salvarCatalogoCacheLocal();
+            carregandoCatalogoRemoto = false;
+
+            if (atualizarUI) {
+                renderizarCategoriasUI();
+                renderizarMenu(categoriaFiltroAtual);
+                renderizarTabelaProdutos();
+                atualizarTelas();
+            }
+        }
+
+        async function salvarCatalogo() {
+            salvarCatalogoCacheLocal();
+            if (carregandoCatalogoRemoto) return;
+
+            const catalogo = montarCatalogoAtual();
+            try {
+                const { error } = await supabaseClient
+                    .from('pdv_state')
+                    .upsert({ id: CATALOGO_ID, data: catalogo, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+                if (error) throw error;
+            } catch (erro) {
+                console.error('Falha ao sincronizar o catálogo de produtos com o Supabase. Mantido no cache local:', erro);
+            }
+        }
+
+        // Migração automática, executada uma única vez (na primeira barraca que
+        // carregar o app depois desta funcionalidade existir): antes, cada barraca
+        // tinha seu próprio catálogo dentro do seu próprio estado. Não existe mais
+        // "o" catálogo antigo — existem vários, um por barraca. Usamos como semente
+        // o da barraca 'main' (a barraca original, com o cardápio real em uso),
+        // atribuindo todos os produtos dela à barraca 'main'. As demais barracas
+        // começam sem nenhum produto atribuído — quem cuida delas escolhe o que
+        // aparece em cada uma pela tela de Produtos & Estoque.
+        async function migrarCatalogoDeMain() {
+            try {
+                const { data, error } = await supabaseClient
+                    .from('pdv_state')
+                    .select('data')
+                    .eq('id', 'main')
+                    .maybeSingle();
+                if (error) throw error;
+
+                const estadoMain = data && data.data;
+                if (estadoMain && Array.isArray(estadoMain.produtosDB)) {
+                    categoriasDB = Array.isArray(estadoMain.categoriasDB) ? estadoMain.categoriasDB : JSON.parse(JSON.stringify(categoriasPadrao));
+                    produtosDB = estadoMain.produtosDB.map(p => {
+                        const { estoque, ...resto } = p;
+                        return { ...resto, ativo: p.ativo !== false, barracas: ['main'] };
+                    });
+                } else {
+                    categoriasDB = JSON.parse(JSON.stringify(categoriasPadrao));
+                    produtosDB = JSON.parse(JSON.stringify(produtosPadrao)).map(p => {
+                        const { estoque, ...resto } = p;
+                        return { ...resto, barracas: [] };
+                    });
+                }
+            } catch (erro) {
+                console.error('Não foi possível migrar o catálogo a partir da barraca "main". Usando padrões:', erro);
+                categoriasDB = JSON.parse(JSON.stringify(categoriasPadrao));
+                produtosDB = JSON.parse(JSON.stringify(produtosPadrao)).map(p => {
+                    const { estoque, ...resto } = p;
+                    return { ...resto, barracas: [] };
+                });
+            }
+            await salvarCatalogo();
+        }
+
+        async function carregarCatalogo() {
+            try {
+                const { data, error } = await supabaseClient
+                    .from('pdv_state')
+                    .select('data')
+                    .eq('id', CATALOGO_ID)
+                    .maybeSingle();
+                if (error) throw error;
+
+                if (data && data.data && Array.isArray(data.data.produtosDB)) {
+                    aplicarCatalogo(data.data, false);
+                } else {
+                    await migrarCatalogoDeMain();
+                    aplicarCatalogo(montarCatalogoAtual(), false);
+                }
+            } catch (erro) {
+                console.error('Não foi possível carregar o catálogo do Supabase. Usando cache local:', erro);
+                try {
+                    const cache = JSON.parse(localStorage.getItem('pdv_catalogo_cache'));
+                    if (cache) aplicarCatalogo(cache, false);
+                } catch (e) { /* mantém os padrões já carregados */ }
+            }
+        }
+
+        function iniciarRealtimeCatalogo() {
+            supabaseClient
+                .channel('pdv-catalogo-sync')
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: 'pdv_state',
+                    filter: `id=eq.${CATALOGO_ID}`
+                }, payload => {
+                    const catalogo = payload.new && payload.new.data;
+                    if (!catalogo || catalogo.origem === PDV_CLIENT_ID) return;
+                    aplicarCatalogo(catalogo, true);
+                })
+                .subscribe(status => {
+                    console.log('Supabase Realtime (catálogo de produtos):', status);
+                });
+        }
+
         let carrinho = []; 
         let pedidoEmEdicaoId = null; let categoriaFiltroAtual = 'Todos'; let produtoEmEdicaoId = null; 
         
@@ -270,7 +434,7 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             if(idAba === 'tela-relatorio') atualizarDashboard();
             if(idAba === 'tela-fechamento-caixa') renderizarHistoricoCaixas();
             if(idAba === 'tela-agendados') document.getElementById('busca-agendados').focus();
-            if(idAba === 'tela-produtos') { renderizarCategoriasUI(); renderizarTabelaProdutos(); }
+            if(idAba === 'tela-produtos') { renderizarCategoriasUI(); renderizarTabelaProdutos(); if (produtoEmEdicaoId === null) renderizarChecklistBarracasProduto(); }
             if(idAba === 'tela-pedido') { renderizarCategoriasUI(); renderizarMenu(categoriaFiltroAtual); }
             if(idAba === 'tela-atalhos') renderizarPainelAtalhos();
             if(idAba === 'tela-videowall') atualizarTelas(); 
@@ -463,23 +627,26 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             }
         }
         
+        // Categorias fazem parte do catálogo compartilhado — mudam para todas as
+        // barracas de uma vez, por isso salvam com salvarCatalogo(), não
+        // salvarNoBancoLocal() (que é o estado desta barraca sozinha).
         function moverCategoria(index, direcao) {
             const novoIndex = index + direcao;
             if (novoIndex < 0 || novoIndex >= categoriasDB.length) return;
             const temp = categoriasDB[index];
             categoriasDB[index] = categoriasDB[novoIndex];
             categoriasDB[novoIndex] = temp;
-            salvarNoBancoLocal();
+            salvarCatalogo();
             renderizarCategoriasUI();
             renderizarMenu(categoriaFiltroAtual);
         }
 
         function adicionarCategoria() {
             let nome = document.getElementById('nova-cat-nome').value.trim(); if (!nome) return;
-            nome = nome.charAt(0).toUpperCase() + nome.slice(1); 
+            nome = nome.charAt(0).toUpperCase() + nome.slice(1);
             if (categoriasDB.includes(nome)) return exibirAviso("Esta categoria já está cadastrada!");
-            categoriasDB.push(nome); document.getElementById('nova-cat-nome').value = ''; 
-            salvarNoBancoLocal();
+            categoriasDB.push(nome); document.getElementById('nova-cat-nome').value = '';
+            salvarCatalogo();
             renderizarCategoriasUI();
         }
         function editarCategoria(nomeAntigo) {
@@ -490,17 +657,17 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                 categoriasDB[categoriasDB.indexOf(nomeAntigo)] = novoNome;
                 produtosDB.forEach(p => { if (p.categoria === nomeAntigo) p.categoria = novoNome; });
                 if (categoriaFiltroAtual === nomeAntigo) categoriaFiltroAtual = novoNome;
-                salvarNoBancoLocal();
+                salvarCatalogo();
                 renderizarCategoriasUI(); renderizarTabelaProdutos(); renderizarMenu(categoriaFiltroAtual);
             }
         }
         function excluirCategoria(nome) {
             if (produtosDB.some(p => p.categoria === nome)) return exibirAviso(`Existem produtos vinculados a "${nome}". Remova os produtos antes.`);
-            if (confirm(`Excluir a categoria "${nome}"?`)) { 
-                categoriasDB = categoriasDB.filter(c => c !== nome); 
-                if (categoriaFiltroAtual === nome) categoriaFiltroAtual = 'Todos'; 
-                salvarNoBancoLocal();
-                renderizarCategoriasUI(); renderizarMenu(categoriaFiltroAtual); 
+            if (confirm(`Excluir a categoria "${nome}"? Isso afeta TODAS as barracas, não só a sua.`)) {
+                categoriasDB = categoriasDB.filter(c => c !== nome);
+                if (categoriaFiltroAtual === nome) categoriaFiltroAtual = 'Todos';
+                salvarCatalogo();
+                renderizarCategoriasUI(); renderizarMenu(categoriaFiltroAtual);
             }
         }
 
@@ -563,14 +730,31 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             renderizarListaComboTemporario();
         }
 
+        // Ativo/Inativo é global (produto some das vendas em TODAS as barracas) —
+        // é diferente de "não marcado para esta barraca", que só afeta uma.
         function toggleStatusAtivoProduto(id) {
             const p = produtosDB.find(prod => prod.id === id);
             if (p) {
                 p.ativo = !p.ativo;
-                salvarNoBancoLocal();
+                salvarCatalogo();
                 renderizarTabelaProdutos();
                 renderizarMenu(categoriaFiltroAtual);
             }
+        }
+
+        // Desenha os checkboxes de "em quais barracas este produto aparece" no
+        // formulário de cadastro/edição. `idsMarcados` vem do produto sendo
+        // editado (ou fica vazio, com a barraca atual pré-marcada, ao cadastrar).
+        function renderizarChecklistBarracasProduto(idsMarcados) {
+            const box = document.getElementById('checklist-barracas-produto');
+            if (!box) return;
+            const marcados = Array.isArray(idsMarcados) ? idsMarcados : [barracaStateId];
+            box.innerHTML = registroBarracas.map(b => `
+                <label style="display:flex; align-items:center; gap:5px; font-weight:normal; font-size:0.85rem; margin-bottom:0;">
+                    <input type="checkbox" class="chk-barraca-produto" value="${b.id}" style="width:auto; margin-bottom:0;" ${marcados.includes(b.id) ? 'checked' : ''}>
+                    ${b.nome}
+                </label>
+            `).join('') || '<span style="color:gray; font-size:0.85rem;">Nenhuma barraca cadastrada ainda.</span>';
         }
 
         function renderizarTabelaProdutos() {
@@ -581,13 +765,23 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                     else { let subP = produtosDB.find(x=>x.id===i.ref); return `${i.qtd}x ${subP?subP.nome:'Fixo'}`; }
                 }).join(', ')}</small>` : '';
 
-                let txtEstoque = p.isCombo ? '<span style="color:gray;">Misto</span>' : (p.estoque !== null ? `${p.estoque} un.` : '∞ (Livre)');
-                let corEstoque = (!p.isCombo && p.estoque !== null && p.estoque <= 5) ? 'color: var(--danger);' : '';
+                const estoqueAqui = estoquePorProduto[p.id];
+                const estoqueAquiVal = (estoqueAqui === undefined) ? null : estoqueAqui;
+                let txtEstoque = p.isCombo ? '<span style="color:gray;">Misto</span>' : (estoqueAquiVal !== null ? `${estoqueAquiVal} un.` : '∞ (Livre)');
+                let corEstoque = (!p.isCombo && estoqueAquiVal !== null && estoqueAquiVal <= 5) ? 'color: var(--danger);' : '';
                 let imgThumb = p.foto ? `<img src="${p.foto}" style="width:40px; height:40px; object-fit:contain; background:#f8fafc; border-radius:6px; padding:2px; border:1px solid #ddd;">` : '<span style="color:gray; font-size:0.75rem;">Sem foto</span>';
 
-                let badgeStatus = p.ativo !== false 
+                let badgeStatus = p.ativo !== false
                     ? `<button class="btn btn-success" style="padding:3px 8px; font-size:0.75rem;" onclick="toggleStatusAtivoProduto(${p.id})">🟢 Ativo</button>`
                     : `<button class="btn btn-danger" style="padding:3px 8px; font-size:0.75rem;" onclick="toggleStatusAtivoProduto(${p.id})">🔴 Inativo</button>`;
+
+                const nomesBarracas = (p.barracas || []).map(id => {
+                    const b = registroBarracas.find(x => x.id === id);
+                    return b ? b.nome : id;
+                });
+                let badgesBarracas = nomesBarracas.length
+                    ? nomesBarracas.map(n => `<span style="background:#ede9fe; color:#5b21b6; padding:2px 6px; border-radius:4px; font-size:0.75rem; display:inline-block; margin:1px;">${n}</span>`).join('')
+                    : '<span style="color:var(--danger); font-size:0.75rem;">Nenhuma (invisível)</span>';
 
                 tbody.innerHTML += `
                     <tr style="border-bottom: 1px solid #f3f4f6; ${p.ativo === false ? 'opacity: 0.6; background:#fef2f2;' : ''}">
@@ -596,9 +790,10 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                         <td>${badgeStatus}</td>
                         <td>${p.nome} ${desc} <br><span style="font-size: 0.8rem; color: gray;">${p.cozinha ? '👨‍🍳 Cozinha' : '🛍️ Balcão'}</span></td>
                         <td><span style="background:#e5e7eb; padding:2px 6px; border-radius:4px; font-size:0.8rem;">${p.categoria}</span></td>
+                        <td style="max-width:160px;">${badgesBarracas}</td>
                         <td style="font-weight: bold;">R$ ${p.preco.toFixed(2)}</td><td style="${corEstoque}">${txtEstoque}</td>
                         <td style="white-space: nowrap;">
-                            <button class="btn btn-warning" style="padding: 4px; font-size: 0.8rem; color: black;" onclick="prepararEdicaoProduto(${p.id})">✏️</button> 
+                            <button class="btn btn-warning" style="padding: 4px; font-size: 0.8rem; color: black;" onclick="prepararEdicaoProduto(${p.id})">✏️</button>
                             ${!p.isCombo ? `<button class="btn btn-primary" style="padding: 4px; font-size: 0.8rem;" onclick="adicionarEstoqueManual(${p.id})">📦 +</button>` : ''}
                             <button class="btn btn-danger" style="padding: 4px; font-size: 0.8rem;" onclick="apagarProduto(${p.id})">🗑️</button>
                         </td>
@@ -608,11 +803,12 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
         
         function prepararEdicaoProduto(id) {
             const p = produtosDB.find(prod => prod.id === id);
-            document.getElementById('novo-prod-nome').value = p.nome; 
+            document.getElementById('novo-prod-nome').value = p.nome;
             document.getElementById('novo-prod-preco').value = p.preco;
             document.getElementById('novo-prod-categoria').value = p.categoria;
             document.getElementById('novo-prod-foto').value = p.foto || '';
             document.getElementById('novo-prod-ativo').value = (p.ativo !== false).toString();
+            renderizarChecklistBarracasProduto(p.barracas);
 
             if (p.foto) {
                 document.getElementById('preview-foto-img').src = p.foto;
@@ -632,43 +828,46 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                 });
                 renderizarListaComboTemporario();
             } else {
-                document.getElementById('novo-prod-estoque').value = p.estoque !== null ? p.estoque : ''; 
-                document.getElementById('novo-prod-cozinha').value = p.cozinha ? 'true' : 'false'; 
+                const estoqueAqui = estoquePorProduto[p.id];
+                document.getElementById('novo-prod-estoque').value = (estoqueAqui !== undefined && estoqueAqui !== null) ? estoqueAqui : '';
+                document.getElementById('novo-prod-cozinha').value = p.cozinha ? 'true' : 'false';
             }
 
             produtoEmEdicaoId = p.id;
-            document.getElementById('titulo-form-produto').innerText = `Editar ${p.isCombo?'Combo':'Produto'} #${p.id}`; 
+            document.getElementById('titulo-form-produto').innerText = `Editar ${p.isCombo?'Combo':'Produto'} #${p.id}`;
             document.getElementById('btn-salvar-produto').innerText = "Atualizar 🔄";
-            document.getElementById('btn-salvar-produto').classList.replace('btn-primary', 'btn-warning'); 
+            document.getElementById('btn-salvar-produto').classList.replace('btn-primary', 'btn-warning');
             document.getElementById('btn-cancelar-edicao-prod').style.display = 'block';
         }
 
         function cancelarEdicaoProduto() {
-            produtoEmEdicaoId = null; 
-            document.getElementById('novo-prod-nome').value = ''; 
-            document.getElementById('novo-prod-preco').value = ''; 
+            produtoEmEdicaoId = null;
+            document.getElementById('novo-prod-nome').value = '';
+            document.getElementById('novo-prod-preco').value = '';
             document.getElementById('novo-prod-estoque').value = '';
             document.getElementById('novo-prod-foto').value = '';
             document.getElementById('file-prod-foto').value = '';
             document.getElementById('novo-prod-ativo').value = "true";
             document.getElementById('preview-foto-container').style.display = 'none';
+            renderizarChecklistBarracasProduto();
 
             comboTemporario = []; renderizarListaComboTemporario();
             mudarModoCadastro('simples');
             document.getElementById('btn-salvar-produto').innerText = "Salvar 💾";
-            document.getElementById('btn-salvar-produto').classList.replace('btn-warning', 'btn-primary'); 
+            document.getElementById('btn-salvar-produto').classList.replace('btn-warning', 'btn-primary');
             document.getElementById('btn-cancelar-edicao-prod').style.display = 'none';
         }
 
         function salvarProduto() {
-            let nome = document.getElementById('novo-prod-nome').value.trim(); 
+            let nome = document.getElementById('novo-prod-nome').value.trim();
             let preco = parseFloat(document.getElementById('novo-prod-preco').value);
-            let categoria = document.getElementById('novo-prod-categoria').value; 
+            let categoria = document.getElementById('novo-prod-categoria').value;
             let foto = document.getElementById('novo-prod-foto').value.trim();
             let ativo = document.getElementById('novo-prod-ativo').value === 'true';
+            let barracasMarcadas = Array.from(document.querySelectorAll('.chk-barraca-produto:checked')).map(chk => chk.value);
 
             if (!nome || isNaN(preco) || preco <= 0 || !categoria) return exibirAviso("Preencha todos os campos do produto corretamente.");
-            
+
             let isCombo = (modoCadastroAtivo === 'combo');
             let cozinha = false;
             let estoqueFinal = null;
@@ -682,59 +881,72 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                 cozinha = document.getElementById('novo-prod-cozinha').value === 'true';
                 let estoqueInput = document.getElementById('novo-prod-estoque').value.trim();
                 estoqueFinal = estoqueInput === '' ? null : parseInt(estoqueInput);
-                
-                if (estoqueFinal !== null && estoqueFinal <= 0) {
-                    ativo = false;
-                }
+                // Estoque é só desta barraca (estoquePorProduto), não mais um campo
+                // do produto — por isso não mexe mais em `ativo` aqui: ficar sem
+                // estoque nesta barraca não pode apagar o produto para as outras.
             }
 
+            let idSalvo;
             if (produtoEmEdicaoId !== null) {
                 let p = produtosDB.find(prod => prod.id === produtoEmEdicaoId);
-                p.nome = nome; p.preco = preco; p.categoria = categoria; p.cozinha = cozinha; 
-                p.isCombo = isCombo; p.estoque = estoqueFinal; p.itensCombo = finalItensCombo; p.foto = foto; p.ativo = ativo;
-                cancelarEdicaoProduto(); 
+                p.nome = nome; p.preco = preco; p.categoria = categoria; p.cozinha = cozinha;
+                p.isCombo = isCombo; p.itensCombo = finalItensCombo; p.foto = foto; p.ativo = ativo; p.barracas = barracasMarcadas;
+                idSalvo = p.id;
+                cancelarEdicaoProduto();
             } else {
-                produtosDB.push({ 
-                    id: produtosDB.length > 0 ? Math.max(...produtosDB.map(p => p.id)) + 1 : 1, 
-                    nome, preco, categoria, cozinha, isCombo, estoque: estoqueFinal, itensCombo: finalItensCombo, foto, ativo 
+                idSalvo = produtosDB.length > 0 ? Math.max(...produtosDB.map(p => p.id)) + 1 : 1;
+                produtosDB.push({
+                    id: idSalvo,
+                    nome, preco, categoria, cozinha, isCombo, itensCombo: finalItensCombo, foto, ativo, barracas: barracasMarcadas
                 });
-                cancelarEdicaoProduto(); 
+                cancelarEdicaoProduto();
             }
-            salvarNoBancoLocal();
+
+            if (!isCombo) {
+                estoquePorProduto[idSalvo] = estoqueFinal;
+                salvarNoBancoLocal();
+            }
+            salvarCatalogo();
             renderizarCategoriasUI();
             renderizarTabelaProdutos(); renderizarMenu(categoriaFiltroAtual);
         }
 
         function adicionarEstoqueManual(idProduto) {
-            const p = produtosDB.find(prod => prod.id === idProduto); 
+            const p = produtosDB.find(prod => prod.id === idProduto);
             if(p.isCombo) return;
-            if(p.estoque === null) return exibirAviso("Este produto possui Estoque Livre.");
-            const add = prompt(`Adicionar estoque ao ${p.nome} (Atual: ${p.estoque}):`);
-            if(add && !isNaN(add)) { 
-                p.estoque += parseInt(add); 
-                if (p.estoque > 0) p.ativo = true;
+            const atual = estoquePorProduto[idProduto];
+            const atualVal = (atual === undefined) ? null : atual;
+            if(atualVal === null) return exibirAviso("Este produto possui Estoque Livre nesta barraca.");
+            const add = prompt(`Adicionar estoque ao ${p.nome} nesta barraca (Atual: ${atualVal}):`);
+            if(add && !isNaN(add)) {
+                estoquePorProduto[idProduto] = atualVal + parseInt(add);
                 salvarNoBancoLocal();
-                renderizarTabelaProdutos(); renderizarMenu(categoriaFiltroAtual); 
+                renderizarTabelaProdutos(); renderizarMenu(categoriaFiltroAtual);
             }
         }
 
         function apagarProduto(idProduto) {
-            if (confirm(`Excluir produto/combo?`)) { 
-                produtosDB = produtosDB.filter(p => p.id !== idProduto); 
-                if (produtoEmEdicaoId === idProduto) cancelarEdicaoProduto(); 
+            if (confirm(`Excluir este produto/combo do catálogo? Isso remove ele de TODAS as barracas que o vendem, não só da sua. Para tirar só da sua barraca, edite o produto e desmarque sua barraca na lista.`)) {
+                produtosDB = produtosDB.filter(p => p.id !== idProduto);
+                if (produtoEmEdicaoId === idProduto) cancelarEdicaoProduto();
+                delete estoquePorProduto[idProduto];
                 salvarNoBancoLocal();
+                salvarCatalogo();
                 renderizarCategoriasUI();
-                renderizarTabelaProdutos(); 
-                renderizarMenu(categoriaFiltroAtual); 
+                renderizarTabelaProdutos();
+                renderizarMenu(categoriaFiltroAtual);
             }
         }
 
         function imprimirEstoquePorCategoria() {
             const areaPrint = document.getElementById('area-impressao');
             
+            // Só produtos desta barraca — estoque é um conceito por barraca.
+            const produtosDaBarraca = produtosDB.filter(p => Array.isArray(p.barracas) && p.barracas.includes(barracaStateId));
+
             let agrupado = {};
             categoriasDB.forEach(cat => { agrupado[cat] = []; });
-            produtosDB.forEach(p => {
+            produtosDaBarraca.forEach(p => {
                 if (!agrupado[p.categoria]) agrupado[p.categoria] = [];
                 agrupado[p.categoria].push(p);
             });
@@ -746,7 +958,9 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                         <div class="print-center print-bold" style="margin-top:10px; background:#f3f4f6; padding:3px; text-transform:uppercase;">--- ${cat} ---</div>
                     `;
                     agrupado[cat].forEach(p => {
-                        let txtEstoque = p.isCombo ? 'Misto' : (p.estoque !== null ? `${p.estoque} un.` : 'Livre');
+                        const estoqueAqui = estoquePorProduto[p.id];
+                        const estoqueAquiVal = (estoqueAqui === undefined) ? null : estoqueAqui;
+                        let txtEstoque = p.isCombo ? 'Misto' : (estoqueAquiVal !== null ? `${estoqueAquiVal} un.` : 'Livre');
                         let txtInativo = p.ativo === false ? ' (INATIVO)' : '';
                         htmlCategorias += `
                             <div class="print-row" style="margin-top:4px;">
@@ -795,18 +1009,23 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             const menuDiv = document.getElementById('menu-produtos'); menuDiv.innerHTML = '';
             const termoBusca = (document.getElementById('busca-produto-menu') ? document.getElementById('busca-produto-menu').value.trim().toLowerCase() : '');
             
-            const produtosDisponiveisVenda = produtosDB.filter(p => p.ativo !== false);
+            // Só produtos ativos (globalmente) E marcados para esta barraca aparecem
+            // aqui — o catálogo é único, mas cada barraca só vende o que foi
+            // marcado para ela.
+            const produtosDisponiveisVenda = produtosDB.filter(p => p.ativo !== false && Array.isArray(p.barracas) && p.barracas.includes(barracaStateId));
 
             const renderCardHTML = (produto) => {
                 let badgeEstoque = ''; let opacity = '1'; let descCombo = '';
+                const estoqueAqui = estoquePorProduto[produto.id];
+                const estoqueAquiVal = (estoqueAqui === undefined) ? null : estoqueAqui;
                 if (produto.isCombo) {
                     badgeEstoque = `<div class="badge-combo">✨ COMBO</div>`;
                     let qtdTotal = produto.itensCombo.reduce((acc, i)=>acc+i.qtd, 0);
                     descCombo = `<div style="font-size: 0.65rem; color: gray; margin-top:1px;">Contém: ${qtdTotal} itens</div>`;
-                } else if (produto.estoque !== null) {
-                    if (produto.estoque <= 0) { badgeEstoque = `<div class="badge-estoque estoque-baixo">ESGOTADO</div>`; opacity = '0.5'; }
-                    else if (produto.estoque <= 5) badgeEstoque = `<div class="badge-estoque estoque-baixo">Restam ${produto.estoque}</div>`;
-                    else badgeEstoque = `<div class="badge-estoque">Est: ${produto.estoque}</div>`;
+                } else if (estoqueAquiVal !== null) {
+                    if (estoqueAquiVal <= 0) { badgeEstoque = `<div class="badge-estoque estoque-baixo">ESGOTADO</div>`; opacity = '0.5'; }
+                    else if (estoqueAquiVal <= 5) badgeEstoque = `<div class="badge-estoque estoque-baixo">Restam ${estoqueAquiVal}</div>`;
+                    else badgeEstoque = `<div class="badge-estoque">Est: ${estoqueAquiVal}</div>`;
                 }
 
                 let imgHtml = produto.foto ? `<img src="${produto.foto}" class="img-produto-card" alt="${produto.nome}">` : '';
@@ -866,10 +1085,12 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             produto.itensCombo.forEach((req) => {
                 if (req.tipo === 'categoria') {
                     for(let i=0; i<req.qtd; i++) {
-                        const opcoes = produtosDB.filter(p => p.categoria === req.ref && !p.isCombo && p.ativo !== false);
+                        const opcoes = produtosDB.filter(p => p.categoria === req.ref && !p.isCombo && p.ativo !== false && Array.isArray(p.barracas) && p.barracas.includes(barracaStateId));
                         const optionsHtml = opcoes.map(p => {
-                            let disp = p.estoque !== null ? ` (Restam ${p.estoque})` : '';
-                            let block = (p.estoque !== null && p.estoque <= 0) ? 'disabled' : '';
+                            const estAqui = estoquePorProduto[p.id];
+                            const estAquiVal = (estAqui === undefined) ? null : estAqui;
+                            let disp = estAquiVal !== null ? ` (Restam ${estAquiVal})` : '';
+                            let block = (estAquiVal !== null && estAquiVal <= 0) ? 'disabled' : '';
                             return `<option value="${p.id}" ${block}>${p.nome}${disp}</option>`;
                         }).join('');
                         
@@ -981,14 +1202,16 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
 
             document.getElementById('modal-troca-info').innerText = `Pedido #${pedido.id} (${pedido.cliente}) - Item atual: ${item.nome} (R$ ${precoItem.toFixed(2)})`;
             
-            const produtosDisponiveis = produtosDB.filter(p => p.categoria === item.categoria && !p.isCombo && Math.abs(p.preco - precoItem) < 0.01 && p.ativo !== false);
+            const produtosDisponiveis = produtosDB.filter(p => p.categoria === item.categoria && !p.isCombo && Math.abs(p.preco - precoItem) < 0.01 && p.ativo !== false && Array.isArray(p.barracas) && p.barracas.includes(barracaStateId));
             const select = document.getElementById('select-novo-item-troca');
-            
+
             if (produtosDisponiveis.length === 0) {
                 select.innerHTML = '<option value="">Nenhum produto ativo com o mesmo valor nesta categoria</option>';
             } else {
                 select.innerHTML = produtosDisponiveis.map(p => {
-                    let disp = p.estoque !== null ? ` (Restam ${p.estoque})` : '';
+                    const estAqui = estoquePorProduto[p.id];
+                    const estAquiVal = (estAqui === undefined) ? null : estAqui;
+                    let disp = estAquiVal !== null ? ` (Restam ${estAquiVal})` : '';
                     return `<option value="${p.id}">${p.nome} - R$ ${p.preco.toFixed(2)}${disp}</option>`;
                 }).join('');
             }
@@ -1014,19 +1237,17 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             const item = pedido.itens.find(i => i.cartId === trocaItemCartId);
 
             const prodAntigo = produtosDB.find(p => p.id === item.idProduto);
-            if (prodAntigo && prodAntigo.estoque !== null) {
-                prodAntigo.estoque += 1;
-                if (prodAntigo.estoque > 0) prodAntigo.ativo = true;
+            if (prodAntigo) {
+                const estAntigo = estoquePorProduto[prodAntigo.id];
+                if (estAntigo !== undefined && estAntigo !== null) estoquePorProduto[prodAntigo.id] = estAntigo + 1;
             }
 
-            if (novoProduto.estoque !== null) {
-                if (novoProduto.estoque <= 0) {
+            const estNovo = estoquePorProduto[novoProduto.id];
+            if (estNovo !== undefined && estNovo !== null) {
+                if (estNovo <= 0) {
                     exibirAviso("Atenção: Este produto estava sem estoque, mas a troca foi efetuada.");
                 }
-                novoProduto.estoque -= 1;
-                if (novoProduto.estoque <= 0) {
-                    novoProduto.ativo = false;
-                }
+                estoquePorProduto[novoProduto.id] = estNovo - 1;
             }
 
             item.idProduto = novoProduto.id;
@@ -1110,19 +1331,21 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
 
         function verificarEstoqueDisponivel(idProduto, qtdParaAdicionar = 1) {
             const p = produtosDB.find(x => x.id === idProduto);
-            if(!p || p.estoque === null) return true; 
-            
+            const estoqueAqui = estoquePorProduto[idProduto];
+            const estoqueAquiVal = (estoqueAqui === undefined) ? null : estoqueAqui;
+            if(!p || estoqueAquiVal === null) return true;
+
             let countCart = 0;
             carrinho.forEach(ci => {
                 if(ci.isCombo) {
                     ci.itensComboEscolhidos.forEach(sub => { if(sub.idProduto === idProduto) countCart += 1; });
                 } else {
-                    if(ci.idProduto === idProduto) countCart += 1; 
+                    if(ci.idProduto === idProduto) countCart += 1;
                 }
             });
 
-            if (countCart + qtdParaAdicionar > p.estoque) {
-                exibirAviso(`Estoque insuficiente de ${p.nome}! Restam ${p.estoque} unidades.`);
+            if (countCart + qtdParaAdicionar > estoqueAquiVal) {
+                exibirAviso(`Estoque insuficiente de ${p.nome}! Restam ${estoqueAquiVal} unidades.`);
                 return false;
             }
             return true;
@@ -1344,19 +1567,13 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             if (pedidoEmEdicaoId !== null) {
                 pedidosGerais.find(p => p.id === pedidoEmEdicaoId).itens.forEach(item => {
                     if(item.isCombo) {
-                        item.itensComboEscolhidos.forEach(sub => { 
-                            let subP = produtosDB.find(x=>x.id===sub.idProduto); 
-                            if(subP && subP.estoque!==null) {
-                                subP.estoque += 1;
-                                if (subP.estoque > 0) subP.ativo = true;
-                            } 
+                        item.itensComboEscolhidos.forEach(sub => {
+                            const est = estoquePorProduto[sub.idProduto];
+                            if(est !== undefined && est !== null) estoquePorProduto[sub.idProduto] = est + 1;
                         });
                     } else {
-                        let prod = produtosDB.find(p => p.id === item.idProduto); 
-                        if(prod && prod.estoque !== null) {
-                            prod.estoque += 1;
-                            if (prod.estoque > 0) prod.ativo = true;
-                        }
+                        const est = estoquePorProduto[item.idProduto];
+                        if(est !== undefined && est !== null) estoquePorProduto[item.idProduto] = est + 1;
                     }
                 });
                 pedidosGerais = pedidosGerais.filter(p => p.id !== pedidoEmEdicaoId);
@@ -1364,19 +1581,13 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
 
             carrinho.forEach(item => {
                 if(item.isCombo) {
-                    item.itensComboEscolhidos.forEach(sub => { 
-                        let subP = produtosDB.find(x=>x.id===sub.idProduto); 
-                        if(subP && subP.estoque!==null) {
-                            subP.estoque -= 1;
-                            if (subP.estoque <= 0) subP.ativo = false;
-                        } 
+                    item.itensComboEscolhidos.forEach(sub => {
+                        const est = estoquePorProduto[sub.idProduto];
+                        if(est !== undefined && est !== null) estoquePorProduto[sub.idProduto] = est - 1;
                     });
                 } else {
-                    let prod = produtosDB.find(p => p.id === item.idProduto); 
-                    if(prod && prod.estoque !== null) {
-                        prod.estoque -= 1;
-                        if (prod.estoque <= 0) prod.ativo = false;
-                    }
+                    const est = estoquePorProduto[item.idProduto];
+                    if(est !== undefined && est !== null) estoquePorProduto[item.idProduto] = est - 1;
                 }
             });
 
@@ -1657,21 +1868,15 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             if(confirm(`Tem certeza que deseja CANCELAR o Pedido #${id}?`)) {
                 const p = pedidosGerais.find(x => x.id === id);
                 if (p && p.statusPainel !== 'cancelado') {
-                    p.itens.forEach(item => { 
+                    p.itens.forEach(item => {
                         if(item.isCombo) {
-                            item.itensComboEscolhidos.forEach(sub => { 
-                                let subP = produtosDB.find(x=>x.id===sub.idProduto); 
-                                if(subP && subP.estoque!==null) {
-                                    subP.estoque += 1;
-                                    if (subP.estoque > 0) subP.ativo = true;
-                                } 
+                            item.itensComboEscolhidos.forEach(sub => {
+                                const est = estoquePorProduto[sub.idProduto];
+                                if(est !== undefined && est !== null) estoquePorProduto[sub.idProduto] = est + 1;
                             });
                         } else {
-                            let prod = produtosDB.find(px => px.id === item.idProduto); 
-                            if(prod && prod.estoque !== null) {
-                                prod.estoque += 1;
-                                if (prod.estoque > 0) prod.ativo = true;
-                            }
+                            const est = estoquePorProduto[item.idProduto];
+                            if(est !== undefined && est !== null) estoquePorProduto[item.idProduto] = est + 1;
                         }
                     });
                     p.statusPainel = 'cancelado'; 
@@ -2510,6 +2715,7 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
 
             carregarCacheLocalDaBarraca();
             await carregarEstadoSupabase();
+            await carregarCatalogo();
             atualizarInterfaceCaixa();
             renderizarCategoriasUI();
             renderizarMenu();
@@ -2518,6 +2724,7 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             renderizarHistoricoCaixas();
             iniciarRealtimeSupabase();
             iniciarRealtimeRegistroBarracas();
+            iniciarRealtimeCatalogo();
         };
 
 // --- Shim exigido pela conversão para módulo ES (não existe no arquivo-fonte) ---

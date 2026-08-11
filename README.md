@@ -42,15 +42,22 @@ Row Level Security (RLS) no projeto Supabase, não de esconder essa string.
 
 ## Múltiplas barracas
 
-O PDV suporta várias "barracas" (bancas/estandes) usando o mesmo app, cada uma **totalmente isolada**:
-cardápio, pedidos, caixa e fila de despacho próprios. Serve para eventos (ex: uma festa/feira da igreja)
-em que cada barraca vende coisas diferentes e fecha seu próprio caixa.
+O PDV suporta várias "barracas" (bancas/estandes) usando o mesmo app. Pedidos, caixa, fila de despacho
+e estoque são **totalmente isolados por barraca**; o cardápio (produtos e categorias) é **único e
+compartilhado** — cadastrado uma vez, cada produto é marcado para aparecer em uma ou mais barracas.
+Serve para eventos (ex: uma festa/feira da igreja) em que cada barraca vende coisas diferentes (ou
+compartilha alguns itens, tipo água/refrigerante) e fecha seu próprio caixa.
 
 - **Como funciona por baixo dos panos**: cada barraca é uma linha própria na tabela `pdv_state` do
   Supabase, identificada pelo `id` da barraca (o mesmo mecanismo que antes guardava só a barraca única
   como `id = 'main'` — por isso a barraca original virou automaticamente "Barraca Principal", sem
   precisar migrar nada no Supabase). Uma linha reservada, `id = '__registry__'`, guarda só a lista de
-  barracas cadastradas (nome, id, data de criação).
+  barracas cadastradas (nome, id, data de criação); outra, `id = '__catalogo__'`, guarda o cardápio
+  único (categorias + produtos, cada produto com um campo `barracas: string[]`).
+- **Estoque é por barraca**: mesmo produto, saldo de estoque independente em cada barraca que o vende
+  (`estoquePorProduto` dentro do estado de cada barraca, não do catálogo). Ativo/Inativo continua
+  global — desativar um produto some com ele em todas as barracas de uma vez; desmarcar a barraca no
+  cadastro do produto some só para aquela barraca.
 - **Ao abrir o app pela primeira vez num dispositivo**, aparece uma tela para escolher (ou criar) a
   barraca em que ele vai trabalhar; a escolha fica salva naquele navegador/dispositivo até ser trocada
   manualmente pelo seletor no canto superior direito do menu. Dispositivos que já usavam o PDV antes
