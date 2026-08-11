@@ -343,6 +343,12 @@
                             <input type="text" id="obs-bonificacao" placeholder="Ex: Doação, Autoridade, Cortesia..." style="margin-bottom: 0; background: white; padding: 4px;">
                         </div>
 
+                        <div id="box-pedido-online" style="display: none; background: #e0f2fe; padding: 8px; border-radius: 6px; border: 1px solid #0284c7; margin-bottom: 6px;">
+                            <label style="font-size: 0.72rem; font-weight: bold; color: #0369a1; margin-bottom:2px;">Horário que a Pessoa Vem Retirar (Obrigatório):</label>
+                            <input type="time" id="horario-retirada-online" style="margin-bottom: 0; background: white; padding: 4px;">
+                            <small style="color:#0369a1; font-size:0.7rem;">O pedido fica em "🎫 Pedido Ficha" e vai sozinho pra cozinha 5 min antes desse horário.</small>
+                        </div>
+
                         <button id="btn-finalizar-pedido" class="btn btn-primary" style="width: 100%; margin-bottom: 6px; font-size: 1rem; padding: 8px;" onclick="finalizarPedido()">Cobrar, Imprimir e Enviar 🖨️</button>
                         <button class="btn-danger" style="width: 100%; padding: 6px; font-size: 0.85rem;" onclick="limparCarrinho()">Limpar Pedido</button>
                     </div>
