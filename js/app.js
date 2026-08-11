@@ -423,6 +423,13 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             else { nav.style.display = 'none'; btnShow.style.display = 'block'; }
         }
 
+        // Menu sanduíche do mobile: abre/fecha o painel com as abas (o CSS é
+        // quem decide, via classe, o que vira lista vertical abaixo do
+        // hambúrguer — ver @media (max-width: 768px) em styles.css).
+        function toggleMenuMobile() {
+            document.getElementById('nav-principal').classList.toggle('menu-mobile-aberto');
+        }
+
         // Os menus do topo (Painéis/Gestão/Relatórios/seletor de barraca) abrem
         // no :hover via CSS, o que não existe em toque (celular/tablet) — sem
         // isso, esses menus ficariam impossíveis de abrir no mobile. Alterna a
@@ -448,7 +455,8 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
         function mudarAba(idAba, botao) {
             document.querySelectorAll('.tab-content').forEach(aba => aba.classList.remove('active'));
             document.querySelectorAll('nav button, .dropdown-content button').forEach(btn => btn.classList.remove('active'));
-            
+            document.getElementById('nav-principal').classList.remove('menu-mobile-aberto');
+
             const mainContainer = document.getElementById('container-principal');
             if (idAba === 'tela-tv') {
                 mainContainer.classList.add('container-tv');
@@ -3101,5 +3109,6 @@ window.salvarProduto = salvarProduto;
 window.setFaseItem = setFaseItem;
 window.toggleCampoDinheiro = toggleCampoDinheiro;
 window.toggleMenuGlobal = toggleMenuGlobal;
+window.toggleMenuMobile = toggleMenuMobile;
 window.toggleStatusAtivoProduto = toggleStatusAtivoProduto;
 window.verDetalhesCaixa = verDetalhesCaixa;

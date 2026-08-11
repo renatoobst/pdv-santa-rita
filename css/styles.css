@@ -48,6 +48,10 @@
 
         /* Ação secundária (ocultar menu): só o ícone, minimalista, ganha destaque no hover. */
         .nav-btn-icon { padding: 9px 12px; opacity: 0.6; font-size: 16px; }
+
+        /* Botão hambúrguer: só existe visualmente no mobile (ver media query). */
+        .nav-hamburguer { display: none; background: transparent; border: 2px solid transparent; color: #fff; font-size: 20px; line-height: 1; padding: 8px 12px; border-radius: 8px; cursor: pointer; }
+        .nav-hamburguer:hover { background-color: rgba(255, 255, 255, 0.08); }
         .nav-btn-icon:hover { opacity: 1; }
 
         .btn-show-menu { position: fixed; top: 10px; left: 10px; background: rgba(0,0,0,0.8); color: white; border: 1px solid #333; padding: 10px 15px; border-radius: 6px; cursor: pointer; z-index: 100000; font-weight: bold; opacity: 0.05; transition: opacity 0.3s; display: none; }
@@ -222,7 +226,6 @@
             nav button { padding: 8px 10px; font-size: 13.5px; }
             .nav-divider { display: none; }
             .modal-content { padding: 16px; }
-            .btn-show-menu { opacity: 0.6 !important; }
 
             /* Grades pensadas pra tela larga viram 1 coluna, evitando espremer
                cartões/formulários até ficarem ilegíveis. */
@@ -230,6 +233,55 @@
 
             /* Evita zoom automático do iOS ao focar campos com font-size < 16px. */
             input, select, textarea { font-size: 16px; }
+
+            /* MENU SANDUÍCHE — no mobile o nav vira uma barra fina com só o
+               hambúrguer e a barraca ativa; o resto some até tocar no hambúrguer.
+               Painéis/TV Aberta/Multiview 4x4 são pensados pra tela grande fixa
+               (TV/monitor de cozinha), não fazem sentido no celular — somem de
+               vez, mesmo com o menu aberto. */
+            .nav-hamburguer { display: inline-flex; align-items: center; order: -1; }
+            .nav-btn-icon, .btn-show-menu { display: none !important; }
+            .dropdown-paineis { display: none !important; }
+
+            #nav-principal > button:not(.nav-hamburguer),
+            #nav-principal > .dropdown:not(#seletor-barraca-nav) {
+                display: none;
+            }
+
+            #nav-principal.menu-mobile-aberto {
+                align-items: stretch;
+            }
+            #nav-principal.menu-mobile-aberto > button:not(.nav-hamburguer) {
+                display: flex;
+                width: 100%;
+            }
+            #nav-principal.menu-mobile-aberto > .dropdown:not(#seletor-barraca-nav) {
+                display: block;
+                width: 100%;
+            }
+            /* Dentro do menu mobile já aberto, os títulos "Gestão ▾"/"Relatórios ▾"
+               viram só rótulos de seção — sem toggle aninhado, sem :hover — e a
+               lista deles fica sempre visível, junto no fluxo normal (não mais
+               um balão flutuante por cima do conteúdo). */
+            #nav-principal.menu-mobile-aberto > .dropdown:not(#seletor-barraca-nav) > .dropbtn {
+                width: 100%;
+                opacity: 0.65;
+                cursor: default;
+                pointer-events: none;
+            }
+            #nav-principal.menu-mobile-aberto > .dropdown:not(#seletor-barraca-nav) > .dropdown-content {
+                display: block;
+                position: static;
+                box-shadow: none;
+                border: none;
+                padding-top: 0;
+                background: transparent;
+                min-width: 0;
+                width: 100%;
+            }
+            #nav-principal.menu-mobile-aberto > .dropdown:not(#seletor-barraca-nav) .dropdown-content button {
+                padding-left: 30px;
+            }
         }
 
         @media (max-width: 480px) {

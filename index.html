@@ -126,6 +126,8 @@
     <button id="btn-show-global-menu" class="btn-show-menu" onclick="toggleMenuGlobal()">⬇ Mostrar Menu</button>
 
     <nav id="nav-principal">
+        <button id="btn-nav-hamburguer" class="nav-hamburguer" onclick="toggleMenuMobile()" title="Menu" aria-label="Abrir menu">☰</button>
+
         <button class="active" onclick="mudarAba('tela-pedido', this)">🛒 Pedido</button>
         <button onclick="mudarAba('tela-agendados', this)">🎫 Pedido Ficha <span id="badge-agendados" class="badge">0</span></button>
         <button onclick="mudarAba('tela-preparo', this)">🍳 Cozinha <span id="badge-cozinha" class="badge">0</span></button>
@@ -133,7 +135,7 @@
 
         <div class="nav-divider"></div>
 
-        <div class="dropdown">
+        <div class="dropdown dropdown-paineis">
             <button class="dropbtn">🖥️ Painéis ▾</button>
             <div class="dropdown-content">
                 <div class="dropdown-inner">
