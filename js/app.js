@@ -419,9 +419,31 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
         function toggleMenuGlobal() {
             const nav = document.getElementById('nav-principal');
             const btnShow = document.getElementById('btn-show-global-menu');
-            if (nav.style.display === 'none') { nav.style.display = 'flex'; btnShow.style.display = 'none'; } 
+            if (nav.style.display === 'none') { nav.style.display = 'flex'; btnShow.style.display = 'none'; }
             else { nav.style.display = 'none'; btnShow.style.display = 'block'; }
         }
+
+        // Os menus do topo (Painéis/Gestão/Relatórios/seletor de barraca) abrem
+        // no :hover via CSS, o que não existe em toque (celular/tablet) — sem
+        // isso, esses menus ficariam impossíveis de abrir no mobile. Alterna a
+        // classe "aberto" no clique/toque do botão, além do hover que já existe
+        // pra quem usa mouse. O markup do nav é estático, então isso só precisa
+        // rodar uma vez.
+        function inicializarDropdownsToque() {
+            document.querySelectorAll('.dropdown > .dropbtn').forEach(botao => {
+                botao.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const dropdown = botao.closest('.dropdown');
+                    const jaAberto = dropdown.classList.contains('aberto');
+                    document.querySelectorAll('.dropdown.aberto').forEach(d => d.classList.remove('aberto'));
+                    if (!jaAberto) dropdown.classList.add('aberto');
+                });
+            });
+            document.addEventListener('click', () => {
+                document.querySelectorAll('.dropdown.aberto').forEach(d => d.classList.remove('aberto'));
+            });
+        }
+        inicializarDropdownsToque();
 
         function mudarAba(idAba, botao) {
             document.querySelectorAll('.tab-content').forEach(aba => aba.classList.remove('active'));
@@ -2738,8 +2760,8 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                 </div>
 
                 <h4 style="margin:10px 0 5px 0; color:#1f2937;">⏱️ Raio-X de Pedidos & Tempo de Preparo</h4>
-                <div style="background:white; border:1px solid #e5e7eb; border-radius:8px; max-height:200px; overflow-y:auto;">
-                    <table style="width:100%; border-collapse:collapse; font-size:0.8rem; text-align:left;">
+                <div style="background:white; border:1px solid #e5e7eb; border-radius:8px; max-height:200px; overflow-y:auto; overflow-x:auto;">
+                    <table style="width:100%; min-width:600px; border-collapse:collapse; font-size:0.8rem; text-align:left;">
                         <thead>
                             <tr style="background:#f8fafc; border-bottom:1px solid #ddd;">
                                 <th style="padding:6px;"># ID</th>

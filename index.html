@@ -25,7 +25,7 @@
                 <h3 id="titulo-ver-pedido-unico" style="margin: 0; color: var(--primary);">Pedido #0</h3>
                 <button class="btn btn-danger" style="padding: 5px 12px;" onclick="fecharModalVerPedidoUnico()">❌ Fechar</button>
             </div>
-            <div id="corpo-ver-pedido-unico" style="max-height: 60vh; overflow-y: auto;"></div>
+            <div id="corpo-ver-pedido-unico" style="max-height: 60vh; overflow-y: auto; overflow-x: auto;"></div>
             <button id="btn-reimprimir-modal-unico" class="btn btn-primary" style="width: 100%; margin-top: 15px;">🖨️ Reimprimir Comprovante</button>
         </div>
     </div>
@@ -36,7 +36,7 @@
                 <h3 id="titulo-detalhe-caixa" style="margin: 0; color: var(--primary);">Detalhes do Fechamento de Caixa</h3>
                 <button class="btn btn-danger" style="padding: 5px 12px;" onclick="fecharModalDetalhesCaixa()">❌ Fechar</button>
             </div>
-            <div id="corpo-detalhes-caixa" style="max-height: 65vh; overflow-y: auto;"></div>
+            <div id="corpo-detalhes-caixa" style="max-height: 65vh; overflow-y: auto; overflow-x: auto;"></div>
         </div>
     </div>
 
@@ -85,10 +85,10 @@
 
     <div id="modal-todos-pedidos" class="modal-geral">
         <div class="modal-content" style="width: 1100px; max-width: 95%;">
-            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 15px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
                 <h3 style="margin: 0; color: var(--primary);">📋 Todos os Pedidos Registrados</h3>
-                
-                <div style="display: flex; gap: 10px; align-items: center;">
+
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                     <label style="font-size: 0.85rem; font-weight: bold;">Filtrar Status:</label>
                     <select id="filtro-modal-status" onchange="renderizarTabelaModalTodosPedidos()" style="margin-bottom: 0; padding: 5px; width: 180px;">
                         <option value="Todos">Todos os Status</option>
@@ -101,7 +101,7 @@
                 </div>
             </div>
             
-            <div style="max-height: 60vh; overflow-y: auto;">
+            <div style="max-height: 60vh; overflow-y: auto; overflow-x: auto;">
                 <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem;">
                     <thead>
                         <tr style="border-bottom: 2px solid #e5e7eb; background: #f8fafc;">
@@ -431,9 +431,9 @@
 
         <!-- TELA: PRODUTOS & ESTOQUE & COMBOS -->
         <div id="tela-produtos" class="tab-content">
-            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
                 <h2 style="border: none; padding: 0; margin: 0;">Gerenciar Produtos, Combos, Categorias & Estoque</h2>
-                <div style="display:flex; gap:10px;">
+                <div style="display:flex; gap:10px; flex-wrap: wrap;">
                     <button class="btn btn-primary" onclick="imprimirEstoquePorCategoria()">🖨️ Imprimir Estoque por Categoria</button>
                     <button class="btn btn-success" onclick="gerarPDFEstoquePorCategoria()" style="background:#0d9488;">📄 Baixar PDF Estoque</button>
                 </div>
@@ -524,7 +524,7 @@
                     </div>
                 </div>
 
-                <div style="flex: 3; min-width: 100%; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-height: 60vh; overflow-y: auto;">
+                <div style="flex: 3; min-width: 100%; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-height: 60vh; overflow-y: auto; overflow-x: auto;">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
                         <h3 style="margin: 0;">Lista de Produtos & Combos</h3>
                         <div style="width: 280px; max-width: 100%;">
@@ -534,7 +534,7 @@
 
                     <div class="menu-categorias" id="abas-tabela-produtos-container" style="margin-bottom: 15px;"></div>
 
-                    <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
+                    <table style="width: 100%; min-width: 700px; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
                         <thead>
                             <tr style="border-bottom: 2px solid #e5e7eb;">
                                 <th style="padding: 10px;">Cód</th>
@@ -660,9 +660,9 @@
                 </div>
             </div>
 
-            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); overflow-x: auto;">
                 <h3 style="margin-top: 0;">Barracas Cadastradas</h3>
-                <table style="width: 100%; border-collapse: collapse;">
+                <table style="width: 100%; min-width: 500px; border-collapse: collapse;">
                     <thead>
                         <tr style="border-bottom: 2px solid #e5e7eb; text-align: left;">
                             <th style="padding: 10px;">Nome</th>
@@ -718,8 +718,8 @@
                     </select>
                 </div>
             </div>
-            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-height: 60vh; overflow-y: auto;">
-                <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
+            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-height: 60vh; overflow-y: auto; overflow-x: auto;">
+                <table style="width: 100%; min-width: 800px; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
                     <thead>
                         <tr style="border-bottom: 2px solid #e5e7eb;">
                             <th style="padding: 10px;">Pedido</th>
@@ -740,18 +740,18 @@
 
         <!-- TELA 7: DASHBOARD E ABERTURA DE CAIXA -->
         <div id="tela-relatorio" class="tab-content">
-            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
                 <h2 style="border: none; padding: 0; margin: 0;">Dashboard Analytics & Gestão de Caixa</h2>
-                <div style="display:flex; gap:10px;">
+                <div style="display:flex; gap:10px; flex-wrap: wrap;">
                     <button class="btn btn-primary" onclick="imprimirRelatorioCaixaAtual()" style="background: #0d9488;">🖨️ Imprimir Caixa Atual</button>
                     <button class="btn btn-success" onclick="gerarPDFCaixaAtual()" style="background: #2563eb;">📄 Baixar PDF Caixa Atual (A4)</button>
                 </div>
             </div>
-            
+
             <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; border-left: 5px solid var(--info);">
                 <h3 style="margin-top: 0; color: var(--info);">💵 Abertura de Caixa (Fundo Inicial)</h3>
-                <div style="display: flex; gap: 15px; align-items: flex-end;">
-                    <div style="flex: 1;">
+                <div style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 180px;">
                         <label style="font-size: 0.85rem; font-weight: bold;">Valor Inicial em Dinheiro (R$):</label>
                         <input type="number" id="valor-fundo-caixa" placeholder="0.00" step="0.01" style="margin-bottom: 0;">
                     </div>
@@ -761,21 +761,21 @@
                 <p id="status-caixa-texto" style="margin-top: 10px; font-weight: bold; font-size: 0.9rem; color: var(--danger);">Status do Caixa: Fechado</p>
             </div>
 
-            <div style="display: flex; gap: 20px;">
-                <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; text-align: center; border-bottom: 4px solid var(--success);">
+            <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; min-width: 150px; text-align: center; border-bottom: 4px solid var(--success);">
                     <h3 style="margin-top: 0; color: gray;">Faturamento Vendas</h3>
                     <p style="color: var(--success); font-size: 1.8rem; font-weight: 900; margin:0;">R$ <span id="rel-total">0.00</span></p>
                 </div>
-                <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; text-align: center; border-bottom: 4px solid #0284c7;">
+                <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; min-width: 150px; text-align: center; border-bottom: 4px solid #0284c7;">
                     <h3 style="margin-top: 0; color: gray;">Total em Gaveta (Dinheiro)</h3>
                     <p style="color: #0284c7; font-size: 1.8rem; font-weight: 900; margin:0;">R$ <span id="rel-total-dinheiro">0.00</span></p>
                     <small style="color:gray; font-size:0.75rem;">(Fundo Caixa + Vendas em Dinheiro)</small>
                 </div>
-                <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; text-align: center; border-bottom: 4px solid var(--primary);">
+                <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; min-width: 150px; text-align: center; border-bottom: 4px solid var(--primary);">
                     <h3 style="margin-top: 0; color: gray;">Pedidos Realizados</h3>
                     <p style="color: var(--primary); font-size: 1.8rem; font-weight: 900; margin:0;" id="rel-qtd-pedidos">0</p>
                 </div>
-                <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; text-align: center; border-bottom: 4px solid var(--info);">
+                <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; min-width: 150px; text-align: center; border-bottom: 4px solid var(--info);">
                     <h3 style="margin-top: 0; color: gray;">Ticket Médio</h3>
                     <p style="color: var(--info); font-size: 1.8rem; font-weight: 900; margin:0;">R$ <span id="rel-ticket">0.00</span></p>
                 </div>
@@ -828,8 +828,8 @@
         <!-- TELA 8: HISTÓRICO DE FECHAMENTOS DE CAIXA -->
         <div id="tela-fechamento-caixa" class="tab-content">
             <h2>📜 Histórico de Fechamentos de Caixa</h2>
-            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-height: 70vh; overflow-y: auto;">
-                <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
+            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-height: 70vh; overflow-y: auto; overflow-x: auto;">
+                <table style="width: 100%; min-width: 800px; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
                     <thead>
                         <tr style="border-bottom: 2px solid #e5e7eb; background: #f8fafc;">
                             <th style="padding: 12px;"># Ref</th>

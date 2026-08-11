@@ -1,3 +1,9 @@
+        /* Sem isso, width:100%/min-width:100% + padding/border ficam maiores que
+           o pai (o padding não é o container-box só a menos que declare
+           box-sizing por elemento) — é a causa raiz de vários estouros
+           horizontais que só aparecem em telas estreitas. */
+        *, *::before, *::after { box-sizing: border-box; }
+
         :root {
             --primary: #2563eb;
             --secondary: #f3f4f6;
@@ -29,6 +35,10 @@
         .dropdown-content button:hover { background-color: rgba(37, 99, 235, 0.3); color: white; }
         .dropdown:hover .dropdown-content { display: block; }
         .dropdown:hover .dropbtn { background-color: rgba(255, 255, 255, 0.08); color: white; }
+        /* Toque (celular/tablet) não tem estado de :hover — o app.js alterna esta
+           classe no clique/toque do botão do dropdown para abrir/fechar o menu. */
+        .dropdown.aberto .dropdown-content { display: block; }
+        .dropdown.aberto .dropbtn { background-color: rgba(255, 255, 255, 0.08); color: white; }
 
         /* Indicador da barraca ativa: precisa se destacar (é contexto importante —
            "onde estou trabalhando agora"), mas com um acento de cor em vez de um
@@ -110,7 +120,7 @@
         /* LAYOUT BALCÃO / COZINHA COM SIDEBAR NO CANTO DIREITO */
         .layout-balcao-container { display: flex; gap: 15px; width: 100%; align-items: flex-start; }
         .balcao-principal { flex: 1; }
-        .sidebar-resumo-balcao { width: 280px; min-width: 250px; background: white; padding: 12px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); max-height: calc(100vh - 140px); overflow-y: auto; border: 1px solid #cbd5e1; }
+        .sidebar-resumo-balcao { width: 280px; min-width: 250px; background: white; padding: 12px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); max-height: calc(100vh - 140px); overflow-y: auto; border: 1px solid #cbd5e1; box-sizing: border-box; }
         .sidebar-resumo-balcao h3 { margin-top: 0; font-size: 0.95rem; border-bottom: 2px solid #2563eb; padding-bottom: 6px; color: #1f2937; text-transform: uppercase; }
         
         .tabela-resumo-canto { width: 100%; border-collapse: collapse; font-size: 0.78rem; text-align: left; }
@@ -187,6 +197,45 @@
         .grid-obs-ingredientes { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; max-height: 150px; overflow-y: auto; margin: 8px 0; background: #f1f5f9; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1; }
         .item-checkbox-ingrediente { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: bold; cursor: pointer; }
         .item-checkbox-ingrediente input { width: auto; margin: 0; }
+
+        /* RESPONSIVIDADE — CELULAR E TABLET (telas de TV/Multiview ficam de fora
+           de propósito: são pensadas pra tela grande fixa, não pra toque). */
+        html, body { max-width: 100%; overflow-x: hidden; }
+
+        @media (max-width: 900px) {
+            .layout-pedido { grid-template-columns: 1fr; }
+            .menu-grid { max-height: none; }
+            .carrinho { height: auto; max-height: none; }
+            .itens-carrinho { max-height: 45vh; }
+
+            .layout-balcao-container { flex-direction: column; }
+            .sidebar-resumo-balcao { width: 100%; min-width: 0; max-height: 320px; order: -1; }
+
+            .grid-campos-pagamento { grid-template-columns: 1fr; }
+            .charts-grid { grid-template-columns: 1fr; }
+            .row-inputs { flex-direction: column; }
+        }
+
+        @media (max-width: 768px) {
+            .container { padding: 12px; }
+            nav { padding: 0.5rem 0.6rem; gap: 6px; }
+            nav button { padding: 8px 10px; font-size: 13.5px; }
+            .nav-divider { display: none; }
+            .modal-content { padding: 16px; }
+            .btn-show-menu { opacity: 0.6 !important; }
+
+            /* Grades pensadas pra tela larga viram 1 coluna, evitando espremer
+               cartões/formulários até ficarem ilegíveis. */
+            .grid-config-3col, .grid-atalhos { grid-template-columns: 1fr; }
+
+            /* Evita zoom automático do iOS ao focar campos com font-size < 16px. */
+            input, select, textarea { font-size: 16px; }
+        }
+
+        @media (max-width: 480px) {
+            .grid-pedidos { grid-template-columns: 1fr; }
+            .subgrupo-container { grid-template-columns: repeat(auto-fill, minmax(105px, 1fr)); }
+        }
 
         #area-impressao { display: none; }
         @media print {
