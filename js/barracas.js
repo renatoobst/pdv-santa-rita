@@ -26,6 +26,7 @@ export let barracaAtual = null; // { id, nome, criadoEm }
 
 export function chaveCacheEstado(id) { return `pdv_cache_${id}`; }
 export function chaveCacheAtalhos(id) { return `pdv_atalhos_${id}`; }
+export function chaveCacheConfigPadroes(id) { return `pdv_config_padroes_${id}`; }
 
 // Faixa Unicode das marcas diacríticas combinantes (usada para tirar acentos
 // depois de normalize('NFD')). Escrita via \u para não depender de caracteres

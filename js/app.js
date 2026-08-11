@@ -8,7 +8,7 @@
 
 import { supabaseClient, PDV_CLIENT_ID } from './config.js';
 import { categoriasPadrao, produtosPadrao } from './data.js';
-import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCacheAtalhos, renderizarPainelBarracas, carregarDashboardGeral, iniciarRealtimeRegistroBarracas, registroBarracas } from './barracas.js';
+import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCacheAtalhos, chaveCacheConfigPadroes, renderizarPainelBarracas, carregarDashboardGeral, iniciarRealtimeRegistroBarracas, registroBarracas } from './barracas.js';
 
         // Id da barraca ativa neste dispositivo (linha correspondente na tabela
         // `pdv_state` do Supabase). Só é conhecido depois que resolverBarracaAtiva()
@@ -57,6 +57,16 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
         };
         let gravandoAtalhoAcao = null;
         let indexPedidoSelecionadoBalcao = 0;
+
+        // PARÂMETROS PADRÃO DA TELA DE PEDIDO (pré-seleção de forma de pagamento /
+        // tipo de retirada / modo de retirada global toda vez que o carrinho é
+        // limpo). Local por dispositivo, igual atalhosConfig — não sincroniza via
+        // Supabase, pois é preferência de operação de quem está usando este caixa.
+        let configPadroes = {
+            formaPagto: '',
+            tipoAtendimento: '',
+            tipoRetiradaGlobal: ''
+        };
 
         function exibirAviso(mensagem, titulo = "Aviso do Sistema") {
             document.getElementById('modal-aviso-titulo').innerText = titulo;
@@ -111,6 +121,7 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             // e mesmo assim cada barraca tem sua própria linha lá.
             localStorage.setItem(chaveCacheEstado(barracaStateId), JSON.stringify(montarEstadoAtual()));
             localStorage.setItem(chaveCacheAtalhos(barracaStateId), JSON.stringify(atalhosConfig));
+            localStorage.setItem(chaveCacheConfigPadroes(barracaStateId), JSON.stringify(configPadroes));
         }
 
         // Pinta a tela imediatamente com o que já está em cache local desta
@@ -128,6 +139,12 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                 if (rawAtalhos) atalhosConfig = JSON.parse(rawAtalhos);
             } catch (erro) {
                 console.error('Cache local de atalhos corrompido, ignorando:', erro);
+            }
+            try {
+                const rawConfigPadroes = localStorage.getItem(chaveCacheConfigPadroes(barracaStateId));
+                if (rawConfigPadroes) configPadroes = { ...configPadroes, ...JSON.parse(rawConfigPadroes) };
+            } catch (erro) {
+                console.error('Cache local de configurações padrão corrompido, ignorando:', erro);
             }
         }
 
@@ -370,7 +387,8 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
         }
 
         let carrinho = []; 
-        let pedidoEmEdicaoId = null; let categoriaFiltroAtual = 'Todos'; let produtoEmEdicaoId = null; 
+        let pedidoEmEdicaoId = null; let categoriaFiltroAtual = 'Todos'; let produtoEmEdicaoId = null;
+        let categoriaFiltroTabelaProdutos = 'Todos'; 
         
         let chartVendas, chartHorarios, chartCategorias, chartRetirada;
 
@@ -437,6 +455,7 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             if(idAba === 'tela-produtos') { renderizarCategoriasUI(); renderizarTabelaProdutos(); if (produtoEmEdicaoId === null) renderizarChecklistBarracasProduto(); }
             if(idAba === 'tela-pedido') { renderizarCategoriasUI(); renderizarMenu(categoriaFiltroAtual); }
             if(idAba === 'tela-atalhos') renderizarPainelAtalhos();
+            if(idAba === 'tela-configuracoes') carregarFormularioConfiguracoes();
             if(idAba === 'tela-videowall') atualizarTelas(); 
             if(idAba === 'tela-entrega') atualizarTelas();
             if(idAba === 'tela-preparo') atualizarTelas();
@@ -468,6 +487,22 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             document.getElementById('badge-key-entregue').innerText = atalhosConfig.entregue || '-';
         }
 
+        // --- PARÂMETROS PADRÃO (TELA DE CONFIGURAÇÕES) ---
+        function carregarFormularioConfiguracoes() {
+            document.getElementById('cfg-padrao-forma-pagto').value = configPadroes.formaPagto || '';
+            document.getElementById('cfg-padrao-tipo-atendimento').value = configPadroes.tipoAtendimento || '';
+            document.getElementById('cfg-padrao-tipo-retirada-global').value = configPadroes.tipoRetiradaGlobal || '';
+        }
+
+        function salvarConfiguracoesPadrao() {
+            configPadroes = {
+                formaPagto: document.getElementById('cfg-padrao-forma-pagto').value,
+                tipoAtendimento: document.getElementById('cfg-padrao-tipo-atendimento').value,
+                tipoRetiradaGlobal: document.getElementById('cfg-padrao-tipo-retirada-global').value
+            };
+            salvarCacheLocal();
+        }
+
         function iniciarGravaçãoAtalho(acao) {
             gravandoAtalhoAcao = acao;
             document.querySelectorAll('.card-atalho').forEach(c => c.classList.remove('gravando'));
@@ -489,7 +524,31 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             }
 
             const tagAtiva = document.activeElement.tagName;
-            if (tagAtiva === 'INPUT' || tagAtiva === 'TEXTAREA' || tagAtiva === 'SELECT') return;
+            if (tagAtiva === 'INPUT' || tagAtiva === 'TEXTAREA' || tagAtiva === 'SELECT') {
+                if (e.key === 'Enter' && document.getElementById('modal-obs').style.display === 'flex') {
+                    salvarObsModal();
+                    e.preventDefault();
+                }
+                return;
+            }
+
+            if (e.key === 'Enter') {
+                if (document.getElementById('modal-troca-item').style.display === 'flex') {
+                    confirmarTrocaItemBalcao();
+                    e.preventDefault();
+                    return;
+                }
+                if (document.getElementById('modal-aviso').style.display === 'flex') {
+                    fecharAviso();
+                    e.preventDefault();
+                    return;
+                }
+                if (document.activeElement && typeof document.activeElement.click === 'function') {
+                    document.activeElement.click();
+                    e.preventDefault();
+                    return;
+                }
+            }
 
             const abaEntrega = document.getElementById('tela-entrega');
             if (abaEntrega && abaEntrega.classList.contains('active')) {
@@ -498,21 +557,38 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                 if (cardsBalcao.length === 0) return;
 
                 if (indexPedidoSelecionadoBalcao >= cardsBalcao.length) indexPedidoSelecionadoBalcao = 0;
+                const cardAtual = cardsBalcao[indexPedidoSelecionadoBalcao];
 
-                if (tecla === atalhosConfig.direita) {
+                if (tecla === atalhosConfig.direita || e.key === 'ArrowRight') {
                     indexPedidoSelecionadoBalcao = (indexPedidoSelecionadoBalcao + 1) % cardsBalcao.length;
                     destacarCardBalcao(cardsBalcao);
-                } else if (tecla === atalhosConfig.esquerda) {
+                    e.preventDefault();
+                } else if (tecla === atalhosConfig.esquerda || e.key === 'ArrowLeft') {
                     indexPedidoSelecionadoBalcao = (indexPedidoSelecionadoBalcao - 1 + cardsBalcao.length) % cardsBalcao.length;
                     destacarCardBalcao(cardsBalcao);
-                } else if (tecla === atalhosConfig.chamar) {
-                    const cardAtual = cardsBalcao[indexPedidoSelecionadoBalcao];
+                    e.preventDefault();
+                }
+                else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    if (cardAtual) {
+                        const elementosFocaveis = Array.from(cardAtual.querySelectorAll('button, select, input, [tabindex="0"]'));
+                        if (elementosFocaveis.length > 0) {
+                            let indexFocoAtual = elementosFocaveis.indexOf(document.activeElement);
+                            if (e.key === 'ArrowDown') {
+                                indexFocoAtual = (indexFocoAtual + 1) % elementosFocaveis.length;
+                            } else {
+                                indexFocoAtual = (indexFocoAtual - 1 + elementosFocaveis.length) % elementosFocaveis.length;
+                            }
+                            elementosFocaveis[indexFocoAtual].focus();
+                            e.preventDefault();
+                        }
+                    }
+                }
+                else if (tecla === atalhosConfig.chamar) {
                     if (cardAtual) {
                         const btnChamar = cardAtual.querySelector("button[onclick*='chamarNoPainel']");
                         if (btnChamar) btnChamar.click();
                     }
                 } else if (tecla === atalhosConfig.entregue) {
-                    const cardAtual = cardsBalcao[indexPedidoSelecionadoBalcao];
                     if (cardAtual) {
                         const btnRetirado = cardAtual.querySelector("button[onclick*='finalizarEntrega']");
                         if (btnRetirado) btnRetirado.click();
@@ -524,8 +600,12 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
         function destacarCardBalcao(cards) {
             cards.forEach(c => c.classList.remove('card-selecionado-teclado'));
             if (cards[indexPedidoSelecionadoBalcao]) {
-                cards[indexPedidoSelecionadoBalcao].classList.add('card-selecionado-teclado');
-                cards[indexPedidoSelecionadoBalcao].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                const cardTarget = cards[indexPedidoSelecionadoBalcao];
+                cardTarget.classList.add('card-selecionado-teclado');
+                cardTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+                const primeiroBotao = cardTarget.querySelector('button');
+                if (primeiroBotao) primeiroBotao.focus();
             }
         }
 
@@ -610,12 +690,27 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             let botoesHtml = `<div class="tag-categoria ${categoriaFiltroAtual === 'Todos' ? 'ativa' : ''}" onclick="filtrarMenu('Todos')">Todos</div>`;
             categoriasDB.forEach(cat => { botoesHtml += `<div class="tag-categoria ${categoriaFiltroAtual === cat ? 'ativa' : ''}" onclick="filtrarMenu('${cat}')">${cat}</div>`; });
             if(menuCatContainer) menuCatContainer.innerHTML = botoesHtml;
-            
+
+            const abasTabelaContainer = document.getElementById('abas-tabela-produtos-container');
+            if (abasTabelaContainer) {
+                let abasHtml = `<div class="tag-categoria ${categoriaFiltroTabelaProdutos === 'Todos' ? 'ativa' : ''}" onclick="filtrarTabelaProdutosPorCategoria('Todos')">Geral (Todos)</div>`;
+                categoriasDB.forEach(cat => {
+                    abasHtml += `<div class="tag-categoria ${categoriaFiltroTabelaProdutos === cat ? 'ativa' : ''}" onclick="filtrarTabelaProdutosPorCategoria('${cat}')">${cat}</div>`;
+                });
+                abasTabelaContainer.innerHTML = abasHtml;
+            }
+
             const listaGestao = document.getElementById('lista-gestao-categorias');
             if(listaGestao) {
                 listaGestao.innerHTML = categoriasDB.map((cat, index) => `
-                    <li class="cat-item">
-                        <span style="font-weight: bold;">${cat}</span>
+                    <li class="cat-item" draggable="true"
+                        ondragstart="tratarDragStartCategoria(event, ${index})"
+                        ondragover="tratarDragOverCategoria(event)"
+                        ondrop="tratarDropCategoria(event, ${index})"
+                        ondragend="tratarDragEndCategoria(event)">
+                        <span style="font-weight: bold; display:flex; align-items:center; gap:8px;">
+                            <span style="color:gray; cursor:grab;">☰</span> ${cat}
+                        </span>
                         <div class="cat-acoes">
                             <button onclick="moverCategoria(${index}, -1)" title="Subir Posição">⬆</button>
                             <button onclick="moverCategoria(${index}, 1)" title="Descer Posição">⬇</button>
@@ -626,7 +721,7 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                 `).join('');
             }
         }
-        
+
         // Categorias fazem parte do catálogo compartilhado — mudam para todas as
         // barracas de uma vez, por isso salvam com salvarCatalogo(), não
         // salvarNoBancoLocal() (que é o estado desta barraca sozinha).
@@ -639,6 +734,37 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             salvarCatalogo();
             renderizarCategoriasUI();
             renderizarMenu(categoriaFiltroAtual);
+        }
+
+        // Reordenar categorias arrastando (alternativa aos botões ⬆/⬇ acima).
+        let indexCategoriaArrastada = null;
+
+        function tratarDragStartCategoria(e, index) {
+            indexCategoriaArrastada = index;
+            e.currentTarget.classList.add('arrastando');
+            e.dataTransfer.effectAllowed = 'move';
+        }
+
+        function tratarDragOverCategoria(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        }
+
+        function tratarDropCategoria(e, indexAlvo) {
+            e.preventDefault();
+            if (indexCategoriaArrastada !== null && indexCategoriaArrastada !== indexAlvo) {
+                const itemMovido = categoriasDB.splice(indexCategoriaArrastada, 1)[0];
+                categoriasDB.splice(indexAlvo, 0, itemMovido);
+                salvarCatalogo();
+                renderizarCategoriasUI();
+                renderizarMenu(categoriaFiltroAtual);
+                renderizarTabelaProdutos();
+            }
+        }
+
+        function tratarDragEndCategoria(e) {
+            e.currentTarget.classList.remove('arrastando');
+            indexCategoriaArrastada = null;
         }
 
         function adicionarCategoria() {
@@ -757,13 +883,42 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             `).join('') || '<span style="color:gray; font-size:0.85rem;">Nenhuma barraca cadastrada ainda.</span>';
         }
 
+        function filtrarTabelaProdutosPorCategoria(cat) {
+            categoriaFiltroTabelaProdutos = cat;
+            renderizarCategoriasUI();
+            renderizarTabelaProdutos();
+        }
+
         function renderizarTabelaProdutos() {
             const tbody = document.getElementById('tabela-produtos'); tbody.innerHTML = '';
-            produtosDB.forEach(p => {
+
+            const buscaInput = document.getElementById('busca-tabela-produtos');
+            const termoBusca = buscaInput ? buscaInput.value.trim().toLowerCase() : '';
+
+            let lista = [...produtosDB];
+
+            if (categoriaFiltroTabelaProdutos && categoriaFiltroTabelaProdutos !== 'Todos') {
+                lista = lista.filter(p => p.categoria === categoriaFiltroTabelaProdutos);
+            }
+
+            if (termoBusca) {
+                lista = lista.filter(p =>
+                    p.nome.toLowerCase().includes(termoBusca) ||
+                    p.id.toString().includes(termoBusca) ||
+                    (p.categoria && p.categoria.toLowerCase().includes(termoBusca))
+                );
+            }
+
+            if (lista.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: gray;">Nenhum produto ou combo encontrado.</td></tr>';
+                return;
+            }
+
+            lista.forEach(p => {
                 let desc = p.isCombo ? `<br><small style="color:var(--info);">↳ Composto por: ${p.itensCombo.map(i => {
                     if(i.tipo === 'categoria') return `${i.qtd}x Escolha de ${i.ref}`;
                     else { let subP = produtosDB.find(x=>x.id===i.ref); return `${i.qtd}x ${subP?subP.nome:'Fixo'}`; }
-                }).join(', ')}</small>` : '';
+                }).join(', ')}</small>` : (p.ingredientes ? `<br><small style="color:#0284c7;">Ingredientes: ${p.ingredientes}</small>` : '');
 
                 const estoqueAqui = estoquePorProduto[p.id];
                 const estoqueAquiVal = (estoqueAqui === undefined) ? null : estoqueAqui;
@@ -808,6 +963,7 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             document.getElementById('novo-prod-categoria').value = p.categoria;
             document.getElementById('novo-prod-foto').value = p.foto || '';
             document.getElementById('novo-prod-ativo').value = (p.ativo !== false).toString();
+            document.getElementById('novo-prod-ingredientes').value = p.ingredientes || '';
             renderizarChecklistBarracasProduto(p.barracas);
 
             if (p.foto) {
@@ -848,6 +1004,7 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             document.getElementById('novo-prod-foto').value = '';
             document.getElementById('file-prod-foto').value = '';
             document.getElementById('novo-prod-ativo').value = "true";
+            document.getElementById('novo-prod-ingredientes').value = '';
             document.getElementById('preview-foto-container').style.display = 'none';
             renderizarChecklistBarracasProduto();
 
@@ -864,6 +1021,7 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             let categoria = document.getElementById('novo-prod-categoria').value;
             let foto = document.getElementById('novo-prod-foto').value.trim();
             let ativo = document.getElementById('novo-prod-ativo').value === 'true';
+            let ingredientes = document.getElementById('novo-prod-ingredientes').value.trim();
             let barracasMarcadas = Array.from(document.querySelectorAll('.chk-barraca-produto:checked')).map(chk => chk.value);
 
             if (!nome || isNaN(preco) || preco <= 0 || !categoria) return exibirAviso("Preencha todos os campos do produto corretamente.");
@@ -882,8 +1040,13 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                 let estoqueInput = document.getElementById('novo-prod-estoque').value.trim();
                 estoqueFinal = estoqueInput === '' ? null : parseInt(estoqueInput);
                 // Estoque é só desta barraca (estoquePorProduto), não mais um campo
-                // do produto — por isso não mexe mais em `ativo` aqui: ficar sem
-                // estoque nesta barraca não pode apagar o produto para as outras.
+                // do produto — por isso só desativa automaticamente (nunca reativa
+                // aqui, isso fica a cargo do dropdown "Status do Produto" manual)
+                // quando o produto pertence a exatamente 1 barraca, senão zerar o
+                // estoque aqui apagaria o produto também das outras barracas.
+                if (estoqueFinal !== null && estoqueFinal <= 0 && barracasMarcadas.length === 1) {
+                    ativo = false;
+                }
             }
 
             let idSalvo;
@@ -891,13 +1054,14 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                 let p = produtosDB.find(prod => prod.id === produtoEmEdicaoId);
                 p.nome = nome; p.preco = preco; p.categoria = categoria; p.cozinha = cozinha;
                 p.isCombo = isCombo; p.itensCombo = finalItensCombo; p.foto = foto; p.ativo = ativo; p.barracas = barracasMarcadas;
+                p.ingredientes = ingredientes;
                 idSalvo = p.id;
                 cancelarEdicaoProduto();
             } else {
                 idSalvo = produtosDB.length > 0 ? Math.max(...produtosDB.map(p => p.id)) + 1 : 1;
                 produtosDB.push({
                     id: idSalvo,
-                    nome, preco, categoria, cozinha, isCombo, itensCombo: finalItensCombo, foto, ativo, barracas: barracasMarcadas
+                    nome, preco, categoria, cozinha, isCombo, itensCombo: finalItensCombo, foto, ativo, barracas: barracasMarcadas, ingredientes
                 });
                 cancelarEdicaoProduto();
             }
@@ -911,6 +1075,23 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             renderizarTabelaProdutos(); renderizarMenu(categoriaFiltroAtual);
         }
 
+        // Auto (des)ativa um produto quando o estoque DESTA barraca chega/sai de
+        // 0 — só quando o produto pertence a exatamente 1 barraca. `ativo` é um
+        // campo global do catálogo compartilhado, enquanto o estoque é por
+        // barraca; aplicar isso a um produto vendido em várias barracas faria a
+        // barraca A vender tudo esconder o produto também da barraca B, mesmo
+        // com estoque lá. Retorna true se mudou `ativo` (call site deve chamar
+        // salvarCatalogo() nesse caso).
+        function sincronizarAtivoPorEstoque(produto, novoEstoque) {
+            if (!produto || produto.isCombo) return false;
+            if (!Array.isArray(produto.barracas) || produto.barracas.length !== 1) return false;
+            if (novoEstoque === null || novoEstoque === undefined) return false;
+            const novoAtivo = novoEstoque > 0;
+            if (produto.ativo === novoAtivo) return false;
+            produto.ativo = novoAtivo;
+            return true;
+        }
+
         function adicionarEstoqueManual(idProduto) {
             const p = produtosDB.find(prod => prod.id === idProduto);
             if(p.isCombo) return;
@@ -919,7 +1100,9 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             if(atualVal === null) return exibirAviso("Este produto possui Estoque Livre nesta barraca.");
             const add = prompt(`Adicionar estoque ao ${p.nome} nesta barraca (Atual: ${atualVal}):`);
             if(add && !isNaN(add)) {
-                estoquePorProduto[idProduto] = atualVal + parseInt(add);
+                const novoEstoque = atualVal + parseInt(add);
+                estoquePorProduto[idProduto] = novoEstoque;
+                if (sincronizarAtivoPorEstoque(p, novoEstoque)) salvarCatalogo();
                 salvarNoBancoLocal();
                 renderizarTabelaProdutos(); renderizarMenu(categoriaFiltroAtual);
             }
@@ -1168,8 +1351,41 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
         function abrirModalObs(cartId) {
             obsCartIdAtual = cartId;
             const item = carrinho.find(i => i.cartId === cartId);
+            const produto = produtosDB.find(p => p.id === item.idProduto);
+
             document.getElementById('modal-obs-nome-item').innerText = `Item: ${item.nome}`;
-            document.getElementById('input-obs-texto').value = item.obs || '';
+
+            const boxCheck = document.getElementById('container-checkboxes-obs');
+            const gridCheck = document.getElementById('grid-ingredientes-obs');
+            gridCheck.innerHTML = '';
+
+            let listaIngredientes = [];
+            if (produto && produto.ingredientes) {
+                listaIngredientes = produto.ingredientes.split(',').map(s => s.trim()).filter(Boolean);
+            }
+
+            if (listaIngredientes.length > 0) {
+                boxCheck.style.display = 'block';
+                listaIngredientes.forEach(ing => {
+                    const jaTemSem = item.obs ? item.obs.includes(`Sem ${ing}`) : false;
+                    gridCheck.innerHTML += `
+                        <label class="item-checkbox-ingrediente">
+                            <input type="checkbox" value="Sem ${ing}" ${jaTemSem ? 'checked' : ''} class="cb-obs-ingrediente"> Sem ${ing}
+                        </label>
+                    `;
+                });
+            } else {
+                boxCheck.style.display = 'none';
+            }
+
+            let textoLivre = item.obs || '';
+            if (listaIngredientes.length > 0 && textoLivre) {
+                listaIngredientes.forEach(ing => {
+                    textoLivre = textoLivre.replace(`Sem ${ing}`, '').replace(/,\s*,/g, ',').replace(/^,\s*/, '').replace(/,\s*$/, '').trim();
+                });
+            }
+
+            document.getElementById('input-obs-texto').value = textoLivre;
             document.getElementById('modal-obs').style.display = 'flex';
             document.getElementById('input-obs-texto').focus();
         }
@@ -1181,9 +1397,16 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
 
         function salvarObsModal() {
             if (obsCartIdAtual !== null) {
-                const texto = document.getElementById('input-obs-texto').value.trim();
+                const checkboxes = document.querySelectorAll('.cb-obs-ingrediente:checked');
+                let marcados = Array.from(checkboxes).map(cb => cb.value);
+                const textoLivre = document.getElementById('input-obs-texto').value.trim();
+
+                let obsFinal = [];
+                if (marcados.length > 0) obsFinal.push(marcados.join(', '));
+                if (textoLivre) obsFinal.push(textoLivre);
+
                 const item = carrinho.find(i => i.cartId === obsCartIdAtual);
-                if (item) item.obs = texto;
+                if (item) item.obs = obsFinal.join(', ');
             }
             fecharModalObs();
             atualizarCarrinhoUI();
@@ -1236,10 +1459,16 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             const pedido = pedidosGerais.find(p => p.id === trocaItemPedidoId);
             const item = pedido.itens.find(i => i.cartId === trocaItemCartId);
 
+            let catalogoAlteradoPorEstoque = false;
+
             const prodAntigo = produtosDB.find(p => p.id === item.idProduto);
             if (prodAntigo) {
                 const estAntigo = estoquePorProduto[prodAntigo.id];
-                if (estAntigo !== undefined && estAntigo !== null) estoquePorProduto[prodAntigo.id] = estAntigo + 1;
+                if (estAntigo !== undefined && estAntigo !== null) {
+                    const novoEst = estAntigo + 1;
+                    estoquePorProduto[prodAntigo.id] = novoEst;
+                    if (sincronizarAtivoPorEstoque(prodAntigo, novoEst)) catalogoAlteradoPorEstoque = true;
+                }
             }
 
             const estNovo = estoquePorProduto[novoProduto.id];
@@ -1247,7 +1476,9 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                 if (estNovo <= 0) {
                     exibirAviso("Atenção: Este produto estava sem estoque, mas a troca foi efetuada.");
                 }
-                estoquePorProduto[novoProduto.id] = estNovo - 1;
+                const novoEst = estNovo - 1;
+                estoquePorProduto[novoProduto.id] = novoEst;
+                if (sincronizarAtivoPorEstoque(novoProduto, novoEst)) catalogoAlteradoPorEstoque = true;
             }
 
             item.idProduto = novoProduto.id;
@@ -1255,6 +1486,7 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             item.categoria = novoProduto.categoria;
             item.preco = novoProduto.preco;
 
+            if (catalogoAlteradoPorEstoque) salvarCatalogo();
             salvarNoBancoLocal();
             fecharModalTroca();
             renderizarMenu(categoriaFiltroAtual);
@@ -1447,9 +1679,9 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             document.getElementById('valor-recebido-dinheiro').value = '';
             document.getElementById('obs-bonificacao').value = '';
             
-            document.getElementById('forma-pagto').value = '';
-            document.getElementById('tipo-retirada-global').value = '';
-            document.getElementById('tipo-atendimento').value = '';
+            document.getElementById('forma-pagto').value = configPadroes.formaPagto || '';
+            document.getElementById('tipo-retirada-global').value = configPadroes.tipoRetiradaGlobal || '';
+            document.getElementById('tipo-atendimento').value = configPadroes.tipoAtendimento || '';
 
             toggleCampoDinheiro();
 
@@ -1564,16 +1796,28 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                 itens: JSON.parse(JSON.stringify(carrinho)) 
             };
 
+            let catalogoAlteradoPorEstoque = false;
+
             if (pedidoEmEdicaoId !== null) {
                 pedidosGerais.find(p => p.id === pedidoEmEdicaoId).itens.forEach(item => {
                     if(item.isCombo) {
                         item.itensComboEscolhidos.forEach(sub => {
                             const est = estoquePorProduto[sub.idProduto];
-                            if(est !== undefined && est !== null) estoquePorProduto[sub.idProduto] = est + 1;
+                            if(est !== undefined && est !== null) {
+                                const novoEst = est + 1;
+                                estoquePorProduto[sub.idProduto] = novoEst;
+                                const subProd = produtosDB.find(p => p.id === sub.idProduto);
+                                if (sincronizarAtivoPorEstoque(subProd, novoEst)) catalogoAlteradoPorEstoque = true;
+                            }
                         });
                     } else {
                         const est = estoquePorProduto[item.idProduto];
-                        if(est !== undefined && est !== null) estoquePorProduto[item.idProduto] = est + 1;
+                        if(est !== undefined && est !== null) {
+                            const novoEst = est + 1;
+                            estoquePorProduto[item.idProduto] = novoEst;
+                            const prod = produtosDB.find(p => p.id === item.idProduto);
+                            if (sincronizarAtivoPorEstoque(prod, novoEst)) catalogoAlteradoPorEstoque = true;
+                        }
                     }
                 });
                 pedidosGerais = pedidosGerais.filter(p => p.id !== pedidoEmEdicaoId);
@@ -1583,15 +1827,26 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                 if(item.isCombo) {
                     item.itensComboEscolhidos.forEach(sub => {
                         const est = estoquePorProduto[sub.idProduto];
-                        if(est !== undefined && est !== null) estoquePorProduto[sub.idProduto] = est - 1;
+                        if(est !== undefined && est !== null) {
+                            const novoEst = est - 1;
+                            estoquePorProduto[sub.idProduto] = novoEst;
+                            const subProd = produtosDB.find(p => p.id === sub.idProduto);
+                            if (sincronizarAtivoPorEstoque(subProd, novoEst)) catalogoAlteradoPorEstoque = true;
+                        }
                     });
                 } else {
                     const est = estoquePorProduto[item.idProduto];
-                    if(est !== undefined && est !== null) estoquePorProduto[item.idProduto] = est - 1;
+                    if(est !== undefined && est !== null) {
+                        const novoEst = est - 1;
+                        estoquePorProduto[item.idProduto] = novoEst;
+                        const prod = produtosDB.find(p => p.id === item.idProduto);
+                        if (sincronizarAtivoPorEstoque(prod, novoEst)) catalogoAlteradoPorEstoque = true;
+                    }
                 }
             });
 
             pedidosGerais.push(novoPedido);
+            if (catalogoAlteradoPorEstoque) salvarCatalogo();
             salvarNoBancoLocal();
 
             gerarHTMLImpressao(novoPedido); 
@@ -1868,18 +2123,30 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             if(confirm(`Tem certeza que deseja CANCELAR o Pedido #${id}?`)) {
                 const p = pedidosGerais.find(x => x.id === id);
                 if (p && p.statusPainel !== 'cancelado') {
+                    let catalogoAlteradoPorEstoque = false;
                     p.itens.forEach(item => {
                         if(item.isCombo) {
                             item.itensComboEscolhidos.forEach(sub => {
                                 const est = estoquePorProduto[sub.idProduto];
-                                if(est !== undefined && est !== null) estoquePorProduto[sub.idProduto] = est + 1;
+                                if(est !== undefined && est !== null) {
+                                    const novoEst = est + 1;
+                                    estoquePorProduto[sub.idProduto] = novoEst;
+                                    const subProd = produtosDB.find(x => x.id === sub.idProduto);
+                                    if (sincronizarAtivoPorEstoque(subProd, novoEst)) catalogoAlteradoPorEstoque = true;
+                                }
                             });
                         } else {
                             const est = estoquePorProduto[item.idProduto];
-                            if(est !== undefined && est !== null) estoquePorProduto[item.idProduto] = est + 1;
+                            if(est !== undefined && est !== null) {
+                                const novoEst = est + 1;
+                                estoquePorProduto[item.idProduto] = novoEst;
+                                const prod = produtosDB.find(x => x.id === item.idProduto);
+                                if (sincronizarAtivoPorEstoque(prod, novoEst)) catalogoAlteradoPorEstoque = true;
+                            }
                         }
                     });
-                    p.statusPainel = 'cancelado'; 
+                    p.statusPainel = 'cancelado';
+                    if (catalogoAlteradoPorEstoque) salvarCatalogo();
                     salvarNoBancoLocal();
                     renderizarMenu(categoriaFiltroAtual); 
                     renderizarTabelaProdutos(); 
@@ -2163,16 +2430,23 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             if(document.getElementById('vw-cozinha')) document.getElementById('vw-cozinha').innerHTML = htmlCozinha;
             if(document.getElementById('vw-balcao')) document.getElementById('vw-balcao').innerHTML = htmlBalcao;
             if(document.getElementById('vw-tv')) {
+                let ultPronto = prontos.length > 0 ? prontos[prontos.length - 1] : null;
+
                 document.getElementById('vw-tv').innerHTML = `
-                <div class="mc-tv-layout" style="height: 100%; border-radius: 0;">
-                    <div class="mc-tv-col preparando" style="padding: 10px; width: 50%;">
-                        <div class="mc-tv-title title-prep" style="font-size: 1.2rem; margin-bottom: 10px;">Preparando</div>
-                        <div class="mc-list-vertical" style="gap: 8px;">${htmlPrepTV}</div>
+                <div class="vw-tv-compacta">
+                    <div class="vw-tv-col preparando">
+                        <div class="vw-tv-title" style="color:#facc15;">Preparando</div>
+                        ${pedidosGerais.filter(p=>p.statusPainel==='preparando').map(p=>`<div class="vw-num"><span>#${String(p.id).padStart(2, '0')}</span><span>${p.cliente}</span></div>`).join('') || '<p style="font-size:0.75rem; color:gray; text-align:center;">Livre</p>'}
                     </div>
-                    <div class="mc-tv-col pronto" style="padding: 10px; width: 50%;">
-                        <div class="mc-tv-title title-pronto" style="font-size: 1.2rem; margin-bottom: 10px;">Pronto</div>
-                        ${tvDest.style.display === 'flex' ? `<div class="mc-destaque blinking" style="padding: 10px; margin-bottom:10px;">${tvDest.innerHTML}</div>` : ''}
-                        <div class="mc-list-vertical" style="gap: 8px;">${document.getElementById('tv-lista-historico').innerHTML}</div>
+                    <div class="vw-tv-col pronto" style="background:#022c22;">
+                        <div class="vw-tv-title" style="color:#4ade80;">Pronto</div>
+                        ${ultPronto ? `
+                            <div class="vw-destaque">
+                                <div class="vw-destaque-num">#${String(ultPronto.id).padStart(2, '0')}</div>
+                                <div class="vw-destaque-name">${ultPronto.cliente}</div>
+                            </div>
+                        ` : ''}
+                        ${hist.map(p => `<div class="vw-num ready"><span>#${String(p.id).padStart(2, '0')}</span><span>${p.cliente}</span></div>`).join('')}
                     </div>
                 </div>`;
             }
@@ -2758,6 +3032,7 @@ window.cancelarPedido = cancelarPedido;
 window.chamarNoPainel = chamarNoPainel;
 window.confirmarCombo = confirmarCombo;
 window.confirmarTrocaItemBalcao = confirmarTrocaItemBalcao;
+window.salvarConfiguracoesPadrao = salvarConfiguracoesPadrao;
 window.editarCategoria = editarCategoria;
 window.editarPedido = editarPedido;
 window.excluirCategoria = excluirCategoria;
@@ -2782,6 +3057,10 @@ window.imprimirRelatorioFechamento = imprimirRelatorioFechamento;
 window.iniciarGravaçãoAtalho = iniciarGravaçãoAtalho;
 window.limparCarrinho = limparCarrinho;
 window.moverCategoria = moverCategoria;
+window.tratarDragStartCategoria = tratarDragStartCategoria;
+window.tratarDragOverCategoria = tratarDragOverCategoria;
+window.tratarDropCategoria = tratarDropCategoria;
+window.tratarDragEndCategoria = tratarDragEndCategoria;
 window.moverParaAgora = moverParaAgora;
 window.mudarAba = mudarAba;
 window.mudarModoCadastro = mudarModoCadastro;
@@ -2792,6 +3071,8 @@ window.reimprimirPedido = reimprimirPedido;
 window.removerItemCarrinho = removerItemCarrinho;
 window.removerItemComboTemporario = removerItemComboTemporario;
 window.renderizarTabelaModalTodosPedidos = renderizarTabelaModalTodosPedidos;
+window.renderizarTabelaProdutos = renderizarTabelaProdutos;
+window.filtrarTabelaProdutosPorCategoria = filtrarTabelaProdutosPorCategoria;
 window.sairVideoWall = sairVideoWall;
 window.salvarObsModal = salvarObsModal;
 window.salvarProduto = salvarProduto;

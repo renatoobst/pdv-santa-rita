@@ -92,6 +92,11 @@
         .item-carrinho { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; border-bottom: 1px solid #f3f4f6; font-size: 0.9rem; }
         .qtd-controle { display: flex; align-items: center; gap: 8px; }
 
+        .painel-pagamento-compacto { background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0; }
+        .grid-campos-pagamento { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: end; }
+        .grid-campos-pagamento label { font-size: 0.75rem; font-weight: bold; margin-bottom: 2px; display: block; }
+        .grid-campos-pagamento select, .grid-campos-pagamento input { margin-bottom: 0 !important; font-size: 0.82rem !important; padding: 6px 8px !important; }
+
         .grid-pedidos { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; width: 100%; }
         .card-pedido { background: var(--card-bg); padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; border: 3px solid transparent; transition: all 0.2s ease; }
         .card-pedido.card-selecionado-teclado { border-color: var(--primary) !important; box-shadow: 0 0 15px rgba(37, 99, 235, 0.4) !important; transform: scale(1.02); }
@@ -135,8 +140,10 @@
         @keyframes blink-tv { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.95; transform: scale(1.02); } }
         .blinking { animation: blink-tv 1.5s infinite; }
 
-        .cat-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #e5e7eb; transition: background 0.2s; }
+        .cat-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #e5e7eb; transition: background 0.2s; cursor: grab; }
         .cat-item:hover { background: #f9fafb; }
+        .cat-item:active { cursor: grabbing; }
+        .cat-item.arrastando { opacity: 0.4; background: #e2e8f0; border: 2px dashed #2563eb; }
         .cat-acoes button { background: none; border: none; cursor: pointer; font-size: 1rem; opacity: 0.7; margin-left: 2px; }
         .cat-acoes button:hover { opacity: 1; transform: scale(1.1); }
 
@@ -148,6 +155,17 @@
         .vw-body { padding: 10px; overflow-y: auto; flex-grow: 1; box-sizing: border-box; }
         .btn-exit-vw { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.8); color: white; border: 1px solid #333; padding: 10px 15px; border-radius: 6px; cursor: pointer; z-index: 100000; font-weight: bold; opacity: 0.05; transition: opacity 0.3s; }
         .btn-exit-vw:hover { opacity: 1; }
+
+        /* ESTILOS COMPACTOS DA TV DENTRO DO MULTIVIEW (menores que a TV cheia) */
+        .vw-tv-compacta { display: flex; height: 100%; width: 100%; background: #000; color: #fff; }
+        .vw-tv-col { flex: 1; padding: 6px; display: flex; flex-direction: column; overflow-y: auto; box-sizing: border-box; }
+        .vw-tv-col.preparando { border-right: 1px solid #334155; }
+        .vw-tv-title { font-size: 1rem; font-weight: 900; text-align: center; text-transform: uppercase; margin-bottom: 8px; border-bottom: 1px solid #334155; padding-bottom: 4px; }
+        .vw-num { background: #1f2937; color: #f8fafc; padding: 6px 10px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid #facc15; font-size: 0.85rem; font-weight: bold; margin-bottom: 6px; }
+        .vw-num.ready { background: #064e3b; border-left: 4px solid #10b981; color: #86efac; }
+        .vw-destaque { background: #16a34a; color: white; padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 8px; border: 1px solid #4ade80; }
+        .vw-destaque-num { font-size: 2.2rem; font-weight: 900; line-height: 1; }
+        .vw-destaque-name { font-size: 0.9rem; font-weight: bold; text-transform: uppercase; margin-top: 2px; }
 
         .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
         .chart-box { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); display: flex; flex-direction: column; align-items: center; }
@@ -162,6 +180,13 @@
         .card-atalho { background: white; border: 2px solid #e5e7eb; padding: 15px; border-radius: 10px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         .card-atalho.gravando { border-color: var(--warning); background: #fefce8; animation: blink-tv 1.2s infinite; }
         .key-badge { background: #1f2937; color: #fff; font-size: 1.3rem; font-weight: 900; padding: 8px 16px; border-radius: 8px; border-bottom: 4px solid #000; margin: 10px 0; min-width: 40px; }
+
+        .box-config-secao { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; border-left: 5px solid var(--primary); }
+        .grid-config-3col { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; margin-top: 15px; }
+
+        .grid-obs-ingredientes { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; max-height: 150px; overflow-y: auto; margin: 8px 0; background: #f1f5f9; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1; }
+        .item-checkbox-ingrediente { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: bold; cursor: pointer; }
+        .item-checkbox-ingrediente input { width: auto; margin: 0; }
 
         #area-impressao { display: none; }
         @media print {

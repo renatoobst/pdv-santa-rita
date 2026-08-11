@@ -67,9 +67,16 @@
     <div id="modal-obs" class="modal-geral">
         <div class="modal-content">
             <h3 style="margin-top:0; border-bottom: 2px solid #e5e7eb; padding-bottom:10px; color:var(--primary);">📝 Observação do Item</h3>
-            <p id="modal-obs-nome-item" style="font-size: 0.9rem; color: #4b5563; font-weight: bold;"></p>
-            <textarea id="input-obs-texto" rows="4" placeholder="Ex: Sem cebola, bem passado..." style="resize: vertical;"></textarea>
-            <div style="display:flex; gap:10px;">
+            <p id="modal-obs-nome-item" style="font-size: 0.9rem; color: #4b5563; font-weight: bold; margin-bottom: 5px;"></p>
+
+            <div id="container-checkboxes-obs" style="display:none;">
+                <label style="font-size: 0.8rem; font-weight: bold; color: #0284c7;">Marque as opções de remoção/ajuste:</label>
+                <div class="grid-obs-ingredientes" id="grid-ingredientes-obs"></div>
+            </div>
+
+            <label style="font-size: 0.8rem; font-weight: bold; color: #374151;">Outras Observações (Texto Livre):</label>
+            <textarea id="input-obs-texto" rows="3" placeholder="Ex: Bem passado, sem maionese..." style="resize: vertical;"></textarea>
+            <div style="display:flex; gap:10px; margin-top: 10px;">
                 <button class="btn btn-success" style="flex:1;" onclick="salvarObsModal()">Salvar Observação 💾</button>
                 <button class="btn btn-danger" style="flex:1;" onclick="fecharModalObs()">Cancelar</button>
             </div>
@@ -142,6 +149,7 @@
                 <div class="dropdown-inner">
                     <button onclick="mudarAba('tela-produtos', this)">📦 Produtos & Estoque</button>
                     <button onclick="mudarAba('tela-atalhos', this)">⌨️ Teclas de Atalho</button>
+                    <button onclick="mudarAba('tela-configuracoes', this)">⚙️ Configurações & Parâmetros</button>
                     <button id="btn-nav-barracas" onclick="mudarAba('tela-barracas', this)">🏪 Barracas</button>
                 </div>
             </div>
@@ -230,33 +238,57 @@
                         <p style="color: gray; text-align: center; margin-top: 20px;">Nenhum item adicionado.</p>
                     </div>
 
-                    <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
-                        
-                        <div style="display: flex; justify-content: space-between; font-size: 1.4rem; font-weight: bold; margin-bottom: 15px;">
+                    <div class="painel-pagamento-compacto">
+
+                        <div style="display: flex; justify-content: space-between; font-size: 1.25rem; font-weight: bold; margin-bottom: 8px;">
                             <span>Total:</span>
                             <span>R$ <span id="total-carrinho">0.00</span></span>
                         </div>
-                        
-                        <label style="font-size: 0.85rem; font-weight: bold; color: #dc2626;">Forma de Pagamento *:</label>
-                        <select id="forma-pagto" onchange="toggleCampoDinheiro()" style="margin-bottom: 10px; font-weight: bold;">
-                            <option value="">-- Selecione a Forma de Pagamento --</option>
-                            <option value="Cartão Débito">💳 Cartão Débito</option>
-                            <option value="Cartão Crédito">💳 Cartão Crédito</option>
-                            <option value="Pix">📱 Pix (Máquina)</option>
-                            <option value="Dinheiro">💵 Dinheiro</option>
-                            <option value="Misto">🔀 2 Formas de Pagamento</option>
-                            <option value="Pix Direto">📲 Pix Direto (Conta)</option>
-                            <option value="Bonificação">🎁 Bonificação</option>
-                        </select>
+
+                        <div class="grid-campos-pagamento">
+                            <div>
+                                <label style="color: #dc2626;">Forma de Pagamento *:</label>
+                                <select id="forma-pagto" onchange="toggleCampoDinheiro()" style="font-weight: bold;">
+                                    <option value="">-- Selecione --</option>
+                                    <option value="Cartão Débito">💳 Cartão Débito</option>
+                                    <option value="Cartão Crédito">💳 Cartão Crédito</option>
+                                    <option value="Pix">📱 Pix (Máquina)</option>
+                                    <option value="Dinheiro">💵 Dinheiro</option>
+                                    <option value="Misto">🔀 2 Formas (Misto)</option>
+                                    <option value="Pix Direto">📲 Pix Direto (Conta)</option>
+                                    <option value="Bonificação">🎁 Bonificação</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label style="color: #dc2626;">Tipo Retirada *:</label>
+                                <select id="tipo-atendimento" style="font-weight: bold; background: white;">
+                                    <option value="">-- Selecione --</option>
+                                    <option value="Levar (Viagem)">🛍️ Levar (Viagem)</option>
+                                    <option value="Comer no Local">🍽️ Comer no Local</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 6px;">
+                            <label style="font-size: 0.75rem; font-weight: bold; color: #dc2626; display:block; margin-bottom:2px;">Modo de Retirada (Global) *:</label>
+                            <select id="tipo-retirada-global" onchange="mudarTipoRetiradaGlobal()" style="font-weight: bold; background: white; margin-bottom: 6px; padding:6px; font-size:0.82rem;">
+                                <option value="">-- Selecione o Modo de Retirada --</option>
+                                <option value="agora">🟢 Retirar Agora (Cozinha)</option>
+                                <option value="mais_tarde">📦 Retirar Tudo Mais Tarde (Ficha)</option>
+                                <option value="parcial">✂️ Retirada Parcial (Escolher item a item)</option>
+                                <option id="opt-sem-cozinha" value="agora_sem_cozinha">⚡ Retirar Agora (Sem Cozinha)</option>
+                            </select>
+                        </div>
 
                         <!-- BOX DE PAGAMENTO MISTO (2 FORMAS DE PAGAMENTO) -->
-                        <div id="box-pagamento-misto" style="display: none; background: #f0fdf4; padding: 12px; border-radius: 8px; border: 1px solid #16a34a; margin-bottom: 15px;">
-                            <div style="font-size: 0.85rem; font-weight: bold; color: #166534; margin-bottom: 8px;">Dividir Pagamento em 2 Formas:</div>
-                            
-                            <div class="row-inputs" style="margin-bottom: 8px;">
+                        <div id="box-pagamento-misto" style="display: none; background: #f0fdf4; padding: 8px; border-radius: 6px; border: 1px solid #16a34a; margin-bottom: 6px;">
+                            <div style="font-size: 0.75rem; font-weight: bold; color: #166534; margin-bottom: 4px;">Dividir Pagamento em 2 Formas:</div>
+
+                            <div class="row-inputs" style="margin-bottom: 4px;">
                                 <div style="flex: 1.2;">
                                     <label style="font-size: 0.75rem; font-weight: bold;">1ª Forma:</label>
-                                    <select id="misto-forma-1" onchange="atualizarValoresMisto(); toggleCampoDinheiro();" style="margin-bottom: 0; padding: 6px; font-weight: bold;">
+                                    <select id="misto-forma-1" onchange="atualizarValoresMisto(); toggleCampoDinheiro();" style="margin-bottom: 0; padding: 4px; font-weight: bold;">
                                         <option value="Cartão Débito">💳 Cartão Débito</option>
                                         <option value="Cartão Crédito">💳 Cartão Crédito</option>
                                         <option value="Pix">📱 Pix (Máquina)</option>
@@ -266,14 +298,14 @@
                                 </div>
                                 <div style="flex: 1;">
                                     <label style="font-size: 0.75rem; font-weight: bold;">Valor 1 (R$):</label>
-                                    <input type="number" id="misto-valor-1" placeholder="0.00" step="0.01" oninput="atualizarValoresMisto('1')" style="margin-bottom: 0; padding: 6px; background: white;">
+                                    <input type="number" id="misto-valor-1" placeholder="0.00" step="0.01" oninput="atualizarValoresMisto('1')" style="margin-bottom: 0; padding: 4px; background: white;">
                                 </div>
                             </div>
 
                             <div class="row-inputs" style="margin-bottom: 0;">
                                 <div style="flex: 1.2;">
                                     <label style="font-size: 0.75rem; font-weight: bold;">2ª Forma:</label>
-                                    <select id="misto-forma-2" onchange="toggleCampoDinheiro();" style="margin-bottom: 0; padding: 6px; font-weight: bold;">
+                                    <select id="misto-forma-2" onchange="toggleCampoDinheiro();" style="margin-bottom: 0; padding: 4px; font-weight: bold;">
                                         <option value="Dinheiro">💵 Dinheiro</option>
                                         <option value="Cartão Débito">💳 Cartão Débito</option>
                                         <option value="Cartão Crédito">💳 Cartão Crédito</option>
@@ -283,49 +315,31 @@
                                 </div>
                                 <div style="flex: 1;">
                                     <label style="font-size: 0.75rem; font-weight: bold;">Valor 2 (R$):</label>
-                                    <input type="number" id="misto-valor-2" placeholder="0.00" step="0.01" oninput="atualizarValoresMisto('2')" style="margin-bottom: 0; padding: 6px; background: white;">
+                                    <input type="number" id="misto-valor-2" placeholder="0.00" step="0.01" oninput="atualizarValoresMisto('2')" style="margin-bottom: 0; padding: 4px; background: white;">
                                 </div>
                             </div>
                         </div>
 
-                        <div id="box-dinheiro-troco" style="display: none; background: #e0f2fe; padding: 10px; border-radius: 8px; border: 1px solid #0284c7; margin-bottom: 15px;">
-                            <div class="row-inputs" style="margin-bottom: 0;">
+                        <div id="box-dinheiro-troco" style="display: none; background: #e0f2fe; padding: 8px; border-radius: 6px; border: 1px solid #0284c7; margin-bottom: 6px;">
+                            <div class="row-inputs" style="margin-bottom: 0; align-items: center;">
                                 <div style="flex: 1;">
-                                    <label style="font-size: 0.8rem; font-weight: bold; color: #0369a1;">Valor Recebido em Dinheiro (R$):</label>
-                                    <input type="number" id="valor-recebido-dinheiro" placeholder="0.00" step="0.01" oninput="calcularTroco()" style="margin-bottom: 0; background: white;">
+                                    <label style="font-size: 0.72rem; font-weight: bold; color: #0369a1; margin-bottom:0;">Recebido (R$):</label>
+                                    <input type="number" id="valor-recebido-dinheiro" placeholder="0.00" step="0.01" oninput="calcularTroco()" style="margin-bottom: 0; background: white; padding: 4px;">
                                 </div>
                                 <div style="flex: 1; text-align: right;">
-                                    <label style="font-size: 0.8rem; font-weight: bold; color: #0369a1; display: block;">Troco:</label>
-                                    <span style="font-size: 1.3rem; font-weight: 900; color: #0284c7; line-height: 2.2rem;">R$ <span id="valor-troco-display">0.00</span></span>
+                                    <label style="font-size: 0.72rem; font-weight: bold; color: #0369a1; display: block; margin-bottom:0;">Troco:</label>
+                                    <span style="font-size: 1.1rem; font-weight: 900; color: #0284c7;">R$ <span id="valor-troco-display">0.00</span></span>
                                 </div>
                             </div>
                         </div>
 
-                        <div id="box-bonificacao" style="display: none; background: #fef3c7; padding: 10px; border-radius: 8px; border: 1px solid #f59e0b; margin-bottom: 15px;">
-                            <label style="font-size: 0.8rem; font-weight: bold; color: #b45309;">Motivo / Observação da Bonificação (Obrigatório):</label>
-                            <input type="text" id="obs-bonificacao" placeholder="Ex: Doação, Autoridade, Cortesia..." style="margin-bottom: 0; background: white;">
+                        <div id="box-bonificacao" style="display: none; background: #fef3c7; padding: 8px; border-radius: 6px; border: 1px solid #f59e0b; margin-bottom: 6px;">
+                            <label style="font-size: 0.72rem; font-weight: bold; color: #b45309; margin-bottom:2px;">Motivo Bonificação (Obrigatório):</label>
+                            <input type="text" id="obs-bonificacao" placeholder="Ex: Doação, Autoridade, Cortesia..." style="margin-bottom: 0; background: white; padding: 4px;">
                         </div>
 
-                        <div style="background: #fef08a; padding: 10px; border-radius: 6px; margin-bottom: 15px; border: 1px solid #facc15;">
-                            <label style="font-size: 0.85rem; font-weight: bold; display: block; margin-bottom: 5px; color: #dc2626;">Modo de Retirada (Global) *:</label>
-                            <select id="tipo-retirada-global" onchange="mudarTipoRetiradaGlobal()" style="margin-bottom: 10px; font-weight: bold; background: white;">
-                                <option value="">-- Selecione o Modo de Retirada --</option>
-                                <option value="agora">🟢 Retirar Agora (Cozinha)</option>
-                                <option value="mais_tarde">📦 Retirar Tudo Mais Tarde (Ficha)</option>
-                                <option value="parcial">✂️ Retirada Parcial (Escolher item a item)</option>
-                                <option id="opt-sem-cozinha" value="agora_sem_cozinha">⚡ Retirar Agora (Sem Cozinha)</option>
-                            </select>
-
-                            <label style="font-size: 0.85rem; font-weight: bold; display: block; margin-bottom: 5px; color: #dc2626;">Tipo de Retirada *:</label>
-                            <select id="tipo-atendimento" style="margin-bottom: 0; font-weight: bold; background: white;">
-                                <option value="">-- Selecione o Tipo de Retirada --</option>
-                                <option value="Levar (Viagem)">🛍️ Levar (Viagem)</option>
-                                <option value="Comer no Local">🍽️ Comer no Local</option>
-                            </select>
-                        </div>
-
-                        <button id="btn-finalizar-pedido" class="btn btn-primary" style="width: 100%; margin-bottom: 10px; font-size: 1.1rem;" onclick="finalizarPedido()">Cobrar, Imprimir e Enviar 🖨️</button>
-                        <button class="btn-danger" style="width: 100%;" onclick="limparCarrinho()">Limpar Pedido</button>
+                        <button id="btn-finalizar-pedido" class="btn btn-primary" style="width: 100%; margin-bottom: 6px; font-size: 1rem; padding: 8px;" onclick="finalizarPedido()">Cobrar, Imprimir e Enviar 🖨️</button>
+                        <button class="btn-danger" style="width: 100%; padding: 6px; font-size: 0.85rem;" onclick="limparCarrinho()">Limpar Pedido</button>
                     </div>
                 </div>
             </div>
@@ -428,7 +442,10 @@
             <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start;">
                 
                 <div style="flex: 1; min-width: 250px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-                    <h3 style="margin-top: 0;">Categorias</h3>
+                    <h3 style="margin-top: 0; display:flex; justify-content:space-between; align-items:center;">
+                        Categorias
+                        <small style="font-size:0.7rem; color:gray; font-weight:normal;">✨ Arraste para reordenar</small>
+                    </h3>
                     <div style="display: flex; gap: 8px; margin-bottom: 15px;">
                         <input type="text" id="nova-cat-nome" placeholder="Nova Categoria..." style="margin-bottom: 0; flex: 1;">
                         <button class="btn btn-success" style="padding: 10px; width: 45px;" onclick="adicionarCategoria()">➕</button>
@@ -447,7 +464,10 @@
                     
                     <label style="font-size: 0.85rem; font-weight: bold;">Nome (Produto ou Combo):</label>
                     <input type="text" id="novo-prod-nome" placeholder="Ex: X-Bacon" required>
-                    
+
+                    <label style="font-size: 0.85rem; font-weight: bold; color:#0284c7;">Ingredientes / Itens Inclusos (Separados por vírgula):</label>
+                    <input type="text" id="novo-prod-ingredientes" placeholder="Ex: Pão, Hamburguer, Queijo, Tomate, Alface">
+
                     <label style="font-size: 0.85rem; font-weight: bold;">Status do Produto (Visibilidade no PDV):</label>
                     <select id="novo-prod-ativo" style="margin-bottom: 15px; font-weight: bold;">
                         <option value="true">🟢 ATIVO (Aparece nas Vendas)</option>
@@ -505,7 +525,15 @@
                 </div>
 
                 <div style="flex: 3; min-width: 100%; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-height: 60vh; overflow-y: auto;">
-                    <h3 style="margin-top: 0;">Lista de Produtos & Combos</h3>
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
+                        <h3 style="margin: 0;">Lista de Produtos & Combos</h3>
+                        <div style="width: 280px; max-width: 100%;">
+                            <input type="text" id="busca-tabela-produtos" placeholder="🔍 Pesquisar na lista..." oninput="renderizarTabelaProdutos()" style="margin-bottom: 0; padding: 8px; font-weight: bold; border: 2px solid #cbd5e1; background: #f8fafc;">
+                        </div>
+                    </div>
+
+                    <div class="menu-categorias" id="abas-tabela-produtos-container" style="margin-bottom: 15px;"></div>
+
                     <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
                         <thead>
                             <tr style="border-bottom: 2px solid #e5e7eb;">
@@ -565,6 +593,57 @@
                     <li>Aperte a tecla de <b>Chamar no Painel</b> para tocar o aviso sonoro e enviar a senha para a TV.</li>
                     <li>Aperte a tecla de <b>Marcar como Retirado</b> para dar baixa e finalizar o atendimento do pedido selecionado.</li>
                 </ul>
+            </div>
+        </div>
+
+        <!-- TELA: CONFIGURAÇÕES E PARÂMETROS DO SISTEMA -->
+        <div id="tela-configuracoes" class="tab-content">
+            <h2>⚙️ Configurações e Parâmetros do Sistema</h2>
+            <p style="color: gray; margin-bottom: 20px;">Personalize o comportamento padrão da tela de Pedido desta barraca.</p>
+
+            <div class="box-config-secao">
+                <h3 style="margin-top: 0; color: var(--primary); display: flex; align-items: center; gap: 8px;">
+                    🛒 Parâmetros Padrão da Tela de Pedido
+                </h3>
+                <p style="font-size: 0.85rem; color: #4b5563; margin-top: -5px;">
+                    Escolha quais opções devem vir pré-selecionadas ou se os campos devem resetar para o estado <b>"-- Selecione --"</b> sempre que um pedido for finalizado ou limpo.
+                </p>
+
+                <div class="grid-config-3col">
+                    <div>
+                        <label style="font-size: 0.85rem; font-weight: bold; color: #374151; display: block; margin-bottom: 4px;">Padrão: Forma de Pagamento</label>
+                        <select id="cfg-padrao-forma-pagto" onchange="salvarConfiguracoesPadrao()" style="font-weight: bold; background: #f8fafc;">
+                            <option value="">-- Selecione (Obriga Escolha) --</option>
+                            <option value="Cartão Débito">💳 Cartão Débito</option>
+                            <option value="Cartão Crédito">💳 Cartão Crédito</option>
+                            <option value="Pix">📱 Pix (Máquina)</option>
+                            <option value="Dinheiro">💵 Dinheiro</option>
+                            <option value="Misto">🔀 2 Formas (Misto)</option>
+                            <option value="Pix Direto">📲 Pix Direto (Conta)</option>
+                            <option value="Bonificação">🎁 Bonificação</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label style="font-size: 0.85rem; font-weight: bold; color: #374151; display: block; margin-bottom: 4px;">Padrão: Tipo de Retirada</label>
+                        <select id="cfg-padrao-tipo-atendimento" onchange="salvarConfiguracoesPadrao()" style="font-weight: bold; background: #f8fafc;">
+                            <option value="">-- Selecione (Obriga Escolha) --</option>
+                            <option value="Levar (Viagem)">🛍️ Levar (Viagem)</option>
+                            <option value="Comer no Local">🍽️ Comer no Local</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label style="font-size: 0.85rem; font-weight: bold; color: #374151; display: block; margin-bottom: 4px;">Padrão: Modo de Retirada (Global)</label>
+                        <select id="cfg-padrao-tipo-retirada-global" onchange="salvarConfiguracoesPadrao()" style="font-weight: bold; background: #f8fafc;">
+                            <option value="">-- Selecione (Obriga Escolha) --</option>
+                            <option value="agora">🟢 Retirar Agora (Cozinha)</option>
+                            <option value="mais_tarde">📦 Retirar Tudo Mais Tarde (Ficha)</option>
+                            <option value="parcial">✂️ Retirada Parcial (Item a Item)</option>
+                            <option value="agora_sem_cozinha">⚡ Retirar Agora (Sem Cozinha)</option>
+                        </select>
+                    </div>
+                </div>
             </div>
         </div>
 
