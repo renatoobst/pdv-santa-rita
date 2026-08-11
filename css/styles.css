@@ -12,11 +12,15 @@
 
         body { font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; background-color: var(--bg); color: var(--text); }
 
-        nav { background-color: #111827; padding: 1rem; display: flex; gap: 10px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); flex-wrap: wrap; align-items: center; position: relative; z-index: 1000; }
-        
-        nav button { background-color: transparent; color: #d1d5db; border: 2px solid transparent; padding: 10px 15px; font-size: 15px; font-weight: 600; cursor: pointer; border-radius: 8px; transition: all 0.3s ease; display: inline-flex; align-items: center; }
-        nav button.active { background-color: rgba(37, 99, 235, 0.2); color: white; border-color: var(--primary); }
-        nav button:hover:not(.active) { background-color: rgba(255, 255, 255, 0.1); color: white; }
+        nav { background-color: #111827; padding: 0.65rem 1rem; display: flex; gap: 4px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); flex-wrap: wrap; align-items: center; position: relative; z-index: 1000; }
+
+        nav button { background-color: transparent; color: #9ca3af; border: 2px solid transparent; padding: 9px 14px; font-size: 14.5px; font-weight: 600; cursor: pointer; border-radius: 8px; transition: all 0.15s ease; display: inline-flex; align-items: center; white-space: nowrap; }
+        nav button.active { background-color: rgba(37, 99, 235, 0.18); color: #fff; border-color: var(--primary); }
+        nav button:hover:not(.active) { background-color: rgba(255, 255, 255, 0.08); color: #fff; }
+
+        /* Separa visualmente o fluxo do dia a dia (Pedido → Cozinha → Balcão) dos
+           grupos de telas usadas com menos frequência (painéis, gestão, relatórios). */
+        .nav-divider { width: 1px; height: 22px; background-color: rgba(255,255,255,0.12); margin: 0 4px; flex-shrink: 0; }
 
         .dropdown { position: relative; display: inline-block; z-index: 999999; }
         .dropdown-content { display: none; position: absolute; background-color: #1f2937; min-width: 230px; box-shadow: 0px 8px 25px rgba(0,0,0,0.5); border-radius: 8px; border: 1px solid #374151; top: 100%; left: 0; padding-top: 8px; }
@@ -24,7 +28,17 @@
         .dropdown-content button { color: #d1d5db; padding: 12px 16px; text-decoration: none; display: block; width: 100%; text-align: left; border: none; border-radius: 0; background: transparent; }
         .dropdown-content button:hover { background-color: rgba(37, 99, 235, 0.3); color: white; }
         .dropdown:hover .dropdown-content { display: block; }
-        .dropdown:hover .dropbtn { background-color: rgba(255, 255, 255, 0.1); color: white; }
+        .dropdown:hover .dropbtn { background-color: rgba(255, 255, 255, 0.08); color: white; }
+
+        /* Indicador da barraca ativa: precisa se destacar (é contexto importante —
+           "onde estou trabalhando agora"), mas com um acento de cor em vez de um
+           bloco sólido, pra não competir com o azul de "aba ativa". */
+        .nav-barraca-btn { background-color: rgba(13, 148, 136, 0.18) !important; color: #5eead4 !important; border-color: rgba(45, 212, 191, 0.45) !important; }
+        .dropdown:hover .nav-barraca-btn, .nav-barraca-btn:hover { background-color: rgba(13, 148, 136, 0.3) !important; color: #99f6e4 !important; }
+
+        /* Ação secundária (ocultar menu): só o ícone, minimalista, ganha destaque no hover. */
+        .nav-btn-icon { padding: 9px 12px; opacity: 0.6; font-size: 16px; }
+        .nav-btn-icon:hover { opacity: 1; }
 
         .btn-show-menu { position: fixed; top: 10px; left: 10px; background: rgba(0,0,0,0.8); color: white; border: 1px solid #333; padding: 10px 15px; border-radius: 6px; cursor: pointer; z-index: 100000; font-weight: bold; opacity: 0.05; transition: opacity 0.3s; display: none; }
         .btn-show-menu:hover { opacity: 1; }
