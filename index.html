@@ -94,6 +94,7 @@
                         <option value="Todos">Todos os Status</option>
                         <option value="preparando">👨‍🍳 Na Cozinha</option>
                         <option value="mais_tarde">📦 P. Mais Tarde (Ficha)</option>
+                        <option value="pendente">🌐 Pendente (Retirada)</option>
                         <option value="entregue">✅ Finalizados</option>
                         <option value="cancelado">❌ Cancelados</option>
                     </select>
@@ -132,6 +133,7 @@
         <button onclick="mudarAba('tela-agendados', this)">🎫 Pedido Ficha <span id="badge-agendados" class="badge">0</span></button>
         <button onclick="mudarAba('tela-preparo', this)">🍳 Cozinha <span id="badge-cozinha" class="badge">0</span></button>
         <button onclick="mudarAba('tela-entrega', this)">🛍️ Balcão/Entrega <span id="badge-entrega" class="badge">0</span></button>
+        <button onclick="mudarAba('tela-retirada', this)">🌐 Pedido Retirada <span id="badge-retirada" class="badge">0</span></button>
 
         <div class="nav-divider"></div>
 
@@ -259,6 +261,7 @@
                                     <option value="Misto">🔀 2 Formas (Misto)</option>
                                     <option value="Pix Direto">📲 Pix Direto (Conta)</option>
                                     <option value="Bonificação">🎁 Bonificação</option>
+                                    <option value="Pendente">🌐 Pedido Online (Pagar na Retirada)</option>
                                 </select>
                             </div>
 
@@ -388,6 +391,17 @@
                     </div>
                 </div>
             </div>
+        </div>
+
+        <!-- TELA: PEDIDO RETIRADA (pedidos feitos pela internet/combinados fora,
+             aguardando a pessoa vir buscar E pagar) -->
+        <div id="tela-retirada" class="tab-content">
+            <h2>🌐 Pedido Retirada — Aguardando Pagamento</h2>
+            <p style="color: gray; margin-bottom: 20px;">
+                Pedidos combinados pela internet/WhatsApp: a pessoa ainda vai vir retirar e pagar.
+                Quando ela chegar, clique em <b>💳 Cobrar Agora</b> pra escolher a forma de pagamento e imprimir a notinha.
+            </p>
+            <div class="grid-pedidos" id="fila-retirada"></div>
         </div>
 
         <!-- TELA 5: PAINEL DE TV -->
@@ -808,6 +822,10 @@
                 <div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex: 1; min-width: 150px; border-left: 4px solid #ef4444;">
                     <p style="margin: 0; font-size: 0.85rem; color: gray; font-weight: bold;">🎁 Qtd Pedidos Bonificação</p>
                     <p style="margin: 5px 0 0 0; font-size: 1.4rem; font-weight: bold;"><span id="rel-qtd-bonificacao">0</span> ped.</p>
+                </div>
+                <div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex: 1; min-width: 150px; border-left: 4px solid #0284c7;">
+                    <p style="margin: 0; font-size: 0.85rem; color: gray; font-weight: bold;">🌐 Pendente de Pagamento (Retirada)</p>
+                    <p style="margin: 5px 0 0 0; font-size: 1.4rem; font-weight: bold;">R$ <span id="rel-total-pendente">0.00</span> <small style="font-size:0.8rem; color:gray; font-weight:normal;">(<span id="rel-qtd-pendente">0</span> ped.)</small></p>
                 </div>
             </div>
 

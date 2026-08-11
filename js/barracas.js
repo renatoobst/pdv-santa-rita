@@ -301,7 +301,15 @@ export async function criarBarracaNoPainel() {
 // barraca ativa no dispositivo).
 export function calcularResumoPedidos(pedidosGerais, caixaAberto, valorFundoCaixa) {
     const lista = Array.isArray(pedidosGerais) ? pedidosGerais : [];
-    const validos = lista.filter(p => p.statusPainel !== 'cancelado');
+    // Pedido Online (pagamentoPendente) ainda não virou dinheiro de verdade —
+    // fica de fora dos totais do caixa (faturamento, gaveta, formas de
+    // pagamento) até alguém abrir o pedido e definir a forma de pagamento na
+    // retirada. Fica exposto à parte, em pendentesPagamento, só pra dar
+    // visibilidade de quanto ainda está "a receber".
+    const pendentesPagamento = lista.filter(p => p.statusPainel !== 'cancelado' && p.pagamentoPendente);
+    const totalPendentePagamento = pendentesPagamento.reduce((a, p) => a + p.total, 0);
+
+    const validos = lista.filter(p => p.statusPainel !== 'cancelado' && !p.pagamentoPendente);
     const validosVendas = validos.filter(p => p.pagamento && !p.pagamento.startsWith('Bonificação'));
     const totalVendas = validosVendas.reduce((a, p) => a + p.total, 0);
 
@@ -347,7 +355,9 @@ export function calcularResumoPedidos(pedidosGerais, caixaAberto, valorFundoCaix
         qtdBonificacoes: bonificacoesLista.length,
         bonificacoesLista,
         totalGaveta: caixaAberto ? (valorFundoCaixa + fatDinheiro) : 0.00,
-        resumoProdutosVendidos
+        resumoProdutosVendidos,
+        pendentesPagamento,
+        totalPendentePagamento
     };
 }
 
