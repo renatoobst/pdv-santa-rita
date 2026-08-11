@@ -123,11 +123,29 @@
         <button onclick="mudarAba('tela-agendados', this)">🎫 Pedido Ficha <span id="badge-agendados" class="badge">0</span></button>
         <button onclick="mudarAba('tela-preparo', this)">🍳 Cozinha <span id="badge-cozinha" class="badge">0</span></button>
         <button onclick="mudarAba('tela-entrega', this)">🛍️ Balcão/Entrega <span id="badge-entrega" class="badge">0</span></button>
-        <button onclick="mudarAba('tela-tv', this)" style="background: #374151;">📺 TV Aberta</button>
-        <button onclick="mudarAba('tela-videowall', this)" style="background: #4f46e5; color: white;">🎛️ Multiview 4x4</button>
-        <button onclick="mudarAba('tela-produtos', this)">📦 Produtos & Estoque</button>
-        <button onclick="mudarAba('tela-atalhos', this)" style="background: #0284c7; color: white;">⌨️ Teclas de Atalho</button>
-        <button id="btn-nav-barracas" onclick="mudarAba('tela-barracas', this)" style="background: #7c3aed; color: white;">🏪 Barracas</button>
+
+        <div class="nav-divider"></div>
+
+        <div class="dropdown">
+            <button class="dropbtn">🖥️ Painéis ▾</button>
+            <div class="dropdown-content">
+                <div class="dropdown-inner">
+                    <button onclick="mudarAba('tela-tv', this)">📺 TV Aberta</button>
+                    <button onclick="mudarAba('tela-videowall', this)">🎛️ Multiview 4x4</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="dropdown">
+            <button class="dropbtn">⚙️ Gestão ▾</button>
+            <div class="dropdown-content">
+                <div class="dropdown-inner">
+                    <button onclick="mudarAba('tela-produtos', this)">📦 Produtos & Estoque</button>
+                    <button onclick="mudarAba('tela-atalhos', this)">⌨️ Teclas de Atalho</button>
+                    <button id="btn-nav-barracas" onclick="mudarAba('tela-barracas', this)">🏪 Barracas</button>
+                </div>
+            </div>
+        </div>
 
         <div class="dropdown">
             <button class="dropbtn">📊 Relatórios ▾</button>
@@ -142,13 +160,13 @@
         </div>
 
         <div class="dropdown" id="seletor-barraca-nav" style="margin-left: auto;">
-            <button class="dropbtn" style="background: #0d9488; color: white;">🏪 <span id="nome-barraca-atual-nav">Carregando…</span> ▾</button>
+            <button class="dropbtn nav-barraca-btn">🏪 <span id="nome-barraca-atual-nav">Carregando…</span> ▾</button>
             <div class="dropdown-content" style="left: auto; right: 0;">
                 <div class="dropdown-inner" id="lista-barracas-trocar"></div>
             </div>
         </div>
 
-        <button onclick="toggleMenuGlobal()" style="background: #1e293b; border: 1px solid #334155; color: #94a3b8;">⬆ Ocultar Menu</button>
+        <button class="nav-btn-icon" onclick="toggleMenuGlobal()" title="Ocultar Menu">⬆</button>
     </nav>
 
     <!-- TELA DE SELEÇÃO DE BARRACA (portão de entrada, antes de qualquer outra tela) -->
