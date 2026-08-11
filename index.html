@@ -127,20 +127,42 @@
         <button onclick="mudarAba('tela-videowall', this)" style="background: #4f46e5; color: white;">🎛️ Multiview 4x4</button>
         <button onclick="mudarAba('tela-produtos', this)">📦 Produtos & Estoque</button>
         <button onclick="mudarAba('tela-atalhos', this)" style="background: #0284c7; color: white;">⌨️ Teclas de Atalho</button>
-        
+        <button id="btn-nav-barracas" onclick="mudarAba('tela-barracas', this)" style="background: #7c3aed; color: white;">🏪 Barracas</button>
+
         <div class="dropdown">
             <button class="dropbtn">📊 Relatórios ▾</button>
             <div class="dropdown-content">
                 <div class="dropdown-inner">
                     <button id="btn-sub-gestao" onclick="mudarAba('tela-gestao', this)">📋 Gestão de Pedidos</button>
                     <button id="btn-sub-dash" onclick="mudarAba('tela-relatorio', this)">📈 Dashboard Analytics</button>
+                    <button id="btn-sub-dash-geral" onclick="mudarAba('tela-dashboard-geral', this)">🏬 Dashboard Geral (Todas as Barracas)</button>
                     <button id="btn-sub-fechamento" onclick="mudarAba('tela-fechamento-caixa', this)">📜 Histórico de Caixas</button>
                 </div>
             </div>
         </div>
 
-        <button onclick="toggleMenuGlobal()" style="margin-left: auto; background: #1e293b; border: 1px solid #334155; color: #94a3b8;">⬆ Ocultar Menu</button>
+        <div class="dropdown" id="seletor-barraca-nav" style="margin-left: auto;">
+            <button class="dropbtn" style="background: #0d9488; color: white;">🏪 <span id="nome-barraca-atual-nav">Carregando…</span> ▾</button>
+            <div class="dropdown-content" style="left: auto; right: 0;">
+                <div class="dropdown-inner" id="lista-barracas-trocar"></div>
+            </div>
+        </div>
+
+        <button onclick="toggleMenuGlobal()" style="background: #1e293b; border: 1px solid #334155; color: #94a3b8;">⬆ Ocultar Menu</button>
     </nav>
+
+    <!-- TELA DE SELEÇÃO DE BARRACA (portão de entrada, antes de qualquer outra tela) -->
+    <div id="tela-selecionar-barraca" class="modal-geral" style="display:none; z-index: 3000000; background: rgba(15,23,42,0.97);">
+        <div class="modal-content" style="width: 520px; max-width: 92%; max-height: 85vh; overflow-y: auto;">
+            <h2 style="margin-top: 0;">🏪 Selecione sua Barraca</h2>
+            <p style="color: #4b5563; font-size: 0.9rem;">Escolha em qual barraca este dispositivo vai trabalhar. Pedidos, caixa e cardápio são independentes por barraca. Você pode trocar depois pelo menu superior.</p>
+            <div id="lista-barracas-selecao" style="display:flex; flex-direction:column; gap:8px; margin: 15px 0;"></div>
+            <hr>
+            <h3 style="font-size: 1rem;">➕ Criar Nova Barraca</h3>
+            <input type="text" id="input-nova-barraca-selecao" placeholder="Ex: Barraca de Doces">
+            <button class="btn btn-success" style="width:100%;" onclick="criarBarracaNaSelecao()">Criar e Entrar</button>
+        </div>
+    </div>
 
     <div class="container" id="container-principal">
         
@@ -521,6 +543,42 @@
                     <li>Aperte a tecla de <b>Marcar como Retirado</b> para dar baixa e finalizar o atendimento do pedido selecionado.</li>
                 </ul>
             </div>
+        </div>
+
+        <!-- TELA: GERENCIAR BARRACAS -->
+        <div id="tela-barracas" class="tab-content">
+            <h2>🏪 Gerenciar Barracas</h2>
+            <p style="color: gray; margin-bottom: 20px;">Cada barraca tem seu próprio cardápio, pedidos, caixa e fila de despacho, totalmente independentes das outras.</p>
+
+            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px;">
+                <h3 style="margin-top: 0;">➕ Nova Barraca</h3>
+                <div class="row-inputs">
+                    <input type="text" id="input-nova-barraca-painel" placeholder="Ex: Barraca de Bebidas" style="margin-bottom: 0;">
+                    <button class="btn btn-success" onclick="criarBarracaNoPainel()" style="white-space: nowrap;">Criar Barraca</button>
+                </div>
+            </div>
+
+            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                <h3 style="margin-top: 0;">Barracas Cadastradas</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid #e5e7eb; text-align: left;">
+                            <th style="padding: 10px;">Nome</th>
+                            <th>Id</th>
+                            <th>Criada em</th>
+                            <th style="text-align: right; padding-right: 10px;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabela-barracas"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TELA: DASHBOARD GERAL (TODAS AS BARRACAS) -->
+        <div id="tela-dashboard-geral" class="tab-content">
+            <h2>🏬 Dashboard Geral — Todas as Barracas</h2>
+            <p style="color: gray; margin-bottom: 20px;">Visão somada de todas as barracas cadastradas, direto do Supabase. Não interfere no que está sendo usado em nenhuma barraca.</p>
+            <div id="corpo-dashboard-geral"><p style="color:gray;">Carregando…</p></div>
         </div>
 
         <!-- TELA 6: GESTÃO DETALHADA -->
