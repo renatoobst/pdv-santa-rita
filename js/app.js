@@ -483,7 +483,14 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             if(idAba === 'tela-fechamento-caixa') renderizarHistoricoCaixas();
             if(idAba === 'tela-agendados') document.getElementById('busca-agendados').focus();
             if(idAba === 'tela-produtos') { renderizarCategoriasUI(); renderizarTabelaProdutos(); if (produtoEmEdicaoId === null) renderizarChecklistBarracasProduto(); }
-            if(idAba === 'tela-pedido') { renderizarCategoriasUI(); renderizarMenu(categoriaFiltroAtual); }
+            if(idAba === 'tela-pedido') {
+                renderizarCategoriasUI();
+                renderizarMenu(categoriaFiltroAtual);
+                // Só reaplica os padrões se não houver carrinho/edição em
+                // andamento — nunca sobrescreve uma seleção que o operador já
+                // fez pra um pedido em curso.
+                if (carrinho.length === 0 && pedidoEmEdicaoId === null) aplicarConfigPadroesNoFormulario();
+            }
             if(idAba === 'tela-atalhos') renderizarPainelAtalhos();
             if(idAba === 'tela-configuracoes') carregarFormularioConfiguracoes();
             if(idAba === 'tela-videowall') atualizarTelas(); 
@@ -1704,16 +1711,24 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             atualizarValoresMisto();
         }
 
+        // Aplica os padrões definidos em "Configurações & Parâmetros" nos campos
+        // de pagamento/retirada da tela de Pedido. Chamada ao limpar o carrinho,
+        // ao entrar na tela de Pedido (se não houver carrinho em andamento) e no
+        // carregamento inicial — assim o que foi configurado aparece pré-marcado
+        // sem precisar finalizar um pedido primeiro pra "ativar" o padrão.
+        function aplicarConfigPadroesNoFormulario() {
+            document.getElementById('forma-pagto').value = configPadroes.formaPagto || '';
+            document.getElementById('tipo-retirada-global').value = configPadroes.tipoRetiradaGlobal || '';
+            document.getElementById('tipo-atendimento').value = configPadroes.tipoAtendimento || '';
+            toggleCampoDinheiro();
+        }
+
         function limparCarrinho() {
             carrinho = []; document.getElementById('nome-cliente').value = '';
             document.getElementById('valor-recebido-dinheiro').value = '';
             document.getElementById('obs-bonificacao').value = '';
-            
-            document.getElementById('forma-pagto').value = configPadroes.formaPagto || '';
-            document.getElementById('tipo-retirada-global').value = configPadroes.tipoRetiradaGlobal || '';
-            document.getElementById('tipo-atendimento').value = configPadroes.tipoAtendimento || '';
 
-            toggleCampoDinheiro();
+            aplicarConfigPadroesNoFormulario();
 
             pedidoEmEdicaoId = null;
             document.getElementById('banner-alerta-edicao').style.display = 'none';
@@ -2187,6 +2202,21 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             }
         }
 
+        // Único critério pra "tem item de verdade na cozinha agora": fase
+        // 'agora' (não 'mais_tarde', que ainda está só na Pedido Ficha) e
+        // marcado como cozinha (ou, no caso de combo, algum sub-item marcado
+        // e ainda não entregue). Usado tanto na TV cheia quanto na TV
+        // compacta do Multiview, pra nunca mostrarem pedidos diferentes.
+        function pedidoTemItemNaCozinha(pedido) {
+            return pedido.itens.some(item => {
+                if (item.fase !== 'agora') return false;
+                if (item.isCombo) {
+                    return item.itensComboEscolhidos && item.itensComboEscolhidos.some(sub => sub.cozinha && sub.fase !== 'entregue');
+                }
+                return item.cozinha;
+            });
+        }
+
         function atualizarTelas() {
             let htmlCozinha = '', htmlBalcao = '', htmlAgenda = '', htmlPrepTV = '';
             let countCoz = 0, countBalc = 0, countAgend = 0;
@@ -2312,19 +2342,17 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                         </div>`;
                 }
 
-                let temCozinhaGeral = p.itens.some(item => {
-                    if (item.isCombo) {
-                        return item.itensComboEscolhidos && item.itensComboEscolhidos.some(sub => sub.cozinha);
-                    }
-                    return item.cozinha;
-                });
-
-                if((p.statusPainel === 'preparando' || p.statusPainel === 'pronto') && temCozinhaGeral) { 
-                    if (p.statusPainel === 'preparando') {
-                        htmlPrepTV += `<div class="mc-num"><span class="id">#${String(p.id).padStart(2, '0')}</span><span class="nome">${p.cliente}</span></div>`; 
-                    }
+                // A TV precisa mostrar exatamente os mesmos pedidos que a tela da
+                // Cozinha (itensPurosCozinha, calculado acima, já filtra por
+                // fase==='agora'). Antes isso era recalculado olhando p.itens
+                // inteiro sem filtrar a fase — um pedido de Pedido Ficha (itens
+                // ainda 'mais_tarde', não enviados à cozinha) com status
+                // 'preparando' definido manualmente (ex: pelo dropdown de status
+                // na edição) aparecia na TV mesmo sem nada realmente em produção.
+                if(p.statusPainel === 'preparando' && itensPurosCozinha.length > 0) {
+                    htmlPrepTV += `<div class="mc-num"><span class="id">#${String(p.id).padStart(2, '0')}</span><span class="nome">${p.cliente}</span></div>`;
                 }
-                
+
                 if(p.statusPainel === 'pronto') prontos.push(p);
                 if(p.statusPainel === 'entregue') entregues.push(p);
             });
@@ -2466,7 +2494,7 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                 <div class="vw-tv-compacta">
                     <div class="vw-tv-col preparando">
                         <div class="vw-tv-title" style="color:#facc15;">Preparando</div>
-                        ${pedidosGerais.filter(p=>p.statusPainel==='preparando').map(p=>`<div class="vw-num"><span>#${String(p.id).padStart(2, '0')}</span><span>${p.cliente}</span></div>`).join('') || '<p style="font-size:0.75rem; color:gray; text-align:center;">Livre</p>'}
+                        ${pedidosGerais.filter(p=>p.statusPainel==='preparando' && pedidoTemItemNaCozinha(p)).map(p=>`<div class="vw-num"><span>#${String(p.id).padStart(2, '0')}</span><span>${p.cliente}</span></div>`).join('') || '<p style="font-size:0.75rem; color:gray; text-align:center;">Livre</p>'}
                     </div>
                     <div class="vw-tv-col pronto" style="background:#022c22;">
                         <div class="vw-tv-title" style="color:#4ade80;">Pronto</div>
@@ -3023,6 +3051,7 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             atualizarInterfaceCaixa();
             renderizarCategoriasUI();
             renderizarMenu();
+            aplicarConfigPadroesNoFormulario();
             atualizarTelas();
             atualizarFiltrosGestao();
             renderizarHistoricoCaixas();
