@@ -1622,7 +1622,13 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
 
         function mudarTipoRetiradaGlobal() {
             const tipo = document.getElementById('tipo-retirada-global').value;
-            carrinho.forEach(item => item.fase = (tipo === 'parcial' ? item.fase : tipo)); 
+            // item.fase só pode ser 'agora' ou 'mais_tarde' — nunca o valor cru
+            // do select. "agora_sem_cozinha" (e qualquer outro valor) precisa
+            // virar 'agora'; do contrário o item fica com uma fase que não bate
+            // com nenhum filtro (nem 'agora' nem 'mais_tarde') e some de vez dos
+            // recibos/telas que dependem de fase, mesmo depois de entregue.
+            const faseNormalizada = tipo === 'mais_tarde' ? 'mais_tarde' : 'agora';
+            carrinho.forEach(item => item.fase = (tipo === 'parcial' ? item.fase : faseNormalizada));
             atualizarCarrinhoUI();
         }
 
@@ -1679,7 +1685,7 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
 
                 let htmlFase = tipoGlobal === 'parcial' 
                     ? `<select onchange="setFaseItem('${item.cartId}', this.value)" style="margin:0; padding:6px; font-size:0.85rem;"><option value="agora" ${item.fase==='agora'?'selected':''}>Agora</option><option value="mais_tarde" ${item.fase==='mais_tarde'?'selected':''}>Depois</option></select>`
-                    : `<span style="font-size:0.8rem; background:#f3f4f6; padding:4px;">${item.fase === 'agora' ? '🟢 Agora' : '📦 Depois'}</span>`;
+                    : `<span style="font-size:0.8rem; background:#f3f4f6; padding:4px;">${item.fase === 'mais_tarde' ? '📦 Depois' : '🟢 Agora'}</span>`;
                 
                 let descCombo = item.isCombo ? `<div style="font-size:0.75rem; color:gray; margin-top:2px;">↳ Contém: ${item.itensComboEscolhidos.map(sub=>`1x ${sub.nome}`).join(', ')}</div>` : '';
 
@@ -1905,7 +1911,11 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
 
         function gerarHTMLImpressao(pedido) {
             const areaPrint = document.getElementById('area-impressao');
-            const iAgora = pedido.itens.filter(i => i.fase === 'agora' || i.fase === 'entregue'); 
+            // Qualquer coisa que não seja explicitamente 'mais_tarde' entra aqui
+            // (não só 'agora'/'entregue') — cobre pedidos antigos que ficaram com
+            // item.fase = 'agora_sem_cozinha' salvo por engano (bug já corrigido
+            // em mudarTipoRetiradaGlobal), que senão sumiriam do recibo de vez.
+            const iAgora = pedido.itens.filter(i => i.fase !== 'mais_tarde');
             const iDepois = pedido.itens.filter(i => i.fase === 'mais_tarde');
             
             const htmlItem = (i) => {
@@ -2156,8 +2166,8 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             const p = pedidosGerais.find(x => x.id === id);
             const horaAtual = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
             
-            p.itens.forEach(i => { if(i.fase === 'agora') i.fase = 'entregue'; });
-            p.statusPainel = 'entregue'; 
+            p.itens.forEach(i => { if(i.fase !== 'mais_tarde') i.fase = 'entregue'; });
+            p.statusPainel = 'entregue';
             p.horaEntrega = horaAtual;
 
             salvarNoBancoLocal();
@@ -2230,7 +2240,7 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             pedidosGerais.forEach(p => {
                 if(p.statusPainel === 'cancelado') return;
                 
-                const iAgoraPendentes = p.itens.filter(i => i.fase === 'agora');
+                const iAgoraPendentes = p.itens.filter(i => i.fase !== 'mais_tarde');
                 const iDepois = p.itens.filter(i => i.fase === 'mais_tarde');
 
                 let itensPurosCozinha = [];
