@@ -1,0 +1,2623 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDV Pro - Santuário Santa Rita</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --secondary: #f3f4f6;
+            --success: #16a34a;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #8b5cf6;
+            --text: #1f2937;
+            --bg: #f3f4f6;
+            --card-bg: #ffffff;
+        }
+
+        body { font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; background-color: var(--bg); color: var(--text); }
+
+        nav { background-color: #111827; padding: 1rem; display: flex; gap: 10px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); flex-wrap: wrap; align-items: center; position: relative; z-index: 1000; }
+        
+        nav button { background-color: transparent; color: #d1d5db; border: 2px solid transparent; padding: 10px 15px; font-size: 15px; font-weight: 600; cursor: pointer; border-radius: 8px; transition: all 0.3s ease; display: inline-flex; align-items: center; }
+        nav button.active { background-color: rgba(37, 99, 235, 0.2); color: white; border-color: var(--primary); }
+        nav button:hover:not(.active) { background-color: rgba(255, 255, 255, 0.1); color: white; }
+
+        .dropdown { position: relative; display: inline-block; z-index: 999999; }
+        .dropdown-content { display: none; position: absolute; background-color: #1f2937; min-width: 230px; box-shadow: 0px 8px 25px rgba(0,0,0,0.5); border-radius: 8px; border: 1px solid #374151; top: 100%; left: 0; padding-top: 8px; }
+        .dropdown-inner { background-color: #1f2937; border-radius: 8px; overflow: hidden; }
+        .dropdown-content button { color: #d1d5db; padding: 12px 16px; text-decoration: none; display: block; width: 100%; text-align: left; border: none; border-radius: 0; background: transparent; }
+        .dropdown-content button:hover { background-color: rgba(37, 99, 235, 0.3); color: white; }
+        .dropdown:hover .dropdown-content { display: block; }
+        .dropdown:hover .dropbtn { background-color: rgba(255, 255, 255, 0.1); color: white; }
+
+        .btn-show-menu { position: fixed; top: 10px; left: 10px; background: rgba(0,0,0,0.8); color: white; border: 1px solid #333; padding: 10px 15px; border-radius: 6px; cursor: pointer; z-index: 100000; font-weight: bold; opacity: 0.05; transition: opacity 0.3s; display: none; }
+        .btn-show-menu:hover { opacity: 1; }
+
+        .badge { background: red; color: white; border-radius: 50%; padding: 2px 6px; font-size: 12px; margin-left: 8px; display: none; font-weight: bold; }
+        .container { padding: 20px; max-width: 1400px; margin: 0 auto; box-sizing: border-box; }
+        
+        .container.container-tv { padding: 0 !important; max-width: 100% !important; margin: 0 !important; width: 100vw; }
+
+        .tab-content { display: none; animation: fadeIn 0.3s; }
+        .tab-content.active { display: block; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        h2 { border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; color: #111827; margin-top: 0; }
+        input, select, textarea { padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.95rem; width: 100%; box-sizing: border-box; margin-bottom: 15px; }
+        .row-inputs { display: flex; gap: 10px; }
+
+        .btn { padding: 12px; border: none; border-radius: 6px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: opacity 0.2s; color: white; }
+        .btn:hover { opacity: 0.9; }
+        .btn-success { background-color: var(--success); }
+        .btn-primary { background-color: var(--primary); }
+        .btn-danger { background-color: var(--danger); }
+        .btn-warning { background-color: var(--warning); color: #000; }
+        .btn-info { background-color: var(--info); }
+        
+        .layout-pedido { display: grid; grid-template-columns: 2fr 1.3fr; gap: 20px; }
+        .menu-categorias { display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; }
+        .tag-categoria { background: #e5e7eb; padding: 5px 12px; border-radius: 20px; cursor: pointer; font-weight: 500; font-size: 0.85rem; }
+        .tag-categoria:hover { background: #d1d5db; }
+        .tag-categoria.ativa { background: var(--primary); color: white; }
+
+        .menu-grid { display: flex; flex-direction: column; gap: 12px; max-height: 75vh; overflow-y: auto; padding-right: 8px; }
+        .subgrupo-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+        .subgrupo-header { grid-column: 1 / -1; font-size: 0.95rem; font-weight: 800; color: #1f2937; border-bottom: 2px solid #e5e7eb; padding-bottom: 3px; margin-top: 5px; text-transform: uppercase; letter-spacing: 0.5px; }
+        
+        .card-produto { background: var(--card-bg); padding: 8px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); cursor: pointer; border: 2px solid transparent; transition: all 0.2s; position: relative; display: flex; flex-direction: column; justify-content: space-between; height: 100%; box-sizing: border-box; }
+        .card-produto:hover { transform: translateY(-2px); border-color: var(--primary); box-shadow: 0 6px 12px rgba(0,0,0,0.1); }
+        .img-produto-card { width: 100%; height: 75px; object-fit: contain; background-color: #f8fafc; border-radius: 6px; margin-bottom: 6px; padding: 2px; box-sizing: border-box; }
+
+        .badge-estoque { position: absolute; top: -6px; right: -6px; background: var(--info); color: white; font-size: 0.65rem; font-weight: bold; padding: 2px 6px; border-radius: 8px; z-index: 2; }
+        .estoque-baixo { background: var(--danger); }
+        .badge-combo { position: absolute; top: -6px; left: -6px; background: #8b5cf6; color: white; font-size: 0.65rem; font-weight: bold; padding: 2px 6px; border-radius: 8px; z-index: 2; }
+
+        .carrinho { background: var(--card-bg); padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); display: flex; flex-direction: column; height: calc(100vh - 140px); overflow-y: auto; transition: background 0.3s; }
+        .carrinho.modo-edicao { background: #fffbebf5; border: 2px solid var(--warning); }
+        
+        .itens-carrinho { flex-grow: 1; overflow-y: auto; margin-bottom: 15px; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; }
+        .item-carrinho { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; border-bottom: 1px solid #f3f4f6; font-size: 0.9rem; }
+        .qtd-controle { display: flex; align-items: center; gap: 8px; }
+
+        .grid-pedidos { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; width: 100%; }
+        .card-pedido { background: var(--card-bg); padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; border: 3px solid transparent; transition: all 0.2s ease; }
+        .card-pedido.card-selecionado-teclado { border-color: var(--primary) !important; box-shadow: 0 0 15px rgba(37, 99, 235, 0.4) !important; transform: scale(1.02); }
+
+        .status-bar { height: 6px; position: absolute; top: 0; left: 0; right: 0; }
+        .bg-info { background-color: var(--info); }
+        .bg-warning { background-color: var(--warning); }
+        .bg-pronto { background-color: var(--success); }
+        .lista-itens { background: #f9fafb; padding: 10px; border-radius: 6px; margin: 10px 0; font-size: 0.95rem; flex-grow: 1; }
+
+        /* PAINEL DE TV - 100% PREENCHIMENTO COMPLETO */
+        #tela-tv.active { padding: 0; margin: 0; width: 100vw; height: calc(100vh - 65px); background: #000; }
+        .mc-tv-layout { display: flex; height: 100%; width: 100%; background: #000; color: #fff; border-radius: 0; overflow: hidden; }
+        .mc-tv-col { flex: 1; padding: 2%; display: flex; flex-direction: column; overflow-y: auto; box-sizing: border-box; }
+        .mc-tv-col.preparando { border-right: 2px solid #334155; }
+        .mc-tv-col.pronto { background: linear-gradient(180deg, #022c22 0%, #000000 100%); }
+        .mc-tv-title { font-size: 3vw; font-weight: 900; text-align: center; text-transform: uppercase; margin-bottom: 25px; letter-spacing: 2px; }
+        .title-prep { color: #facc15; border-bottom: 2px solid #334155; padding-bottom: 10px; }
+        .title-pronto { color: #4ade80; border-bottom: 2px solid #065f46; padding-bottom: 10px; }
+        .mc-list-vertical { display: flex; flex-direction: column; gap: 15px; width: 100%; }
+        .mc-num { background: #1f2937; color: #f8fafc; padding: 15px 20px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; gap: 10px; box-shadow: inset 0 2px 4px rgba(255,255,255,0.05); border-left: 6px solid #facc15; width: 100%; box-sizing: border-box; }
+        .mc-num .id { font-size: 2.5vw; font-weight: 900; }
+        .mc-num .nome { font-size: 1.5vw; font-weight: bold; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; color: #cbd5e1; }
+        .mc-num.ready { background: #064e3b; border-left: 6px solid #10b981; }
+        .mc-num.ready .id { color: #86efac; }
+        .mc-num.ready .nome { color: #d1fae5; }
+        .mc-destaque { background: #16a34a; color: white; padding: 30px 20px; border-radius: 15px; text-align: center; margin-bottom: 30px; box-shadow: 0 0 40px rgba(22, 163, 74, 0.4); border: 2px solid #4ade80; display: flex; flex-direction: column; justify-content: center; align-items: center;}
+        .mc-destaque-num { font-size: 7vw; font-weight: 900; line-height: 1; text-shadow: 2px 4px 10px rgba(0,0,0,0.5); }
+        .mc-destaque-name { font-size: 2.2vw; opacity: 0.95; margin-top: 10px; font-weight: bold; text-transform: uppercase; background: rgba(0,0,0,0.3); padding: 5px 20px; border-radius: 30px;}
+        @keyframes blink-tv { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.95; transform: scale(1.02); } }
+        .blinking { animation: blink-tv 1.5s infinite; }
+
+        .cat-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #e5e7eb; transition: background 0.2s; }
+        .cat-item:hover { background: #f9fafb; }
+        .cat-acoes button { background: none; border: none; cursor: pointer; font-size: 1.1rem; opacity: 0.6; }
+        .cat-acoes button:hover { opacity: 1; transform: scale(1.1); }
+
+        .videowall-container { display: grid; grid-template-columns: 50vw 50vw; grid-template-rows: 50vh 50vh; gap: 0; margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; }
+        .vw-quadrant { background: var(--card-bg); overflow: hidden; display: flex; flex-direction: column; border: none; border-radius: 0; box-shadow: none; margin: 0; padding: 0; }
+        .vw-header { padding: 10px; font-weight: bold; text-align: center; font-size: 1.2rem; text-transform: uppercase; letter-spacing: 1px; }
+        .vw-body { padding: 10px; overflow-y: auto; flex-grow: 1; box-sizing: border-box; }
+        .btn-exit-vw { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.8); color: white; border: 1px solid #333; padding: 10px 15px; border-radius: 6px; cursor: pointer; z-index: 100000; font-weight: bold; opacity: 0.05; transition: opacity 0.3s; }
+        .btn-exit-vw:hover { opacity: 1; }
+
+        .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+        .chart-box { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); display: flex; flex-direction: column; align-items: center; }
+
+        .modal-geral { display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.6); z-index:1000000; justify-content:center; align-items:center; }
+        
+        #modal-ver-pedido-unico { z-index: 2000000 !important; }
+
+        .modal-content { background:white; padding:25px; border-radius:12px; width:450px; max-width:90%; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+
+        /* DASHBOARD TECLAS DE ATALHO */
+        .grid-atalhos { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 15px; margin-top: 15px; }
+        .card-atalho { background: white; border: 2px solid #e5e7eb; padding: 15px; border-radius: 10px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .card-atalho.gravando { border-color: var(--warning); background: #fefce8; animation: blink-tv 1.2s infinite; }
+        .key-badge { background: #1f2937; color: #fff; font-size: 1.3rem; font-weight: 900; padding: 8px 16px; border-radius: 8px; border-bottom: 4px solid #000; margin: 10px 0; min-width: 40px; }
+
+        #area-impressao { display: none; }
+        @media print {
+            body * { visibility: hidden; }
+            #area-impressao, #area-impressao * { visibility: visible; }
+            #area-impressao { display: block; position: absolute; left: 0; top: 0; width: 80mm; padding: 5mm; font-family: 'Courier New', Courier, monospace; font-size: 12px; background: white; color: black; }
+            .print-center { text-align: center; }
+            .print-bold { font-weight: bold; }
+            .print-divider { border-top: 1px dashed black; margin: 8px 0; }
+            .print-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+            @page { margin: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="modal-aviso" class="modal-geral">
+        <div class="modal-content" style="text-align: center; border-top: 6px solid var(--primary);">
+            <h3 id="modal-aviso-titulo" style="margin-top:0; color: var(--primary); font-size: 1.3rem;">Aviso do Sistema</h3>
+            <p id="modal-aviso-mensagem" style="font-size: 1rem; color: #374151; margin: 20px 0; font-weight: 600; line-height: 1.4;"></p>
+            <button class="btn btn-primary" style="width: 100%; font-size: 1rem;" onclick="fecharAviso()">OK 👍</button>
+        </div>
+    </div>
+
+    <div id="modal-ver-pedido-unico" class="modal-geral">
+        <div class="modal-content" style="width: 500px; max-width: 95%;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 15px;">
+                <h3 id="titulo-ver-pedido-unico" style="margin: 0; color: var(--primary);">Pedido #0</h3>
+                <button class="btn btn-danger" style="padding: 5px 12px;" onclick="fecharModalVerPedidoUnico()">❌ Fechar</button>
+            </div>
+            <div id="corpo-ver-pedido-unico" style="max-height: 60vh; overflow-y: auto;"></div>
+            <button id="btn-reimprimir-modal-unico" class="btn btn-primary" style="width: 100%; margin-top: 15px;">🖨️ Reimprimir Comprovante</button>
+        </div>
+    </div>
+
+    <div id="modal-detalhes-caixa" class="modal-geral">
+        <div class="modal-content" style="width: 800px; max-width: 95%;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 15px;">
+                <h3 id="titulo-detalhe-caixa" style="margin: 0; color: var(--primary);">Detalhes do Fechamento de Caixa</h3>
+                <button class="btn btn-danger" style="padding: 5px 12px;" onclick="fecharModalDetalhesCaixa()">❌ Fechar</button>
+            </div>
+            <div id="corpo-detalhes-caixa" style="max-height: 65vh; overflow-y: auto;"></div>
+        </div>
+    </div>
+
+    <div id="modal-combo" class="modal-geral">
+        <div class="modal-content">
+            <h3 id="modal-combo-titulo" style="margin-top:0; border-bottom: 2px solid #e5e7eb; padding-bottom:10px;">Montar Combo</h3>
+            <div id="modal-combo-body" style="max-height: 400px; overflow-y: auto; padding-right: 10px;"></div>
+            <div style="display:flex; gap:10px; margin-top:20px;">
+                <button class="btn btn-primary" style="flex:1;" onclick="confirmarCombo()">Confirmar Escolhas 🛒</button>
+                <button class="btn btn-danger" style="flex:1;" onclick="fecharModalCombo()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-troca-item" class="modal-geral">
+        <div class="modal-content">
+            <h3 style="margin-top:0; border-bottom: 2px solid #e5e7eb; padding-bottom:10px; color:var(--primary);">🔄 Trocar Item (Balcão)</h3>
+            <p id="modal-troca-info" style="font-size: 0.9rem; color: #4b5563; font-weight: bold;"></p>
+            <label style="font-size: 0.85rem; font-weight: bold;">Selecione o novo produto da mesma categoria:</label>
+            <select id="select-novo-item-troca" style="margin-bottom: 15px; width: 100%; padding: 8px; font-weight: bold;"></select>
+            <div style="display:flex; gap:10px;">
+                <button class="btn btn-success" style="flex:1;" onclick="confirmarTrocaItemBalcao()">Confirmar Troca ✅</button>
+                <button class="btn btn-danger" style="flex:1;" onclick="fecharModalTroca()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-obs" class="modal-geral">
+        <div class="modal-content">
+            <h3 style="margin-top:0; border-bottom: 2px solid #e5e7eb; padding-bottom:10px; color:var(--primary);">📝 Observação do Item</h3>
+            <p id="modal-obs-nome-item" style="font-size: 0.9rem; color: #4b5563; font-weight: bold;"></p>
+            <textarea id="input-obs-texto" rows="4" placeholder="Ex: Sem cebola, bem passado..." style="resize: vertical;"></textarea>
+            <div style="display:flex; gap:10px;">
+                <button class="btn btn-success" style="flex:1;" onclick="salvarObsModal()">Salvar Observação 💾</button>
+                <button class="btn btn-danger" style="flex:1;" onclick="fecharModalObs()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-todos-pedidos" class="modal-geral">
+        <div class="modal-content" style="width: 1100px; max-width: 95%;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 15px;">
+                <h3 style="margin: 0; color: var(--primary);">📋 Todos os Pedidos Registrados</h3>
+                
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <label style="font-size: 0.85rem; font-weight: bold;">Filtrar Status:</label>
+                    <select id="filtro-modal-status" onchange="renderizarTabelaModalTodosPedidos()" style="margin-bottom: 0; padding: 5px; width: 180px;">
+                        <option value="Todos">Todos os Status</option>
+                        <option value="preparando">👨‍🍳 Na Cozinha</option>
+                        <option value="mais_tarde">📦 P. Mais Tarde (Ficha)</option>
+                        <option value="entregue">✅ Finalizados</option>
+                        <option value="cancelado">❌ Cancelados</option>
+                    </select>
+                    <button class="btn btn-danger" style="padding: 5px 12px;" onclick="fecharModalTodosPedidos()">❌ Sair</button>
+                </div>
+            </div>
+            
+            <div style="max-height: 60vh; overflow-y: auto;">
+                <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid #e5e7eb; background: #f8fafc;">
+                            <th style="padding: 8px;"># ID</th>
+                            <th>Entrada</th>
+                            <th>Ent. Cozinha</th>
+                            <th>Entrega</th>
+                            <th>Tempo</th>
+                            <th>Cliente</th>
+                            <th>Pagamento</th>
+                            <th>Status</th>
+                            <th>Total</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabela-modal-todos-pedidos"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <button id="btn-show-global-menu" class="btn-show-menu" onclick="toggleMenuGlobal()">⬇ Mostrar Menu</button>
+
+    <nav id="nav-principal">
+        <button class="active" onclick="mudarAba('tela-pedido', this)">🛒 Pedido</button>
+        <button onclick="mudarAba('tela-agendados', this)">🎫 Pedido Ficha <span id="badge-agendados" class="badge">0</span></button>
+        <button onclick="mudarAba('tela-preparo', this)">🍳 Cozinha <span id="badge-cozinha" class="badge">0</span></button>
+        <button onclick="mudarAba('tela-entrega', this)">🛍️ Balcão/Entrega <span id="badge-entrega" class="badge">0</span></button>
+        <button onclick="mudarAba('tela-tv', this)" style="background: #374151;">📺 TV Aberta</button>
+        <button onclick="mudarAba('tela-videowall', this)" style="background: #4f46e5; color: white;">🎛️ Multiview 4x4</button>
+        <button onclick="mudarAba('tela-produtos', this)">📦 Produtos & Estoque</button>
+        <button onclick="mudarAba('tela-atalhos', this)" style="background: #0284c7; color: white;">⌨️ Teclas de Atalho</button>
+        
+        <div class="dropdown">
+            <button class="dropbtn">📊 Relatórios ▾</button>
+            <div class="dropdown-content">
+                <div class="dropdown-inner">
+                    <button id="btn-sub-gestao" onclick="mudarAba('tela-gestao', this)">📋 Gestão de Pedidos</button>
+                    <button id="btn-sub-dash" onclick="mudarAba('tela-relatorio', this)">📈 Dashboard Analytics</button>
+                    <button id="btn-sub-fechamento" onclick="mudarAba('tela-fechamento-caixa', this)">📜 Histórico de Caixas</button>
+                </div>
+            </div>
+        </div>
+
+        <button onclick="toggleMenuGlobal()" style="margin-left: auto; background: #1e293b; border: 1px solid #334155; color: #94a3b8;">⬆ Ocultar Menu</button>
+    </nav>
+
+    <div class="container" id="container-principal">
+        
+        <!-- TELA 1: PEDIDO -->
+        <div id="tela-pedido" class="tab-content active">
+            <div class="layout-pedido">
+                <div>
+                    <div class="menu-categorias" id="menu-categorias-container"></div>
+                    <div class="menu-grid" id="menu-produtos"></div>
+                </div>
+
+                <div class="carrinho" id="box-carrinho-container">
+                    
+                    <div id="banner-alerta-edicao" style="display: none; background: #f59e0b; color: #000; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 0.95rem; text-align: center; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                        ⚠️ EDITANDO PEDIDO <span id="lbl-id-pedido-edicao">#0</span>
+                        <br>
+                        <button class="btn btn-danger" style="padding: 4px 10px; font-size: 0.8rem; margin-top: 5px;" onclick="limparCarrinho()">❌ Cancelar Alteração</button>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h2 style="font-size: 1.2rem; margin: 0; border: none; padding: 0;" id="titulo-painel-carrinho">Pedido Atual</h2>
+                        <button class="btn btn-info" style="font-size: 0.8rem; padding: 6px 12px;" onclick="abrirModalTodosPedidos()">📋 Ver Todos os Pedidos</button>
+                    </div>
+                    
+                    <div style="margin-bottom: 10px;">
+                        <label style="font-size: 0.85rem; font-weight: bold;">Cliente / Mesa:</label>
+                        <input type="text" id="nome-cliente" placeholder="Ex: João (Mesa 4)">
+                    </div>
+
+                    <div class="itens-carrinho" id="itens-carrinho">
+                        <p style="color: gray; text-align: center; margin-top: 20px;">Nenhum item adicionado.</p>
+                    </div>
+
+                    <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                        
+                        <div style="display: flex; justify-content: space-between; font-size: 1.4rem; font-weight: bold; margin-bottom: 15px;">
+                            <span>Total:</span>
+                            <span>R$ <span id="total-carrinho">0.00</span></span>
+                        </div>
+                        
+                        <label style="font-size: 0.85rem; font-weight: bold;">Forma de Pagamento:</label>
+                        <select id="forma-pagto" onchange="toggleCampoDinheiro()" style="margin-bottom: 10px; font-weight: bold;">
+                            <option value="Pix">📱 Pix</option>
+                            <option value="Cartão Crédito">💳 Cartão Crédito</option>
+                            <option value="Cartão Débito">💳 Cartão Débito</option>
+                            <option value="Dinheiro">💵 Dinheiro</option>
+                            <option value="Bonificação">🎁 Bonificação</option>
+                        </select>
+
+                        <div id="box-dinheiro-troco" style="display: none; background: #e0f2fe; padding: 10px; border-radius: 8px; border: 1px solid #0284c7; margin-bottom: 15px;">
+                            <div class="row-inputs" style="margin-bottom: 0;">
+                                <div style="flex: 1;">
+                                    <label style="font-size: 0.8rem; font-weight: bold; color: #0369a1;">Valor Recebido (R$):</label>
+                                    <input type="number" id="valor-recebido-dinheiro" placeholder="0.00" step="0.01" oninput="calcularTroco()" style="margin-bottom: 0; background: white;">
+                                </div>
+                                <div style="flex: 1; text-align: right;">
+                                    <label style="font-size: 0.8rem; font-weight: bold; color: #0369a1; display: block;">Troco:</label>
+                                    <span style="font-size: 1.3rem; font-weight: 900; color: #0284c7; line-height: 2.2rem;">R$ <span id="valor-troco-display">0.00</span></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="box-bonificacao" style="display: none; background: #fef3c7; padding: 10px; border-radius: 8px; border: 1px solid #f59e0b; margin-bottom: 15px;">
+                            <label style="font-size: 0.8rem; font-weight: bold; color: #b45309;">Motivo / Observação da Bonificação (Obrigatório):</label>
+                            <input type="text" id="obs-bonificacao" placeholder="Ex: Doação, Autoridade, Cortesia..." style="margin-bottom: 0; background: white;">
+                        </div>
+
+                        <div style="background: #fef08a; padding: 10px; border-radius: 6px; margin-bottom: 15px; border: 1px solid #facc15;">
+                            <label style="font-size: 0.85rem; font-weight: bold; display: block; margin-bottom: 5px; color: #854d0e;">Modo de Retirada (Global):</label>
+                            <select id="tipo-retirada-global" onchange="mudarTipoRetiradaGlobal()" style="margin-bottom: 10px; font-weight: bold; background: white;">
+                                <option value="agora">🟢 Retirar Agora (Cozinha)</option>
+                                <option value="mais_tarde">📦 Retirar Tudo Mais Tarde (Ficha)</option>
+                                <option value="parcial">✂️ Retirada Parcial (Escolher item a item)</option>
+                                <option id="opt-sem-cozinha" value="agora_sem_cozinha">⚡ Retirar Agora (Sem Cozinha)</option>
+                            </select>
+
+                            <label style="font-size: 0.85rem; font-weight: bold; display: block; margin-bottom: 5px; color: #854d0e;">Tipo de Retirada:</label>
+                            <select id="tipo-atendimento" style="margin-bottom: 0; font-weight: bold; background: white;">
+                                <option value="Comer no Local">🍽️ Comer no Local</option>
+                                <option value="Levar (Viagem)">🛍️ Levar (Viagem)</option>
+                            </select>
+                        </div>
+
+                        <button id="btn-finalizar-pedido" class="btn btn-primary" style="width: 100%; margin-bottom: 10px; font-size: 1.1rem;" onclick="finalizarPedido()">Cobrar, Imprimir e Enviar 🖨️</button>
+                        <button class="btn-danger" style="width: 100%;" onclick="limparCarrinho()">Limpar Pedido</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TELA 2: PEDIDO FICHA -->
+        <div id="tela-agendados" class="tab-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 20px;">
+                <h2 style="border: none; padding: 0; margin: 0;">Pedidos p/ Mais Tarde (Ficha)</h2>
+                <input type="text" id="busca-agendados" placeholder="🔍 Pesquisar nº ou nome..." oninput="atualizarTelas()" style="width: 300px; margin: 0;">
+            </div>
+            <div class="grid-pedidos" id="fila-agendados"></div>
+        </div>
+
+        <!-- TELA 3: COZINHA -->
+        <div id="tela-preparo" class="tab-content">
+            <h2>Fila da Cozinha (Apenas Leitura)</h2>
+            <div class="grid-pedidos" id="fila-cozinha"></div>
+        </div>
+
+        <!-- TELA 4: BALCÃO / ENTREGA -->
+        <div id="tela-entrega" class="tab-content">
+            <h2>Painel de Entrega (Balcão/Entrega)</h2>
+            <div class="grid-pedidos" id="fila-entrega"></div>
+        </div>
+
+        <!-- TELA 5: PAINEL DE TV -->
+        <div id="tela-tv" class="tab-content">
+            <div class="mc-tv-layout">
+                <div class="mc-tv-col preparando">
+                    <div class="mc-tv-title title-prep">Preparando</div>
+                    <div class="mc-list-vertical" id="tv-lista-preparando"></div>
+                </div>
+                <div class="mc-tv-col pronto">
+                    <div class="mc-tv-title title-pronto">Pronto</div>
+                    <div id="tv-pronto-destaque" class="mc-destaque blinking" style="display:none;"></div>
+                    <div class="mc-list-vertical" id="tv-lista-historico"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TELA: MULTIVIEW 4x4 -->
+        <div id="tela-videowall" class="tab-content">
+            <button class="btn-exit-vw" onclick="sairVideoWall()">⬅ Voltar ao Menu</button>
+            <div class="videowall-container">
+                <div class="vw-quadrant" style="background: white;">
+                    <div class="vw-header bg-warning">👨‍🍳 Monitor Cozinha</div>
+                    <div class="vw-body grid-pedidos" id="vw-cozinha" style="align-content: flex-start;"></div>
+                </div>
+                <div class="vw-quadrant" style="background:#000;">
+                    <div class="vw-body" id="vw-tv" style="padding: 0; display:flex; flex-direction:column;"></div>
+                </div>
+                <div class="vw-quadrant" style="background: #f8fafc;">
+                    <div class="vw-header bg-info" style="color:white;">📦 Monitor Entregas</div>
+                    <div class="vw-body grid-pedidos" id="vw-balcao" style="align-content: flex-start;"></div>
+                </div>
+                <div class="vw-quadrant" style="background: #e2e8f0;">
+                    <div class="vw-header" style="background:#10b981; color:white;">🔗 Sinal Livre / Câmeras</div>
+                    <div class="vw-body" style="display:flex; align-items:center; justify-content:center; flex-direction:column; color:gray; text-align:center;">
+                        <svg style="width:50px; height:50px; margin-bottom:15px; color:#94a3b8;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        <p style="margin:0; font-size:1.1rem; font-weight:bold;">Sinal Aberto</p>
+                        <p style="font-size:0.9rem;">Insira seu Iframe, CFTV ou capture direto pelo OBS Studio.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TELA: PRODUTOS & ESTOQUE & COMBOS -->
+        <div id="tela-produtos" class="tab-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 20px;">
+                <h2 style="border: none; padding: 0; margin: 0;">Gerenciar Produtos, Combos, Categorias & Estoque</h2>
+                <button class="btn btn-primary" onclick="imprimirEstoquePorCategoria()">🖨️ Imprimir Estoque por Categoria</button>
+            </div>
+            
+            <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start;">
+                
+                <div style="flex: 1; min-width: 250px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                    <h3 style="margin-top: 0;">Categorias</h3>
+                    <div style="display: flex; gap: 8px; margin-bottom: 15px;">
+                        <input type="text" id="nova-cat-nome" placeholder="Nova Categoria..." style="margin-bottom: 0; flex: 1;">
+                        <button class="btn btn-success" style="padding: 10px; width: 45px;" onclick="adicionarCategoria()">➕</button>
+                    </div>
+                    <ul id="lista-gestao-categorias" style="list-style: none; padding: 0; margin: 0; max-height: 250px; overflow-y: auto;"></ul>
+                </div>
+
+                <div style="flex: 1.5; min-width: 320px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                    
+                    <div style="display:flex; gap:5px; margin-bottom: 15px; background: #f3f4f6; padding: 5px; border-radius: 8px;">
+                        <button id="tab-simples" class="btn btn-primary" style="flex:1; padding: 8px;" onclick="mudarModoCadastro('simples')">Produto Simples</button>
+                        <button id="tab-combo" class="btn" style="flex:1; padding: 8px; background:transparent; color:#333;" onclick="mudarModoCadastro('combo')">Criar Combo</button>
+                    </div>
+
+                    <h3 id="titulo-form-produto" style="margin-top: 0;">Cadastrar Produto</h3>
+                    
+                    <label style="font-size: 0.85rem; font-weight: bold;">Nome (Produto ou Combo):</label>
+                    <input type="text" id="novo-prod-nome" placeholder="Ex: X-Bacon" required>
+                    
+                    <label style="font-size: 0.85rem; font-weight: bold;">Carregar Foto do Computador:</label>
+                    <input type="file" id="file-prod-foto" accept="image/*" style="margin-bottom: 5px;" onchange="processarUploadFoto(this)">
+                    <input type="hidden" id="novo-prod-foto">
+                    <div id="preview-foto-container" style="margin-bottom: 15px; display:none;">
+                        <img id="preview-foto-img" style="width: 70px; height: 70px; object-fit: cover; border-radius: 6px; border: 1px solid #ccc;">
+                    </div>
+
+                    <div class="row-inputs">
+                        <div style="flex: 1;">
+                            <label style="font-size: 0.85rem; font-weight: bold;">Preço Total (R$):</label>
+                            <input type="number" id="novo-prod-preco" placeholder="0.00" step="0.01" required>
+                        </div>
+                        <div style="flex: 1;" id="box-estoque-simples">
+                            <label style="font-size: 0.85rem; font-weight: bold;">Estoque Inicial:</label>
+                            <input type="number" id="novo-prod-estoque" placeholder="Vazio = Livre">
+                        </div>
+                    </div>
+
+                    <div id="box-itens-combo" style="display:none; background: #fef08a; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                        <label style="font-size: 0.85rem; font-weight: bold; color: #854d0e;">Itens Inclusos no Combo:</label>
+                        <p style="font-size: 0.75rem; color: #854d0e; margin: 0 0 10px 0;">Você pode adicionar uma categoria inteira ou um produto fixo.</p>
+                        <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+                            <select id="combo-add-select" style="margin-bottom:0; flex:1;"></select>
+                            <input type="number" id="combo-add-qtd" value="1" min="1" style="margin-bottom:0; width:60px;">
+                            <button class="btn btn-success" style="padding: 10px;" onclick="addProdutoTemporarioAoCombo()">➕</button>
+                        </div>
+                        <ul id="lista-combo-temporario" style="margin:0; padding-left:20px; font-size: 0.85rem; font-weight:bold;"></ul>
+                    </div>
+
+                    <label style="font-size: 0.85rem; font-weight: bold;">Categoria Vinculada:</label>
+                    <select id="novo-prod-categoria"></select>
+                    
+                    <div id="box-cozinha-simples">
+                        <label style="font-size: 0.85rem; font-weight: bold;">Direcionamento (Apenas P/ Produtos Simples):</label>
+                        <select id="novo-prod-cozinha">
+                            <option value="true">👨‍🍳 Vai para a Cozinha (Preparo)</option>
+                            <option value="false">🛍️ Apenas Balcão (Pronto/Geladeira)</option>
+                        </select>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; margin-top: 15px;">
+                        <button id="btn-salvar-produto" class="btn btn-primary" style="flex: 1;" onclick="salvarProduto()">Salvar 💾</button>
+                        <button id="btn-cancelar-edicao-prod" class="btn btn-danger" style="display: none; padding: 12px 15px;" onclick="cancelarEdicaoProduto()" title="Cancelar Edição">❌</button>
+                    </div>
+                </div>
+
+                <div style="flex: 3; min-width: 100%; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-height: 60vh; overflow-y: auto;">
+                    <h3 style="margin-top: 0;">Lista de Produtos & Combos</h3>
+                    <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
+                        <thead>
+                            <tr style="border-bottom: 2px solid #e5e7eb;">
+                                <th style="padding: 10px;">Cód</th>
+                                <th>Foto</th>
+                                <th>Nome / Descrição</th>
+                                <th>Categoria</th>
+                                <th>Preço</th>
+                                <th>Estoque</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-produtos"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TELA NOVE: DASHBOARD DE TECLAS DE ATALHO -->
+        <div id="tela-atalhos" class="tab-content">
+            <h2>⌨️ Configuração de Teclas de Atalho (Painel do Balcão)</h2>
+            <p style="color: gray; margin-bottom: 20px;">Clique em qualquer comando abaixo para gravar a tecla que deseja usar para acioná-lo no teclado durante o atendimento no Balcão/Entrega.</p>
+            
+            <div class="grid-atalhos">
+                <div class="card-atalho" id="card-key-direita">
+                    <h3 style="margin: 0; font-size: 1rem; color: var(--primary);">➡️ Navegar p/ Direita</h3>
+                    <div class="key-badge" id="badge-key-direita">1</div>
+                    <button class="btn btn-primary" style="font-size: 0.85rem; padding: 8px 12px;" onclick="iniciarGravaçãoAtalho('direita')">Clique p/ Alterar Tecla</button>
+                </div>
+
+                <div class="card-atalho" id="card-key-esquerda">
+                    <h3 style="margin: 0; font-size: 1rem; color: var(--primary);">⬅️ Navegar p/ Esquerda</h3>
+                    <div class="key-badge" id="badge-key-esquerda">2</div>
+                    <button class="btn btn-primary" style="font-size: 0.85rem; padding: 8px 12px;" onclick="iniciarGravaçãoAtalho('esquerda')">Clique p/ Alterar Tecla</button>
+                </div>
+
+                <div class="card-atalho" id="card-key-chamar">
+                    <h3 style="margin: 0; font-size: 1rem; color: var(--warning);">🔔 Chamar no Painel/TV</h3>
+                    <div class="key-badge" id="badge-key-chamar">3</div>
+                    <button class="btn btn-primary" style="font-size: 0.85rem; padding: 8px 12px;" onclick="iniciarGravaçãoAtalho('chamar')">Clique p/ Alterar Tecla</button>
+                </div>
+
+                <div class="card-atalho" id="card-key-entregue">
+                    <h3 style="margin: 0; font-size: 1rem; color: var(--success);">✅ Marcar como Retirado</h3>
+                    <div class="key-badge" id="badge-key-entregue">4</div>
+                    <button class="btn btn-primary" style="font-size: 0.85rem; padding: 8px 12px;" onclick="iniciarGravaçãoAtalho('entregue')">Clique p/ Alterar Tecla</button>
+                </div>
+            </div>
+
+            <div style="margin-top: 30px; background: white; padding: 20px; border-radius: 10px; border-left: 5px solid var(--info);">
+                <h3 style="margin-top: 0; color: var(--info);">💡 Como usar no atendimento:</h3>
+                <ul style="line-height: 1.8; color: #374151; font-weight: 600;">
+                    <li>Na aba <b>Balcão/Entrega</b>, utilize as teclas para navegar entre os pedidos sem precisar usar o mouse.</li>
+                    <li>O pedido selecionado atualmente no balcão ficará destacado com uma <b>borda azul bem visível</b>.</li>
+                    <li>Aperte a tecla de <b>Chamar no Painel</b> para tocar o aviso sonoro e enviar a senha para a TV.</li>
+                    <li>Aperte a tecla de <b>Marcar como Retirado</b> para dar baixa e finalizar o atendimento do pedido selecionado.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- TELA 6: GESTÃO DETALHADA -->
+        <div id="tela-gestao" class="tab-content">
+            <h2>Gestão Interna de Pedidos</h2>
+            <div style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center;">
+                <div style="flex: 1;">
+                    <label style="font-size: 0.85rem; font-weight: bold;">🔍 Pesquisar Pedido ou Cliente:</label>
+                    <input type="text" id="filtro-texto-gestao" placeholder="Ex: João, #15..." oninput="atualizarFiltrosGestao()" style="margin-bottom: 0;">
+                </div>
+                <div style="width: 200px;">
+                    <label style="font-size: 0.85rem; font-weight: bold;">📅 Filtrar por Data:</label>
+                    <input type="date" id="filtro-data-gestao" onchange="atualizarFiltrosGestao()" style="margin-bottom: 0;">
+                </div>
+                <div style="width: 200px;">
+                    <label style="font-size: 0.85rem; font-weight: bold;">📋 Status:</label>
+                    <select id="filtro-status-gestao" onchange="atualizarFiltrosGestao()" style="margin-bottom: 0;">
+                        <option value="Todos">Todos</option>
+                        <option value="entregue">✅ Finalizados</option>
+                        <option value="preparando">👨‍🍳 Em Andamento</option>
+                        <option value="cancelado">❌ Cancelados</option>
+                    </select>
+                </div>
+            </div>
+            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-height: 60vh; overflow-y: auto;">
+                <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid #e5e7eb;">
+                            <th style="padding: 10px;">Pedido</th>
+                            <th>Entrada / Cozinha / Entrega</th>
+                            <th>Tempo Preparo</th>
+                            <th>Cliente</th>
+                            <th>Pagamento</th>
+                            <th>Resumo dos Itens</th>
+                            <th>Status</th>
+                            <th>Total</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabela-gestao"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TELA 7: DASHBOARD E ABERTURA DE CAIXA -->
+        <div id="tela-relatorio" class="tab-content">
+            <h2>Dashboard Analytics & Gestão de Caixa</h2>
+            
+            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; border-left: 5px solid var(--info);">
+                <h3 style="margin-top: 0; color: var(--info);">💵 Abertura de Caixa (Fundo Inicial)</h3>
+                <div style="display: flex; gap: 15px; align-items: flex-end;">
+                    <div style="flex: 1;">
+                        <label style="font-size: 0.85rem; font-weight: bold;">Valor Inicial em Dinheiro (R$):</label>
+                        <input type="number" id="valor-fundo-caixa" placeholder="0.00" step="0.01" style="margin-bottom: 0;">
+                    </div>
+                    <button id="btn-acao-caixa" class="btn btn-success" onclick="abrirCaixa()">🟢 Abrir Caixa</button>
+                    <button class="btn btn-danger" onclick="fecharCaixaPrompt()">🔒 Fechar Caixa</button>
+                </div>
+                <p id="status-caixa-texto" style="margin-top: 10px; font-weight: bold; font-size: 0.9rem; color: var(--danger);">Status do Caixa: Fechado</p>
+            </div>
+
+            <div style="display: flex; gap: 20px;">
+                <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; text-align: center; border-bottom: 4px solid var(--success);">
+                    <h3 style="margin-top: 0; color: gray;">Faturamento Vendas</h3>
+                    <p style="color: var(--success); font-size: 1.8rem; font-weight: 900; margin:0;">R$ <span id="rel-total">0.00</span></p>
+                </div>
+                <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; text-align: center; border-bottom: 4px solid #0284c7;">
+                    <h3 style="margin-top: 0; color: gray;">Total em Gaveta (Dinheiro)</h3>
+                    <p style="color: #0284c7; font-size: 1.8rem; font-weight: 900; margin:0;">R$ <span id="rel-total-dinheiro">0.00</span></p>
+                    <small style="color:gray; font-size:0.75rem;">(Fundo Caixa + Vendas em Dinheiro)</small>
+                </div>
+                <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; text-align: center; border-bottom: 4px solid var(--primary);">
+                    <h3 style="margin-top: 0; color: gray;">Pedidos Realizados</h3>
+                    <p style="color: var(--primary); font-size: 1.8rem; font-weight: 900; margin:0;" id="rel-qtd-pedidos">0</p>
+                </div>
+                <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; text-align: center; border-bottom: 4px solid var(--info);">
+                    <h3 style="margin-top: 0; color: gray;">Ticket Médio</h3>
+                    <p style="color: var(--info); font-size: 1.8rem; font-weight: 900; margin:0;">R$ <span id="rel-ticket">0.00</span></p>
+                </div>
+            </div>
+
+            <h3 style="margin-top: 30px; color: #1f2937;">Detalhamento por Forma de Pagamento</h3>
+            <div style="display: flex; gap: 15px; margin-bottom: 20px;">
+                <div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex: 1; border-left: 4px solid #06b6d4;">
+                    <p style="margin: 0; font-size: 0.85rem; color: gray; font-weight: bold;">📱 Pix</p>
+                    <p style="margin: 5px 0 0 0; font-size: 1.4rem; font-weight: bold;">R$ <span id="rel-pix">0.00</span></p>
+                </div>
+                <div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex: 1; border-left: 4px solid #f59e0b;">
+                    <p style="margin: 0; font-size: 0.85rem; color: gray; font-weight: bold;">💳 Cartão Crédito</p>
+                    <p style="margin: 5px 0 0 0; font-size: 1.4rem; font-weight: bold;">R$ <span id="rel-credito">0.00</span></p>
+                </div>
+                <div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex: 1; border-left: 4px solid #8b5cf6;">
+                    <p style="margin: 0; font-size: 0.85rem; color: gray; font-weight: bold;">💳 Cartão Débito</p>
+                    <p style="margin: 5px 0 0 0; font-size: 1.4rem; font-weight: bold;">R$ <span id="rel-debito">0.00</span></p>
+                </div>
+                <div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex: 1; border-left: 4px solid #10b981;">
+                    <p style="margin: 0; font-size: 0.85rem; color: gray; font-weight: bold;">💵 Dinheiro (Vendas)</p>
+                    <p style="margin: 5px 0 0 0; font-size: 1.4rem; font-weight: bold;">R$ <span id="rel-dinheiro-vendas">0.00</span></p>
+                </div>
+                <div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex: 1; border-left: 4px solid #f59e0b;">
+                    <p style="margin: 0; font-size: 0.85rem; color: gray; font-weight: bold;">🎁 Bonificação</p>
+                    <p style="margin: 5px 0 0 0; font-size: 1.4rem; font-weight: bold;">R$ <span id="rel-bonificacao">0.00</span></p>
+                </div>
+            </div>
+            
+            <div class="charts-grid">
+                <div class="chart-box"><h3 style="margin-top:0;">🏆 Top 5 - Mais Vendidos</h3><canvas id="chartMaisVendidos" style="max-height: 250px;"></canvas></div>
+                <div class="chart-box"><h3 style="margin-top:0;">⏰ Picos de Horário</h3><canvas id="chartHorarios" style="max-height: 250px;"></canvas></div>
+                <div class="chart-box"><h3 style="margin-top:0;">🛍️ Divisão por Categoria</h3><canvas id="chartCategorias" style="max-height: 250px;"></canvas></div>
+                <div class="chart-box"><h3 style="margin-top:0;">📦 Tipo de Retirada (Itens)</h3><canvas id="chartRetirada" style="max-height: 250px;"></canvas></div>
+            </div>
+        </div>
+
+        <!-- TELA 8: HISTÓRICO DE FECHAMENTOS DE CAIXA -->
+        <div id="tela-fechamento-caixa" class="tab-content">
+            <h2>📜 Histórico de Fechamentos de Caixa</h2>
+            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-height: 70vh; overflow-y: auto;">
+                <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid #e5e7eb; background: #f8fafc;">
+                            <th style="padding: 12px;"># Ref</th>
+                            <th>Campanha / Evento</th>
+                            <th>Abertura</th>
+                            <th>Fechamento</th>
+                            <th>Fundo Inicial</th>
+                            <th>Total Vendas</th>
+                            <th>Total Gaveta</th>
+                            <th>Qtd Pedidos</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabela-historico-caixas"></tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Estrutura da Impressora Térmica -->
+    <div id="area-impressao"></div>
+
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script>
+        // --- BANCO DE DADOS PERSISTENTE (SUPABASE + CACHE LOCAL) ---
+        const SUPABASE_URL = 'https://akcuenzyiwdzfjphqspr.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_zArjtVDcnjxpJkxEBk1bNQ_ijlY7T4H';
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        const PDV_STATE_ID = 'main';
+        const PDV_CLIENT_ID = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
+
+        const categoriasPadrao = ['Lanches', 'Porções', 'Sobremesas', 'Bebidas', 'Combos'];
+        const produtosPadrao = [
+            { id: 1, nome: 'X-Burger Duplo', preco: 22.00, categoria: 'Lanches', cozinha: true, isCombo: false, estoque: null, foto: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=300' },
+            { id: 2, nome: 'X-Salada', preco: 18.00, categoria: 'Lanches', cozinha: true, isCombo: false, estoque: null, foto: 'https://images.unsplash.com/photo-1550547660-d9450f859349?w=300' },
+            { id: 3, nome: 'Hot Dog Especial', preco: 15.00, categoria: 'Lanches', cozinha: true, isCombo: false, estoque: null, foto: 'https://images.unsplash.com/photo-1619740455993-9e612b1af08a?w=300' },
+            { id: 4, nome: 'Porção Fritas Média', preco: 20.00, categoria: 'Porções', cozinha: true, isCombo: false, estoque: null, foto: 'https://images.unsplash.com/photo-1576107232684-1279f390859f?w=300' },
+            { id: 5, nome: 'Bolo de Pote', preco: 12.00, categoria: 'Sobremesas', cozinha: false, isCombo: false, estoque: 10, foto: 'https://images.unsplash.com/photo-1587314168485-3236d6710814?w=300' },
+            { id: 6, nome: 'Pudim', preco: 9.00, categoria: 'Sobremesas', cozinha: false, isCombo: false, estoque: 5, foto: 'https://images.unsplash.com/photo-1528975604071-b4dc52a2d18c?w=300' },
+            { id: 7, nome: 'Coca-Cola Lata', preco: 6.00, categoria: 'Bebidas', cozinha: false, isCombo: false, estoque: 48, foto: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=300' },
+            { id: 8, nome: 'Guaraná Lata', preco: 6.00, categoria: 'Bebidas', cozinha: false, isCombo: false, estoque: 50, foto: 'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?w=300' },
+            { id: 9, nome: 'Água Mineral', preco: 4.00, categoria: 'Bebidas', cozinha: false, isCombo: false, estoque: 20, foto: 'https://images.unsplash.com/photo-1548839140-29a749e1bc4e?w=300' },
+            { id: 10, nome: 'Combo Família', preco: 55.00, categoria: 'Combos', cozinha: true, isCombo: true, estoque: null, foto: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=300',
+                itensCombo: [
+                    {tipo: 'categoria', ref: 'Lanches', qtd: 2, nomeExibicao: 'Escolha de Lanches'},
+                    {tipo: 'produto', ref: 4, qtd: 1, nomeExibicao: 'Fixo: Porção Fritas Média'},
+                    {tipo: 'categoria', ref: 'Bebidas', qtd: 2, nomeExibicao: 'Escolha de Bebidas'}
+                ]
+            }
+        ];
+
+        let categoriasDB = JSON.parse(localStorage.getItem('pdv_categorias')) || JSON.parse(JSON.stringify(categoriasPadrao));
+        let produtosDB = JSON.parse(localStorage.getItem('pdv_produtos')) || JSON.parse(JSON.stringify(produtosPadrao));
+        let pedidosGerais = JSON.parse(localStorage.getItem('pdv_pedidos')) || [];
+        let contadorPedidos = parseInt(localStorage.getItem('pdv_contador')) || 1;
+        let historicoCaixasDB = JSON.parse(localStorage.getItem('pdv_historico_caixas')) || [];
+
+        let caixaAberto = JSON.parse(localStorage.getItem('pdv_caixa_aberto')) || false;
+        let valorFundoCaixa = parseFloat(localStorage.getItem('pdv_fundo_caixa')) || 0.00;
+        let dataHoraAberturaCaixa = localStorage.getItem('pdv_hora_abertura_caixa') || null;
+
+        let supabaseDisponivel = true;
+        let carregandoEstadoRemoto = false;
+        let ultimaAtualizacaoRemota = null;
+
+        // TECLAS DE ATALHO PADRÃO
+        let atalhosConfig = JSON.parse(localStorage.getItem('pdv_atalhos')) || {
+            direita: '1',
+            esquerda: '2',
+            chamar: '3',
+            entregue: '4'
+        };
+        let gravandoAtalhoAcao = null;
+        let indexPedidoSelecionadoBalcao = 0;
+
+        function exibirAviso(mensagem, titulo = "Aviso do Sistema") {
+            document.getElementById('modal-aviso-titulo').innerText = titulo;
+            document.getElementById('modal-aviso-mensagem').innerText = mensagem;
+            document.getElementById('modal-aviso').style.display = 'flex';
+        }
+
+        function fecharAviso() {
+            document.getElementById('modal-aviso').style.display = 'none';
+        }
+
+        function processarUploadFoto(input) {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                if (file.size > 2 * 1024 * 1024) {
+                    exibirAviso("A foto escolhida é muito grande! Escolha uma imagem de até 2MB.");
+                    input.value = "";
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    const base64Str = e.target.result;
+                    document.getElementById('novo-prod-foto').value = base64Str;
+                    document.getElementById('preview-foto-img').src = base64Str;
+                    document.getElementById('preview-foto-container').style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function montarEstadoAtual() {
+            return {
+                categoriasDB,
+                produtosDB,
+                pedidosGerais,
+                contadorPedidos,
+                historicoCaixasDB,
+                caixaAberto,
+                valorFundoCaixa,
+                dataHoraAberturaCaixa,
+                origem: PDV_CLIENT_ID,
+                salvoEm: new Date().toISOString()
+            };
+        }
+
+        function salvarCacheLocal() {
+            localStorage.setItem('pdv_categorias', JSON.stringify(categoriasDB));
+            localStorage.setItem('pdv_produtos', JSON.stringify(produtosDB));
+            localStorage.setItem('pdv_pedidos', JSON.stringify(pedidosGerais));
+            localStorage.setItem('pdv_contador', contadorPedidos);
+            localStorage.setItem('pdv_historico_caixas', JSON.stringify(historicoCaixasDB));
+            localStorage.setItem('pdv_caixa_aberto', JSON.stringify(caixaAberto));
+            localStorage.setItem('pdv_fundo_caixa', valorFundoCaixa);
+            localStorage.setItem('pdv_atalhos', JSON.stringify(atalhosConfig));
+            if (dataHoraAberturaCaixa) localStorage.setItem('pdv_hora_abertura_caixa', dataHoraAberturaCaixa);
+            else localStorage.removeItem('pdv_hora_abertura_caixa');
+        }
+
+        function aplicarEstado(estado, atualizarUI = true) {
+            if (!estado) return;
+            carregandoEstadoRemoto = true;
+            categoriasDB = Array.isArray(estado.categoriasDB) ? estado.categoriasDB : categoriasDB;
+            produtosDB = Array.isArray(estado.produtosDB) ? estado.produtosDB : produtosDB;
+            pedidosGerais = Array.isArray(estado.pedidosGerais) ? estado.pedidosGerais : pedidosGerais;
+            contadorPedidos = Number.isFinite(Number(estado.contadorPedidos)) ? Number(estado.contadorPedidos) : contadorPedidos;
+            historicoCaixasDB = Array.isArray(estado.historicoCaixasDB) ? estado.historicoCaixasDB : historicoCaixasDB;
+            caixaAberto = typeof estado.caixaAberto === 'boolean' ? estado.caixaAberto : caixaAberto;
+            valorFundoCaixa = Number.isFinite(Number(estado.valorFundoCaixa)) ? Number(estado.valorFundoCaixa) : valorFundoCaixa;
+            dataHoraAberturaCaixa = estado.dataHoraAberturaCaixa || null;
+            ultimaAtualizacaoRemota = estado.salvoEm || null;
+            salvarCacheLocal();
+            carregandoEstadoRemoto = false;
+
+            if (atualizarUI) {
+                atualizarInterfaceCaixa();
+                renderizarCategoriasUI();
+                renderizarMenu(categoriaFiltroAtual);
+                renderizarTabelaProdutos();
+                atualizarTelas();
+                atualizarFiltrosGestao();
+                renderizarHistoricoCaixas();
+                renderizarPainelAtalhos();
+                const relatorio = document.getElementById('tela-relatorio');
+                if (relatorio && relatorio.classList.contains('active')) atualizarDashboard();
+            }
+        }
+
+        async function salvarNoBancoLocal() {
+            salvarCacheLocal();
+            if (carregandoEstadoRemoto) return;
+
+            const estado = montarEstadoAtual();
+            try {
+                const { error } = await supabaseClient
+                    .from('pdv_state')
+                    .upsert({ id: PDV_STATE_ID, data: estado, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+                if (error) throw error;
+                supabaseDisponivel = true;
+            } catch (erro) {
+                supabaseDisponivel = false;
+                console.error('Falha ao sincronizar com Supabase. Dados mantidos no cache local:', erro);
+            }
+        }
+
+        async function carregarEstadoSupabase() {
+            try {
+                const { data, error } = await supabaseClient
+                    .from('pdv_state')
+                    .select('data, updated_at')
+                    .eq('id', PDV_STATE_ID)
+                    .maybeSingle();
+
+                if (error) throw error;
+                supabaseDisponivel = true;
+
+                if (data && data.data) {
+                    aplicarEstado(data.data, false);
+                } else {
+                    await salvarNoBancoLocal();
+                }
+                return true;
+            } catch (erro) {
+                supabaseDisponivel = false;
+                console.error('Não foi possível carregar o Supabase. Usando cache local:', erro);
+                exibirAviso('Supabase não disponível. O PDV abriu usando apenas o cache local.');
+                return false;
+            }
+        }
+
+        function iniciarRealtimeSupabase() {
+            supabaseClient
+                .channel('pdv-state-sync')
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: 'pdv_state',
+                    filter: `id=eq.${PDV_STATE_ID}`
+                }, payload => {
+                    const estado = payload.new && payload.new.data;
+                    if (!estado || estado.origem === PDV_CLIENT_ID) return;
+                    aplicarEstado(estado, true);
+                })
+                .subscribe(status => {
+                    console.log('Supabase Realtime:', status);
+                });
+        }
+
+        let carrinho = []; 
+        let pedidoEmEdicaoId = null; let categoriaFiltroAtual = 'Todos'; let produtoEmEdicaoId = null; 
+        
+        let chartVendas, chartHorarios, chartCategorias, chartRetirada;
+
+        let modoCadastroAtivo = 'simples';
+        let comboTemporario = [];
+        let comboAtualId = null; 
+
+        let trocaItemPedidoId = null;
+        let trocaItemCartId = null;
+        let obsCartIdAtual = null;
+
+        function tocarBeep() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === 'suspended') { audioCtx.resume(); }
+                const osc1 = audioCtx.createOscillator(); const gain1 = audioCtx.createGain();
+                osc1.type = 'triangle'; osc1.frequency.setValueAtTime(987.77, audioCtx.currentTime); 
+                gain1.gain.setValueAtTime(0, audioCtx.currentTime); gain1.gain.linearRampToValueAtTime(1, audioCtx.currentTime + 0.05); gain1.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.6); 
+                osc1.connect(gain1); gain1.connect(audioCtx.destination); osc1.start(audioCtx.currentTime); osc1.stop(audioCtx.currentTime + 0.6);
+
+                const osc2 = audioCtx.createOscillator(); const gain2 = audioCtx.createGain();
+                osc2.type = 'triangle'; osc2.frequency.setValueAtTime(783.99, audioCtx.currentTime + 0.25); 
+                gain2.gain.setValueAtTime(0, audioCtx.currentTime + 0.25); gain2.gain.linearRampToValueAtTime(1, audioCtx.currentTime + 0.3); gain2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.5);
+                osc2.connect(gain2); gain2.connect(audioCtx.destination); osc2.start(audioCtx.currentTime + 0.25); osc2.stop(audioCtx.currentTime + 1.5);
+            } catch(e) { console.log("Áudio não suportado"); }
+        }
+
+        function toggleMenuGlobal() {
+            const nav = document.getElementById('nav-principal');
+            const btnShow = document.getElementById('btn-show-global-menu');
+            if (nav.style.display === 'none') { nav.style.display = 'flex'; btnShow.style.display = 'none'; } 
+            else { nav.style.display = 'none'; btnShow.style.display = 'block'; }
+        }
+
+        function mudarAba(idAba, botao) {
+            document.querySelectorAll('.tab-content').forEach(aba => aba.classList.remove('active'));
+            document.querySelectorAll('nav button, .dropdown-content button').forEach(btn => btn.classList.remove('active'));
+            
+            const mainContainer = document.getElementById('container-principal');
+            if (idAba === 'tela-tv') {
+                mainContainer.classList.add('container-tv');
+            } else {
+                mainContainer.classList.remove('container-tv');
+            }
+
+            const abaAtiva = document.getElementById(idAba); if(abaAtiva) abaAtiva.classList.add('active');
+            if(botao) {
+                botao.classList.add('active');
+                if(botao.closest('.dropdown-content')) {
+                    const dropBtn = botao.closest('.dropdown').querySelector('.dropbtn');
+                    if(dropBtn) dropBtn.classList.add('active');
+                }
+            }
+            
+            if(idAba === 'tela-gestao') atualizarFiltrosGestao();
+            if(idAba === 'tela-relatorio') atualizarDashboard();
+            if(idAba === 'tela-fechamento-caixa') renderizarHistoricoCaixas();
+            if(idAba === 'tela-agendados') document.getElementById('busca-agendados').focus();
+            if(idAba === 'tela-produtos') { renderizarCategoriasUI(); renderizarTabelaProdutos(); }
+            if(idAba === 'tela-pedido') { renderizarCategoriasUI(); renderizarMenu(categoriaFiltroAtual); }
+            if(idAba === 'tela-atalhos') renderizarPainelAtalhos();
+            if(idAba === 'tela-videowall') atualizarTelas(); 
+        }
+        function sairVideoWall() { mudarAba('tela-pedido', documentquerySelectorAll('nav button')[0]); }
+
+        function calcularDiferencaMinutos(horaInicio, horaFim) {
+            if (!horaInicio || !horaFim) return "-";
+            try {
+                const [h1, m1] = horaInicio.split(':').map(Number);
+                const [h2, m2] = horaFim.split(':').map(Number);
+                let min1 = h1 * 60 + m1;
+                let min2 = h2 * 60 + m2;
+                if (min2 < min1) min2 += 24 * 60;
+                const diff = min2 - min1;
+                return `${diff} min`;
+            } catch (e) {
+                return "-";
+            }
+        }
+
+        // --- SISTEMA DE GRAVAÇÃO E NAVEGAÇÃO DE TECLAS DE ATALHO ---
+        function renderizarPainelAtalhos() {
+            document.getElementById('badge-key-direita').innerText = atalhosConfig.direita || '-';
+            document.getElementById('badge-key-esquerda').innerText = atalhosConfig.esquerda || '-';
+            document.getElementById('badge-key-chamar').innerText = atalhosConfig.chamar || '-';
+            document.getElementById('badge-key-entregue').innerText = atalhosConfig.entregue || '-';
+        }
+
+        function iniciarGravaçãoAtalho(acao) {
+            gravandoAtalhoAcao = acao;
+            document.querySelectorAll('.card-atalho').forEach(c => c.classList.remove('gravando'));
+            const card = document.getElementById(`card-key-${acao}`);
+            if (card) card.classList.add('gravando');
+            exibirAviso(`Pressione qualquer tecla no seu teclado para gravar a ação de "${acao.toUpperCase()}".`);
+        }
+
+        window.addEventListener('keydown', (e) => {
+            // Se estiver gravando uma nova tecla
+            if (gravandoAtalhoAcao) {
+                const teclaPressionada = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+                atalhosConfig[gravandoAtalhoAcao] = teclaPressionada;
+                salvarCacheLocal();
+                renderizarPainelAtalhos();
+                gravandoAtalhoAcao = null;
+                document.querySelectorAll('.card-atalho').forEach(c => c.classList.remove('gravando'));
+                exibirAviso(`Tecla "${teclaPressionada}" gravada com sucesso!`);
+                return;
+            }
+
+            // Não dispara atalhos se o usuário estiver digitando em campos de texto
+            const tagAtiva = document.activeElement.tagName;
+            if (tagAtiva === 'INPUT' || tagAtiva === 'TEXTAREA' || tagAtiva === 'SELECT') return;
+
+            // Execução dos atalhos no Balcão
+            const abaEntrega = document.getElementById('tela-entrega');
+            if (abaEntrega && abaEntrega.classList.contains('active')) {
+                const tecla = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+                const cardsBalcao = Array.from(document.querySelectorAll('#fila-entrega .card-pedido'));
+                if (cardsBalcao.length === 0) return;
+
+                if (indexPedidoSelecionadoBalcao >= cardsBalcao.length) indexPedidoSelecionadoBalcao = 0;
+
+                if (tecla === atalhosConfig.direita) {
+                    indexPedidoSelecionadoBalcao = (indexPedidoSelecionadoBalcao + 1) % cardsBalcao.length;
+                    destacarCardBalcao(cardsBalcao);
+                } else if (tecla === atalhosConfig.esquerda) {
+                    indexPedidoSelecionadoBalcao = (indexPedidoSelecionadoBalcao - 1 + cardsBalcao.length) % cardsBalcao.length;
+                    destacarCardBalcao(cardsBalcao);
+                } else if (tecla === atalhosConfig.chamar) {
+                    const cardAtual = cardsBalcao[indexPedidoSelecionadoBalcao];
+                    if (cardAtual) {
+                        const btnChamar = cardAtual.querySelector("button[onclick*='chamarNoPainel']");
+                        if (btnChamar) btnChamar.click();
+                    }
+                } else if (tecla === atalhosConfig.entregue) {
+                    const cardAtual = cardsBalcao[indexPedidoSelecionadoBalcao];
+                    if (cardAtual) {
+                        const btnRetirado = cardAtual.querySelector("button[onclick*='finalizarEntrega']");
+                        if (btnRetirado) btnRetirado.click();
+                    }
+                }
+            }
+        });
+
+        function destacarCardBalcao(cards) {
+            cards.forEach(c => c.classList.remove('card-selecionado-teclado'));
+            if (cards[indexPedidoSelecionadoBalcao]) {
+                cards[indexPedidoSelecionadoBalcao].classList.add('card-selecionado-teclado');
+                cards[indexPedidoSelecionadoBalcao].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+
+        function abrirModalTodosPedidos() {
+            renderizarTabelaModalTodosPedidos();
+            document.getElementById('modal-todos-pedidos').style.display = 'flex';
+        }
+
+        function fecharModalTodosPedidos() {
+            document.getElementById('modal-todos-pedidos').style.display = 'none';
+        }
+
+        function renderizarTabelaModalTodosPedidos() {
+            const tbody = document.getElementById('tabela-modal-todos-pedidos');
+            const filtroStatus = document.getElementById('filtro-modal-status').value;
+            tbody.innerHTML = '';
+            
+            let lista = [...pedidosGerais].reverse();
+
+            if (filtroStatus !== 'Todos') {
+                if (filtroStatus === 'preparando') lista = lista.filter(p => p.statusPainel === 'preparando' || p.statusPainel === 'pronto');
+                if (filtroStatus === 'mais_tarde') lista = lista.filter(p => p.itens.some(i => i.fase === 'mais_tarde'));
+                if (filtroStatus === 'entregue') lista = lista.filter(p => p.statusPainel === 'entregue');
+                if (filtroStatus === 'cancelado') lista = lista.filter(p => p.statusPainel === 'cancelado');
+            }
+
+            if (lista.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 20px; color: gray;">Nenhum pedido encontrado.</td></tr>';
+            } else {
+                lista.forEach(p => {
+                    let statusTag = '';
+                    if (p.statusPainel === 'cancelado') statusTag = '<span style="background:var(--danger); color:white; padding:3px 6px; border-radius:4px; font-weight:bold;">CANCELADO</span>';
+                    else if (p.itens.some(i => i.fase === 'mais_tarde')) statusTag = '<span style="background:var(--info); color:white; padding:3px 6px; border-radius:4px; font-weight:bold;">📦 P. MAIS TARDE</span>';
+                    else if (p.statusPainel === 'entregue') statusTag = '<span style="background:var(--success); color:white; padding:3px 6px; border-radius:4px; font-weight:bold;">FINALIZADO</span>';
+                    else statusTag = '<span style="background:var(--warning); color:black; padding:3px 6px; border-radius:4px; font-weight:bold;">EM PREPARO</span>';
+
+                    let acoes = '';
+                    if (p.statusPainel !== 'cancelado') {
+                        acoes = `
+                            <button onclick="reimprimirPedido(${p.id})" class="btn" style="background:#3b82f6; color:white; padding: 4px 8px; font-size: 0.8rem; margin-right: 4px;">🖨️</button>
+                            <button onclick="editarPedido(${p.id}); fecharModalTodosPedidos();" class="btn btn-warning" style="padding: 4px 8px; font-size: 0.8rem; margin-right: 4px;">✏️ Alterar</button>
+                            <button onclick="cancelarPedido(${p.id}); renderizarTabelaModalTodosPedidos();" class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem;">🗑️</button>
+                        `;
+                    } else {
+                        acoes = `<button onclick="reimprimirPedido(${p.id})" class="btn" style="background:#3b82f6; color:white; padding: 4px 8px; font-size: 0.8rem; margin-right: 4px;">🖨️</button><span style="color:gray; font-size: 0.8rem;">Bloqueado</span>`;
+                    }
+
+                    const tempoPreparo = calcularDiferencaMinutos(p.horaEntradaCozinha || p.hora, p.horaEntrega);
+
+                    tbody.innerHTML += `
+                        <tr style="border-bottom: 1px solid #e5e7eb; ${p.statusPainel === 'cancelado' ? 'opacity: 0.5;' : ''}">
+                            <td style="padding: 8px; font-weight: bold;">#${p.id}</td>
+                            <td style="font-weight:bold; color:#374151;">${p.hora}</td>
+                            <td style="color:#2563eb; font-weight:bold;">${p.horaEntradaCozinha || '-'}</td>
+                            <td style="color:#16a34a; font-weight:bold;">${p.horaEntrega || '-'}</td>
+                            <td style="font-weight: bold; color: var(--primary);">${tempoPreparo}</td>
+                            <td style="font-weight: bold;">${p.cliente}</td>
+                            <td>${p.pagamento}</td>
+                            <td>${statusTag}</td>
+                            <td style="font-weight: bold; color:var(--success);">R$ ${p.total.toFixed(2)}</td>
+                            <td>${acoes}</td>
+                        </tr>
+                    `;
+                });
+            }
+        }
+
+        function renderizarCategoriasUI() {
+            if(!categoriasDB.includes('Combos')) categoriasDB.push('Combos');
+            categoriasDB.sort(); 
+            
+            document.getElementById('novo-prod-categoria').innerHTML = categoriasDB.map(c => `<option value="${c}">${c}</option>`).join('');
+            
+            const comboSelect = document.getElementById('combo-add-select');
+            if(comboSelect) {
+                let catOptions = categoriasDB.filter(c => c !== 'Combos').map(c => `<option value="cat_${c}">Categoria: ${c}</option>`).join('');
+                let prodOptions = produtosDB.filter(p => !p.isCombo).map(p => `<option value="prod_${p.id}">Produto Fixo: ${p.nome}</option>`).join('');
+                comboSelect.innerHTML = `<optgroup label="Escolha do Cliente (Categorias)">${catOptions}</optgroup><optgroup label="Item Fixo (Produtos Específicos)">${prodOptions}</optgroup>`;
+            }
+
+            const menuCatContainer = document.getElementById('menu-categorias-container');
+            let botoesHtml = `<div class="tag-categoria ${categoriaFiltroAtual === 'Todos' ? 'ativa' : ''}" onclick="filtrarMenu('Todos')">Todos</div>`;
+            categoriasDB.forEach(cat => { botoesHtml += `<div class="tag-categoria ${categoriaFiltroAtual === cat ? 'ativa' : ''}" onclick="filtrarMenu('${cat}')">${cat}</div>`; });
+            if(menuCatContainer) menuCatContainer.innerHTML = botoesHtml;
+            
+            const listaGestao = document.getElementById('lista-gestao-categorias');
+            if(listaGestao) listaGestao.innerHTML = categoriasDB.map(cat => `<li class="cat-item"><span style="font-weight: bold;">${cat}</span><div class="cat-acoes"><button onclick="editarCategoria('${cat}')">✏️</button> <button onclick="excluirCategoria('${cat}')">🗑️</button></div></li>`).join('');
+        }
+        
+        function adicionarCategoria() {
+            let nome = document.getElementById('nova-cat-nome').value.trim(); if (!nome) return;
+            nome = nome.charAt(0).toUpperCase() + nome.slice(1); 
+            if (categoriasDB.includes(nome)) return exibirAviso("Esta categoria já está cadastrada!");
+            categoriasDB.push(nome); document.getElementById('nova-cat-nome').value = ''; 
+            salvarNoBancoLocal();
+            renderizarCategoriasUI();
+        }
+        function editarCategoria(nomeAntigo) {
+            let novoNome = prompt(`Editar categoria: "${nomeAntigo}"\nDigite o novo nome:`, nomeAntigo);
+            if (novoNome && novoNome.trim() !== '') {
+                novoNome = novoNome.charAt(0).toUpperCase() + novoNome.slice(1);
+                if (categoriasDB.includes(novoNome) && novoNome !== nomeAntigo) return exibirAviso("Esta categoria já existe.");
+                categoriasDB[categoriasDB.indexOf(nomeAntigo)] = novoNome;
+                produtosDB.forEach(p => { if (p.categoria === nomeAntigo) p.categoria = novoNome; });
+                if (categoriaFiltroAtual === nomeAntigo) categoriaFiltroAtual = novoNome;
+                salvarNoBancoLocal();
+                renderizarCategoriasUI(); renderizarTabelaProdutos(); renderizarMenu(categoriaFiltroAtual);
+            }
+        }
+        function excluirCategoria(nome) {
+            if (produtosDB.some(p => p.categoria === nome)) return exibirAviso(`Existem produtos vinculados a "${nome}". Remova os produtos antes.`);
+            if (confirm(`Excluir a categoria "${nome}"?`)) { 
+                categoriasDB = categoriasDB.filter(c => c !== nome); 
+                if (categoriaFiltroAtual === nome) categoriaFiltroAtual = 'Todos'; 
+                salvarNoBancoLocal();
+                renderizarCategoriasUI(); renderizarMenu(categoriaFiltroAtual); 
+            }
+        }
+
+        function mudarModoCadastro(modo) {
+            modoCadastroAtivo = modo;
+            document.getElementById('tab-simples').style.background = modo === 'simples' ? 'var(--primary)' : 'transparent';
+            document.getElementById('tab-simples').style.color = modo === 'simples' ? 'white' : '#333';
+            document.getElementById('tab-combo').style.background = modo === 'combo' ? 'var(--primary)' : 'transparent';
+            document.getElementById('tab-combo').style.color = modo === 'combo' ? 'white' : '#333';
+
+            if(modo === 'combo') {
+                document.getElementById('box-estoque-simples').style.display = 'none';
+                document.getElementById('box-cozinha-simples').style.display = 'none';
+                document.getElementById('box-itens-combo').style.display = 'block';
+                document.getElementById('novo-prod-categoria').value = 'Combos';
+                document.getElementById('titulo-form-produto').innerText = "Cadastrar Combo";
+            } else {
+                document.getElementById('box-estoque-simples').style.display = 'block';
+                document.getElementById('box-cozinha-simples').style.display = 'block';
+                document.getElementById('box-itens-combo').style.display = 'none';
+                document.getElementById('titulo-form-produto').innerText = "Cadastrar Produto";
+            }
+        }
+
+        function addProdutoTemporarioAoCombo() {
+            const selectVal = document.getElementById('combo-add-select').value;
+            const qtd = parseInt(document.getElementById('combo-add-qtd').value);
+            if(!selectVal || isNaN(qtd) || qtd <= 0) return;
+            
+            let tipo = selectVal.startsWith('cat_') ? 'categoria' : 'produto';
+            let ref = selectVal.substring(selectVal.indexOf('_') + 1);
+            let nomeExibicao = '';
+
+            if (tipo === 'categoria') {
+                nomeExibicao = `Escolha de ${ref}`;
+            } else {
+                ref = parseInt(ref);
+                let p = produtosDB.find(x => x.id === ref);
+                nomeExibicao = `Fixo: ${p ? p.nome : '?'}`;
+            }
+
+            const ext = comboTemporario.find(x => x.tipo === tipo && x.ref === ref);
+            if(ext) ext.qtd += qtd;
+            else comboTemporario.push({ tipo: tipo, ref: ref, qtd: qtd, nomeExibicao: nomeExibicao });
+            renderizarListaComboTemporario();
+        }
+
+        function renderizarListaComboTemporario() {
+            const ul = document.getElementById('lista-combo-temporario');
+            ul.innerHTML = comboTemporario.map((item, index) => `
+                <li style="display:flex; justify-content:space-between; border-bottom: 1px dashed #ccc; padding: 4px 0;">
+                    <span>${item.qtd}x ${item.nomeExibicao}</span>
+                    <button class="btn" onclick="removerItemComboTemporario(${index})" style="background:none; border:none; color:red; cursor:pointer; padding:0;">❌</button>
+                </li>
+            `).join('');
+        }
+
+        function removerItemComboTemporario(index) {
+            comboTemporario.splice(index, 1);
+            renderizarListaComboTemporario();
+        }
+
+        function renderizarTabelaProdutos() {
+            const tbody = document.getElementById('tabela-produtos'); tbody.innerHTML = '';
+            produtosDB.forEach(p => {
+                let desc = p.isCombo ? `<br><small style="color:var(--info);">↳ Composto por: ${p.itensCombo.map(i => {
+                    if(i.tipo === 'categoria') return `${i.qtd}x Escolha de ${i.ref}`;
+                    else { let subP = produtosDB.find(x=>x.id===i.ref); return `${i.qtd}x ${subP?subP.nome:'Fixo'}`; }
+                }).join(', ')}</small>` : '';
+
+                let txtEstoque = p.isCombo ? '<span style="color:gray;">Misto</span>' : (p.estoque !== null ? `${p.estoque} un.` : '∞ (Livre)');
+                let corEstoque = (!p.isCombo && p.estoque !== null && p.estoque <= 5) ? 'color: var(--danger);' : '';
+                let imgThumb = p.foto ? `<img src="${p.foto}" style="width:40px; height:40px; object-fit:contain; background:#f8fafc; border-radius:6px; padding:2px; border:1px solid #ddd;">` : '<span style="color:gray; font-size:0.75rem;">Sem foto</span>';
+
+                tbody.innerHTML += `
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 10px; font-weight: bold;">#${p.id}</td>
+                        <td>${imgThumb}</td>
+                        <td>${p.nome} ${desc} <br><span style="font-size: 0.8rem; color: gray;">${p.cozinha ? '👨‍🍳 Cozinha' : '🛍️ Balcão'}</span></td>
+                        <td><span style="background:#e5e7eb; padding:2px 6px; border-radius:4px; font-size:0.8rem;">${p.categoria}</span></td>
+                        <td style="font-weight: bold;">R$ ${p.preco.toFixed(2)}</td><td style="${corEstoque}">${txtEstoque}</td>
+                        <td style="white-space: nowrap;">
+                            <button class="btn btn-warning" style="padding: 4px; font-size: 0.8rem; color: black;" onclick="prepararEdicaoProduto(${p.id})">✏️</button> 
+                            ${!p.isCombo ? `<button class="btn btn-primary" style="padding: 4px; font-size: 0.8rem;" onclick="adicionarEstoqueManual(${p.id})">📦 +</button>` : ''}
+                            <button class="btn btn-danger" style="padding: 4px; font-size: 0.8rem;" onclick="apagarProduto(${p.id})">🗑️</button>
+                        </td>
+                    </tr>`;
+            });
+        }
+        
+        function prepararEdicaoProduto(id) {
+            const p = produtosDB.find(prod => prod.id === id);
+            document.getElementById('novo-prod-nome').value = p.nome; 
+            document.getElementById('novo-prod-preco').value = p.preco;
+            document.getElementById('novo-prod-categoria').value = p.categoria;
+            document.getElementById('novo-prod-foto').value = p.foto || '';
+
+            if (p.foto) {
+                document.getElementById('preview-foto-img').src = p.foto;
+                document.getElementById('preview-foto-container').style.display = 'block';
+            } else {
+                document.getElementById('preview-foto-container').style.display = 'none';
+            }
+
+            mudarModoCadastro(p.isCombo ? 'combo' : 'simples');
+
+            if(p.isCombo) {
+                comboTemporario = p.itensCombo.map(i => {
+                    let nomeExibicao = '';
+                    if (i.tipo === 'categoria') nomeExibicao = `Escolha de ${i.ref}`;
+                    else { let subP = produtosDB.find(x => x.id === i.ref); nomeExibicao = `Fixo: ${subP ? subP.nome : '?'}`; }
+                    return { ...i, nomeExibicao };
+                });
+                renderizarListaComboTemporario();
+            } else {
+                document.getElementById('novo-prod-estoque').value = p.estoque !== null ? p.estoque : ''; 
+                document.getElementById('novo-prod-cozinha').value = p.cozinha ? 'true' : 'false'; 
+            }
+
+            produtoEmEdicaoId = p.id;
+            document.getElementById('titulo-form-produto').innerText = `Editar ${p.isCombo?'Combo':'Produto'} #${p.id}`; 
+            document.getElementById('btn-salvar-produto').innerText = "Atualizar 🔄";
+            document.getElementById('btn-salvar-produto').classList.replace('btn-primary', 'btn-warning'); 
+            document.getElementById('btn-cancelar-edicao-prod').style.display = 'block';
+        }
+
+        function cancelarEdicaoProduto() {
+            produtoEmEdicaoId = null; 
+            document.getElementById('novo-prod-nome').value = ''; 
+            document.getElementById('novo-prod-preco').value = ''; 
+            document.getElementById('novo-prod-estoque').value = '';
+            document.getElementById('novo-prod-foto').value = '';
+            document.getElementById('file-prod-foto').value = '';
+            document.getElementById('preview-foto-container').style.display = 'none';
+
+            comboTemporario = []; renderizarListaComboTemporario();
+            mudarModoCadastro('simples');
+            document.getElementById('btn-salvar-produto').innerText = "Salvar 💾";
+            document.getElementById('btn-salvar-produto').classList.replace('btn-warning', 'btn-primary'); 
+            document.getElementById('btn-cancelar-edicao-prod').style.display = 'none';
+        }
+
+        function salvarProduto() {
+            let nome = document.getElementById('novo-prod-nome').value.trim(); 
+            let preco = parseFloat(document.getElementById('novo-prod-preco').value);
+            let categoria = document.getElementById('novo-prod-categoria').value; 
+            let foto = document.getElementById('novo-prod-foto').value.trim();
+
+            if (!nome || isNaN(preco) || preco <= 0 || !categoria) return exibirAviso("Preencha todos os campos do produto corretamente.");
+            
+            let isCombo = (modoCadastroAtivo === 'combo');
+            let cozinha = false;
+            let estoqueFinal = null;
+            let finalItensCombo = [];
+
+            if (isCombo) {
+                if (comboTemporario.length === 0) return exibirAviso("O combo precisa ter pelo menos 1 item incluso!");
+                finalItensCombo = JSON.parse(JSON.stringify(comboTemporario));
+                cozinha = true;
+            } else {
+                cozinha = document.getElementById('novo-prod-cozinha').value === 'true';
+                let estoqueInput = document.getElementById('novo-prod-estoque').value.trim();
+                estoqueFinal = estoqueInput === '' ? null : parseInt(estoqueInput);
+            }
+
+            if (produtoEmEdicaoId !== null) {
+                let p = produtosDB.find(prod => prod.id === produtoEmEdicaoId);
+                p.nome = nome; p.preco = preco; p.categoria = categoria; p.cozinha = cozinha; 
+                p.isCombo = isCombo; p.estoque = estoqueFinal; p.itensCombo = finalItensCombo; p.foto = foto;
+                cancelarEdicaoProduto(); 
+            } else {
+                produtosDB.push({ 
+                    id: produtosDB.length > 0 ? Math.max(...produtosDB.map(p => p.id)) + 1 : 1, 
+                    nome, preco, categoria, cozinha, isCombo, estoque: estoqueFinal, itensCombo: finalItensCombo, foto 
+                });
+                cancelarEdicaoProduto(); 
+            }
+            salvarNoBancoLocal();
+            renderizarCategoriasUI();
+            renderizarTabelaProdutos(); renderizarMenu(categoriaFiltroAtual);
+        }
+
+        function adicionarEstoqueManual(idProduto) {
+            const p = produtosDB.find(prod => prod.id === idProduto); 
+            if(p.isCombo) return;
+            if(p.estoque === null) return exibirAviso("Este produto possui Estoque Livre.");
+            const add = prompt(`Adicionar estoque ao ${p.nome} (Atual: ${p.estoque}):`);
+            if(add && !isNaN(add)) { 
+                p.estoque += parseInt(add); 
+                salvarNoBancoLocal();
+                renderizarTabelaProdutos(); renderizarMenu(categoriaFiltroAtual); 
+            }
+        }
+
+        function apagarProduto(idProduto) {
+            if (confirm(`Excluir produto/combo?`)) { 
+                produtosDB = produtosDB.filter(p => p.id !== idProduto); 
+                if (produtoEmEdicaoId === idProduto) cancelarEdicaoProduto(); 
+                salvarNoBancoLocal();
+                renderizarCategoriasUI();
+                renderizarTabelaProdutos(); 
+                renderizarMenu(categoriaFiltroAtual); 
+            }
+        }
+
+        function imprimirEstoquePorCategoria() {
+            const areaPrint = document.getElementById('area-impressao');
+            
+            let agrupado = {};
+            categoriasDB.forEach(cat => { agrupado[cat] = []; });
+            produtosDB.forEach(p => {
+                if (!agrupado[p.categoria]) agrupado[p.categoria] = [];
+                agrupado[p.categoria].push(p);
+            });
+
+            let htmlCategorias = '';
+            for (let cat in agrupado) {
+                if (agrupado[cat].length > 0) {
+                    htmlCategorias += `
+                        <div class="print-center print-bold" style="margin-top:10px; background:#f3f4f6; padding:3px; text-transform:uppercase;">--- ${cat} ---</div>
+                    `;
+                    agrupado[cat].forEach(p => {
+                        let txtEstoque = p.isCombo ? 'Misto' : (p.estoque !== null ? `${p.estoque} un.` : 'Livre');
+                        htmlCategorias += `
+                            <div class="print-row" style="margin-top:4px;">
+                                <span>${p.nome}</span>
+                                <span class="print-bold">${txtEstoque}</span>
+                            </div>
+                        `;
+                    });
+                }
+            }
+
+            const dataHora = new Date().toLocaleString('pt-BR');
+            areaPrint.innerHTML = `
+                <div class="print-center print-bold" style="font-size: 16px;">SANTUÁRIO SANTA RITA</div>
+                <div class="print-center print-bold" style="font-size: 13px; margin-top:4px;">RELATÓRIO DE ESTOQUE POR CATEGORIA</div>
+                <div class="print-center" style="font-size:10px; margin-bottom: 5px;">Gerado em: ${dataHora}</div>
+                <div class="print-divider"></div>
+                ${htmlCategorias}
+                <div class="print-divider"></div>
+                <div class="print-center" style="margin-top: 10px; font-size: 10px; font-style: italic;">
+                    Documento de Conferência Interna
+                </div>
+            `;
+
+            window.print();
+        }
+
+        function renderizarMenu(filtro = 'Todos') {
+            categoriaFiltroAtual = filtro; renderizarCategoriasUI(); 
+            const menuDiv = document.getElementById('menu-produtos'); menuDiv.innerHTML = '';
+            
+            const renderCardHTML = (produto) => {
+                let badgeEstoque = ''; let opacity = '1'; let descCombo = '';
+                if (produto.isCombo) {
+                    badgeEstoque = `<div class="badge-combo">✨ COMBO</div>`;
+                    let qtdTotal = produto.itensCombo.reduce((acc, i)=>acc+i.qtd, 0);
+                    descCombo = `<div style="font-size: 0.65rem; color: gray; margin-top:1px;">Contém: ${qtdTotal} itens</div>`;
+                } else if (produto.estoque !== null) {
+                    if (produto.estoque <= 0) { badgeEstoque = `<div class="badge-estoque estoque-baixo">ESGOTADO</div>`; opacity = '0.5'; }
+                    else if (produto.estoque <= 5) badgeEstoque = `<div class="badge-estoque estoque-baixo">Restam ${produto.estoque}</div>`;
+                    else badgeEstoque = `<div class="badge-estoque">Est: ${produto.estoque}</div>`;
+                }
+
+                let imgHtml = produto.foto ? `<img src="${produto.foto}" class="img-produto-card" alt="${produto.nome}">` : '';
+
+                return `
+                    <div class="card-produto" style="opacity: ${opacity};" onclick="addCarrinho(${produto.id})">
+                        ${badgeEstoque}
+                        ${imgHtml}
+                        <div style="font-size: 0.7rem; color: #6b7280; font-weight: bold; text-transform: uppercase;">${produto.categoria}</div>
+                        <div style="font-size: 0.85rem; font-weight: bold; margin: 2px 0; color: #111827; line-height: 1.1;">${produto.nome}</div>
+                        ${descCombo}
+                        <div style="color: var(--success); font-size: 0.95rem; font-weight: 800; margin-top: 4px;">R$ ${produto.preco.toFixed(2)}</div>
+                    </div>`;
+            };
+
+            if (filtro === 'Todos') {
+                let agrupado = {};
+                categoriasDB.forEach(cat => { agrupado[cat] = []; });
+                produtosDB.forEach(p => {
+                    if (!agrupado[p.categoria]) agrupado[p.categoria] = [];
+                    agrupado[p.categoria].push(p);
+                });
+
+                let htmlGeral = '';
+                for (let cat in agrupado) {
+                    if (agrupado[cat].length > 0) {
+                        let cards = agrupado[cat].map(p => renderCardHTML(p)).join('');
+                        htmlGeral += `
+                            <div class="subgrupo-header">📁 ${cat}</div>
+                            <div class="subgrupo-container">${cards}</div>
+                        `;
+                    }
+                }
+                menuDiv.innerHTML = htmlGeral || '<p style="color: gray; text-align:center;">Nenhum produto cadastrado.</p>';
+            } else {
+                const itens = produtosDB.filter(p => p.categoria === filtro);
+                if (itens.length === 0) {
+                    menuDiv.innerHTML = '<p style="color: gray; text-align:center;">Nenhum produto nesta categoria.</p>';
+                } else {
+                    let cards = itens.map(p => renderCardHTML(p)).join('');
+                    menuDiv.innerHTML = `<div class="subgrupo-container" style="margin-top:5px;">${cards}</div>`;
+                }
+            }
+        }
+        function filtrarMenu(categoria) { renderizarMenu(categoria); }
+
+        function abrirModalCombo(produto) {
+            document.getElementById('modal-combo-titulo').innerText = `Montar ${produto.nome}`;
+            const body = document.getElementById('modal-combo-body');
+            body.innerHTML = '';
+            
+            produto.itensCombo.forEach((req) => {
+                if (req.tipo === 'categoria') {
+                    for(let i=0; i<req.qtd; i++) {
+                        const opcoes = produtosDB.filter(p => p.categoria === req.ref && !p.isCombo);
+                        const optionsHtml = opcoes.map(p => {
+                            let disp = p.estoque !== null ? ` (Restam ${p.estoque})` : '';
+                            let block = (p.estoque !== null && p.estoque <= 0) ? 'disabled' : '';
+                            return `<option value="${p.id}" ${block}>${p.nome}${disp}</option>`;
+                        }).join('');
+                        
+                        body.innerHTML += `
+                            <label style="font-size: 0.85rem; font-weight: bold; margin-top: 10px; display:block; color:#2563eb;">Escolha 1x ${req.ref}:</label>
+                            <select class="combo-item-select" style="margin-bottom: 5px; width: 100%; padding: 8px;">
+                                ${optionsHtml}
+                            </select>
+                        `;
+                    }
+                } else if (req.tipo === 'produto') {
+                    let pFixo = produtosDB.find(x => x.id === req.ref);
+                    for(let i=0; i<req.qtd; i++) {
+                        body.innerHTML += `
+                            <label style="font-size: 0.85rem; font-weight: bold; margin-top: 10px; display:block; color:#16a34a;">Item Fixo Incluso:</label>
+                            <div class="combo-item-fixed" data-id="${req.ref}" style="background:#f0fdf4; padding:8px; border:1px solid #16a34a; border-radius:6px; margin-bottom:5px; font-size:0.9rem; color:#14532d; font-weight:bold;">
+                                ✔️ 1x ${pFixo ? pFixo.nome : 'Desconhecido'}
+                            </div>
+                        `;
+                    }
+                }
+            });
+            document.getElementById('modal-combo').style.display = 'flex';
+        }
+
+        function fecharModalCombo() {
+            document.getElementById('modal-combo').style.display = 'none';
+            comboAtualId = null;
+        }
+
+        function confirmarCombo() {
+            if (!caixaAberto) {
+                return exibirAviso("🔒 O Caixa está fechado! Abra o caixa antes de fazer vendas.", "Caixa Fechado");
+            }
+
+            const produto = produtosDB.find(p => p.id === comboAtualId);
+            const selects = document.querySelectorAll('.combo-item-select');
+            const fixos = document.querySelectorAll('.combo-item-fixed');
+            let itensEscolhidos = [];
+            let checkEstoqueMap = {};
+
+            for(let select of selects) {
+                if(!select.value) { exibirAviso("Há opções indisponíveis ou não selecionadas no combo!"); return; }
+                const idProd = parseInt(select.value);
+                const subP = produtosDB.find(x => x.id === idProd);
+                checkEstoqueMap[idProd] = (checkEstoqueMap[idProd] || 0) + 1;
+                itensEscolhidos.push({ idProduto: subP.id, nome: subP.nome, cozinha: subP.cozinha, qtd: 1, categoria: subP.categoria, fase: 'agora' });
+            }
+            
+            for(let fixo of fixos) {
+                const idProd = parseInt(fixo.dataset.id);
+                const subP = produtosDB.find(x => x.id === idProd);
+                checkEstoqueMap[idProd] = (checkEstoqueMap[idProd] || 0) + 1;
+                itensEscolhidos.push({ idProduto: subP.id, nome: subP.nome, cozinha: subP.cozinha, qtd: 1, categoria: subP.categoria, fase: 'agora' });
+            }
+
+            for(let id in checkEstoqueMap) {
+                if(!verificarEstoqueDisponivel(parseInt(id), checkEstoqueMap[id])) return; 
+            }
+
+            let tipoGlobal = document.getElementById('tipo-retirada-global').value;
+            let fase = tipoGlobal === 'mais_tarde' ? 'mais_tarde' : 'agora';
+
+            carrinho.push({ 
+                cartId: Date.now().toString() + Math.floor(Math.random()*100), 
+                idProduto: produto.id, nome: produto.nome, preco: produto.preco, 
+                categoria: produto.categoria, cozinha: produto.cozinha, 
+                isCombo: true, itensComboEscolhidos: itensEscolhidos,
+                qtd: 1, obs: '', fase: fase 
+            });
+            fecharModalCombo();
+            atualizarCarrinhoUI();
+        }
+
+        function abrirModalObs(cartId) {
+            obsCartIdAtual = cartId;
+            const item = carrinho.find(i => i.cartId === cartId);
+            document.getElementById('modal-obs-nome-item').innerText = `Item: ${item.nome}`;
+            document.getElementById('input-obs-texto').value = item.obs || '';
+            document.getElementById('modal-obs').style.display = 'flex';
+            document.getElementById('input-obs-texto').focus();
+        }
+
+        function fecharModalObs() {
+            document.getElementById('modal-obs').style.display = 'none';
+            obsCartIdAtual = null;
+        }
+
+        function salvarObsModal() {
+            if (obsCartIdAtual !== null) {
+                const texto = document.getElementById('input-obs-texto').value.trim();
+                const item = carrinho.find(i => i.cartId === obsCartIdAtual);
+                if (item) item.obs = texto;
+            }
+            fecharModalObs();
+            atualizarCarrinhoUI();
+        }
+
+        function abrirModalTrocaItem(idPedido, cartId) {
+            trocaItemPedidoId = idPedido;
+            trocaItemCartId = cartId;
+            const pedido = pedidosGerais.find(p => p.id === idPedido);
+            const item = pedido.itens.find(i => i.cartId === cartId);
+            
+            if (!item || item.cozinha) return exibirAviso("Apenas itens de balcão (sem cozinha) podem ser trocados aqui!");
+
+            document.getElementById('modal-troca-info').innerText = `Pedido #${pedido.id} (${pedido.cliente}) - Item atual: ${item.nome}`;
+            
+            const produtosDisponiveis = produtosDB.filter(p => p.categoria === item.categoria && !p.isCombo);
+            const select = document.getElementById('select-novo-item-troca');
+            select.innerHTML = produtosDisponiveis.map(p => {
+                let disp = p.estoque !== null ? ` (Restam ${p.estoque})` : '';
+                return `<option value="${p.id}">${p.nome}${disp}</option>`;
+            }).join('');
+
+            document.getElementById('modal-troca-item').style.display = 'flex';
+        }
+
+        function fecharModalTroca() {
+            document.getElementById('modal-troca-item').style.display = 'none';
+            trocaItemPedidoId = null;
+            trocaItemCartId = null;
+        }
+
+        function confirmarTrocaItemBalcao() {
+            const novoIdProduto = parseInt(document.getElementById('select-novo-item-troca').value);
+            const novoProduto = produtosDB.find(p => p.id === novoIdProduto);
+            if (!novoProduto) return;
+
+            const pedido = pedidosGerais.find(p => p.id === trocaItemPedidoId);
+            const item = pedido.itens.find(i => i.cartId === trocaItemCartId);
+
+            const prodAntigo = produtosDB.find(p => p.id === item.idProduto);
+            if (prodAntigo && prodAntigo.estoque !== null) prodAntigo.estoque += 1;
+
+            if (novoProduto.estoque !== null) {
+                if (novoProduto.estoque <= 0) {
+                    exibirAviso("Atenção: Este produto estava sem estoque, mas a troca foi efetuada.");
+                }
+                novoProduto.estoque -= 1;
+            }
+
+            item.idProduto = novoProduto.id;
+            item.nome = novoProduto.nome;
+            item.categoria = novoProduto.categoria;
+
+            salvarNoBancoLocal();
+            fecharModalTroca();
+            renderizarMenu(categoriaFiltroAtual);
+            renderizarTabelaProdutos();
+            atualizarTelas();
+            exibirAviso("Troca realizada com sucesso e estoque atualizado!");
+        }
+
+        function toggleCampoDinheiro() {
+            const forma = document.getElementById('forma-pagto').value;
+            const boxDinheiro = document.getElementById('box-dinheiro-troco');
+            const boxBonificacao = document.getElementById('box-bonificacao');
+            
+            boxDinheiro.style.display = 'none';
+            boxBonificacao.style.display = 'none';
+
+            if(forma === 'Dinheiro') { 
+                boxDinheiro.style.display = 'block'; 
+                calcularTroco(); 
+            } else if (forma === 'Bonificação') {
+                boxBonificacao.style.display = 'block';
+            }
+        }
+
+        function calcularTroco() {
+            const total = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd), 0);
+            const recVal = parseFloat(document.getElementById('valor-recebido-dinheiro').value) || 0;
+            const troco = recVal - total;
+            document.getElementById('valor-troco-display').innerText = (troco > 0 ? troco : 0).toFixed(2);
+        }
+
+        function verificarEstoqueDisponivel(idProduto, qtdParaAdicionar = 1) {
+            const p = produtosDB.find(x => x.id === idProduto);
+            if(!p || p.estoque === null) return true; 
+            
+            let countCart = 0;
+            carrinho.forEach(ci => {
+                if(ci.isCombo) {
+                    ci.itensComboEscolhidos.forEach(sub => { if(sub.idProduto === idProduto) countCart += 1; });
+                } else {
+                    if(ci.idProduto === idProduto) countCart += 1; 
+                }
+            });
+
+            if (countCart + qtdParaAdicionar > p.estoque) {
+                exibirAviso(`Estoque insuficiente de ${p.nome}! Restam ${p.estoque} unidades.`);
+                return false;
+            }
+            return true;
+        }
+
+        function mudarTipoRetiradaGlobal() {
+            const tipo = document.getElementById('tipo-retirada-global').value;
+            carrinho.forEach(item => item.fase = (tipo === 'parcial' ? item.fase : tipo)); 
+            atualizarCarrinhoUI();
+        }
+
+        function addCarrinho(idProduto) {
+            if (!caixaAberto) {
+                return exibirAviso("🔒 O Caixa está fechado! Abra o caixa no Dashboard antes de adicionar pedidos.", "Caixa Fechado");
+            }
+
+            const produto = produtosDB.find(p => p.id === idProduto);
+            if(produto.isCombo) {
+                comboAtualId = idProduto;
+                abrirModalCombo(produto);
+                return;
+            }
+            
+            if(!verificarEstoqueDisponivel(idProduto, 1)) return;
+            
+            let tipoGlobal = document.getElementById('tipo-retirada-global').value;
+            let fase = tipoGlobal === 'mais_tarde' ? 'mais_tarde' : 'agora';
+            
+            carrinho.push({ 
+                cartId: Date.now().toString() + Math.floor(Math.random()*1000), 
+                idProduto: produto.id, nome: produto.nome, preco: produto.preco, 
+                categoria: produto.categoria, cozinha: produto.cozinha, 
+                isCombo: false, qtd: 1, obs: '', fase: fase 
+            });
+            atualizarCarrinhoUI();
+        }
+
+        function removerItemCarrinho(cartId) {
+            carrinho = carrinho.filter(i => i.cartId !== cartId);
+            atualizarCarrinhoUI();
+        }
+
+        function setFaseItem(cartId, novaFase) { carrinho.find(i => i.cartId === cartId).fase = novaFase; atualizarCarrinhoUI(); }
+        
+        function atualizarCarrinhoUI() {
+            const divItens = document.getElementById('itens-carrinho'); 
+            const tipoGlobal = document.getElementById('tipo-retirada-global').value;
+            divItens.innerHTML = ''; let total = 0;
+            if (carrinho.length === 0) divItens.innerHTML = '<p style="color:gray; text-align:center;">Nenhum item adicionado.</p>';
+            
+            let temItemCozinha = false;
+
+            carrinho.forEach(item => {
+                total += (item.preco * item.qtd);
+                if (item.cozinha || (item.isCombo && item.itensComboEscolhidos.some(sub => sub.cozinha))) {
+                    temItemCozinha = true;
+                }
+
+                let htmlFase = tipoGlobal === 'parcial' 
+                    ? `<select onchange="setFaseItem('${item.cartId}', this.value)" style="margin:0; padding:6px; font-size:0.85rem;"><option value="agora" ${item.fase==='agora'?'selected':''}>Agora</option><option value="mais_tarde" ${item.fase==='mais_tarde'?'selected':''}>Depois</option></select>`
+                    : `<span style="font-size:0.8rem; background:#f3f4f6; padding:4px;">${item.fase === 'agora' ? '🟢 Agora' : '📦 Depois'}</span>`;
+                
+                let descCombo = item.isCombo ? `<div style="font-size:0.75rem; color:gray; margin-top:2px;">↳ Contém: ${item.itensComboEscolhidos.map(sub=>`1x ${sub.nome}`).join(', ')}</div>` : '';
+
+                divItens.innerHTML += `
+                    <div class="item-carrinho">
+                        <div style="display:flex; justify-content:space-between;"><b>1x ${item.nome}</b><b>R$ ${(item.preco).toFixed(2)}</b></div>
+                        ${descCombo}
+                        ${item.obs ? `<div style="color:var(--danger); font-size:0.85rem; margin-top:4px;">📝 Observação: ${item.obs}</div>` : ''}
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                            <div style="display:flex; gap:8px;">${htmlFase} <button class="btn btn-warning" style="padding:6px; font-size:0.8rem;" onclick="abrirModalObs('${item.cartId}')">Observação</button></div>
+                            <div class="qtd-controle"><button class="btn btn-danger" style="padding:6px; font-size:0.8rem;" onclick="removerItemCarrinho('${item.cartId}')">🗑️ Remover</button></div>
+                        </div>
+                    </div>`;
+            });
+
+            const optSemCozinha = document.getElementById('opt-sem-cozinha');
+            const selectRetirada = document.getElementById('tipo-retirada-global');
+
+            if (temItemCozinha) {
+                optSemCozinha.style.display = 'none';
+                if (selectRetirada.value === 'agora_sem_cozinha') {
+                    selectRetirada.value = 'agora';
+                }
+            } else {
+                optSemCozinha.style.display = 'block';
+            }
+
+            document.getElementById('total-carrinho').innerText = total.toFixed(2);
+            calcularTroco();
+        }
+
+        function limparCarrinho() {
+            carrinho = []; document.getElementById('nome-cliente').value = '';
+            document.getElementById('valor-recebido-dinheiro').value = '';
+            document.getElementById('obs-bonificacao').value = '';
+            
+            pedidoEmEdicaoId = null;
+            document.getElementById('banner-alerta-edicao').style.display = 'none';
+            document.getElementById('box-carrinho-container').classList.remove('modo-edicao');
+            document.getElementById('titulo-painel-carrinho').innerText = "Pedido Atual";
+            document.getElementById('btn-finalizar-pedido').innerHTML = `Cobrar, Imprimir e Enviar 🖨️`;
+            document.getElementById('btn-finalizar-pedido').classList.replace('btn-warning', 'btn-primary');
+
+            atualizarCarrinhoUI();
+        }
+
+        function finalizarPedido() {
+            if (!caixaAberto) {
+                return exibirAviso("🔒 O Caixa está fechado! Abra o caixa antes de finalizar pedidos.", "Caixa Fechado");
+            }
+
+            const cliente = document.getElementById('nome-cliente').value.trim();
+            if (carrinho.length === 0) return exibirAviso("O carrinho está vazio!");
+            if (!cliente) return exibirAviso("Por favor, informe o Nome do Cliente ou Mesa!");
+
+            let formaPagto = document.getElementById('forma-pagto').value;
+            const tipoAtendimento = document.getElementById('tipo-atendimento').value;
+            const tipoGlobalRetirada = document.getElementById('tipo-retirada-global').value;
+            const total = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd), 0);
+
+            if (formaPagto === 'Dinheiro') {
+                const recVal = parseFloat(document.getElementById('valor-recebido-dinheiro').value);
+                if (isNaN(recVal) || recVal < total) {
+                    return exibirAviso("Para pagamento em Dinheiro, informe o Valor Recebido igual ou maior ao Total.");
+                }
+            } else if (formaPagto === 'Bonificação') {
+                const obsBono = document.getElementById('obs-bonificacao').value.trim();
+                if (!obsBono) {
+                    return exibirAviso("Para Bonificação, é obrigatório preencher a Observação/Motivo!");
+                }
+                formaPagto = `Bonificação (${obsBono})`;
+            }
+
+            const dataObjeto = new Date();
+            const dataAtual = dataObjeto.toLocaleDateString('pt-BR');
+            const horaAtual = dataObjeto.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            
+            const vaiParaCozinha = tipoGlobalRetirada !== 'agora_sem_cozinha' && carrinho.some(i => i.fase === 'agora' && (i.cozinha || (i.isCombo && i.itensComboEscolhidos.some(sub=>sub.cozinha))));
+
+            const novoPedido = {
+                id: pedidoEmEdicaoId !== null ? pedidoEmEdicaoId : contadorPedidos++,
+                cliente: cliente, pagamento: formaPagto, tipoAtendimento: tipoAtendimento,
+                total: total, data: dataAtual, hora: horaAtual,
+                horaEntradaCozinha: vaiParaCozinha ? horaAtual : null,
+                horaEntrega: (!vaiParaCozinha && tipoGlobalRetirada === 'agora_sem_cozinha') ? horaAtual : null,
+                statusPainel: vaiParaCozinha ? 'preparando' : (tipoGlobalRetirada === 'agora_sem_cozinha' ? 'entregue' : 'nenhum'),
+                itens: JSON.parse(JSON.stringify(carrinho)) 
+            };
+
+            if (pedidoEmEdicaoId !== null) {
+                pedidosGerais.find(p => p.id === pedidoEmEdicaoId).itens.forEach(item => {
+                    if(item.isCombo) {
+                        item.itensComboEscolhidos.forEach(sub => { let subP = produtosDB.find(x=>x.id===sub.idProduto); if(subP && subP.estoque!==null) subP.estoque += 1; });
+                    } else {
+                        let prod = produtosDB.find(p => p.id === item.idProduto); if(prod && prod.estoque !== null) prod.estoque += 1;
+                    }
+                });
+                pedidosGerais = pedidosGerais.filter(p => p.id !== pedidoEmEdicaoId);
+            }
+
+            carrinho.forEach(item => {
+                if(item.isCombo) {
+                    item.itensComboEscolhidos.forEach(sub => { let subP = produtosDB.find(x=>x.id===sub.idProduto); if(subP && subP.estoque!==null) subP.estoque -= 1; });
+                } else {
+                    let prod = produtosDB.find(p => p.id === item.idProduto); if(prod && prod.estoque !== null) prod.estoque -= 1;
+                }
+            });
+
+            pedidosGerais.push(novoPedido);
+            salvarNoBancoLocal();
+
+            gerarHTMLImpressao(novoPedido); 
+            window.print();
+
+            limparCarrinho(); 
+            renderizarMenu(categoriaFiltroAtual); 
+            renderizarTabelaProdutos(); 
+            atualizarTelas();
+        }
+
+        function gerarHTMLImpressao(pedido) {
+            const areaPrint = document.getElementById('area-impressao');
+            const iAgora = pedido.itens.filter(i => i.fase === 'agora' || i.fase === 'entregue'); 
+            const iDepois = pedido.itens.filter(i => i.fase === 'mais_tarde');
+            
+            const htmlItem = (i) => {
+                let det = '';
+                if(i.isCombo) { det = `<div style="font-size:11px; padding-left:5px; color:gray;">↳ ${i.itensComboEscolhidos.map(sub=> `1x ${sub.nome}`).join('<br>↳ ')}</div>`; }
+                let obs = i.obs ? `<div style="font-size:11px; font-weight:bold;">Observação: ${i.obs}</div>` : '';
+                return `<div style="margin-top:5px;"><div class="print-row"><span class="print-bold">1x ${i.nome}</span><span>R$ ${(i.preco).toFixed(2)}</span></div>${det}${obs}</div>`;
+            };
+            
+            areaPrint.innerHTML = `
+                <div class="print-center print-bold" style="font-size: 18px;">SANTUÁRIO SANTA RITA</div>
+                <div class="print-divider"></div>
+                <div class="print-center print-bold" style="font-size: 42px; margin: 5px 0;">#${pedido.id}</div>
+                <div class="print-center print-bold" style="font-size: 26px; margin-bottom: 5px; text-transform: uppercase;">${pedido.cliente}</div>
+                <div class="print-center print-bold" style="font-size: 14px; margin-bottom: 10px;">[ ${pedido.tipoAtendimento} ]</div>
+                <div class="print-center">${pedido.data} - ${pedido.hora}</div>
+                <div class="print-divider"></div>
+                ${iAgora.length ? `<div class="print-center print-bold" style="margin-bottom:5px;">(ITENS DO PEDIDO)</div>` + iAgora.map(htmlItem).join('') : ''}
+                ${iDepois.length ? `<div class="print-divider"></div><div class="print-center print-bold" style="margin-bottom:5px;">[ RETIRAR DEPOIS ]</div>` + iDepois.map(htmlItem).join('') : ''}
+                <div class="print-divider"></div>
+                
+                <div class="print-center print-bold" style="font-size: 18px; margin: 6px 0; text-transform: uppercase; background:#000; color:#fff; padding:4px 0;">
+                    PAGTO: ${pedido.pagamento}
+                </div>
+                
+                <div class="print-row print-bold" style="font-size: 16px; margin-top:6px;"><span>TOTAL:</span><span>R$ ${pedido.total.toFixed(2)}</span></div>
+                <div class="print-divider"></div>
+                <div class="print-center" style="margin-top: 15px; font-size: 13px; font-weight:bold; font-style: italic;">
+                    Muito obrigado por sua ajuda, que Santa Rita interceda muitas bênçãos a vc e toda sua família
+                </div>
+            `;
+        }
+        
+        function reimprimirPedido(idPedido) {
+            const pedido = pedidosGerais.find(p => p.id === idPedido);
+            if (pedido) { gerarHTMLImpressao(pedido); window.print(); }
+        }
+
+        function moverParaAgora(id) { 
+            const p = pedidosGerais.find(x => x.id === id); 
+            const horaAtual = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            
+            p.itens.forEach(i => { if(i.fase==='mais_tarde') i.fase='agora'; }); 
+            p.statusPainel = 'preparando'; 
+            if (!p.horaEntradaCozinha) p.horaEntradaCozinha = horaAtual;
+
+            salvarNoBancoLocal();
+            atualizarTelas(); 
+        }
+
+        function chamarNoPainel(id) { 
+            const p = pedidosGerais.find(x => x.id === id);
+            p.statusPainel = 'pronto'; 
+            tocarBeep(); 
+            salvarNoBancoLocal();
+            atualizarTelas(); 
+        }
+        
+        function finalizarEntrega(id) { 
+            const p = pedidosGerais.find(x => x.id === id);
+            const horaAtual = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            
+            p.itens.forEach(i => { if(i.fase === 'agora') i.fase = 'entregue'; });
+            p.statusPainel = 'entregue'; 
+            p.horaEntrega = horaAtual;
+
+            salvarNoBancoLocal();
+            atualizarTelas(); 
+        }
+
+        function cancelarPedido(id) {
+            if(confirm(`Tem certeza que deseja CANCELAR o Pedido #${id}?`)) {
+                const p = pedidosGerais.find(x => x.id === id);
+                if (p && p.statusPainel !== 'cancelado') {
+                    p.itens.forEach(item => { 
+                        if(item.isCombo) {
+                            item.itensComboEscolhidos.forEach(sub => { let subP = produtosDB.find(x=>x.id===sub.idProduto); if(subP && subP.estoque!==null) subP.estoque += 1; });
+                        } else {
+                            let prod = produtosDB.find(px => px.id === item.idProduto); if(prod && prod.estoque !== null) prod.estoque += 1;
+                        }
+                    });
+                    p.statusPainel = 'cancelado'; 
+                    salvarNoBancoLocal();
+                    renderizarMenu(categoriaFiltroAtual); 
+                    renderizarTabelaProdutos(); 
+                    atualizarTelas(); 
+                    atualizarFiltrosGestao();
+                    exibirAviso(`Pedido #${id} cancelado com sucesso e estoque devolvido!`);
+                }
+            }
+        }
+
+        function atualizarTelas() {
+            let htmlCozinha = '', htmlBalcao = '', htmlAgenda = '', htmlPrepTV = '';
+            let countCoz = 0, countBalc = 0, countAgend = 0;
+            let prontos = [], entregues = [];
+
+            pedidosGerais.forEach(p => {
+                if(p.statusPainel === 'cancelado') return;
+                
+                const iAgoraPendentes = p.itens.filter(i => i.fase === 'agora');
+                const iDepois = p.itens.filter(i => i.fase === 'mais_tarde');
+
+                let itensPurosCozinha = [];
+                iAgoraPendentes.forEach(item => {
+                    if (item.isCombo) {
+                        item.itensComboEscolhidos.forEach(sub => {
+                            if(sub.cozinha && sub.fase !== 'entregue') itensPurosCozinha.push({nome: sub.nome, obs: item.obs, comboPai: item.nome});
+                        });
+                    } else {
+                        if(item.cozinha) itensPurosCozinha.push({nome: item.nome, obs: item.obs});
+                    }
+                });
+
+                if(p.statusPainel === 'preparando' && itensPurosCozinha.length > 0) {
+                    countCoz++;
+                    const itensDetalhadosCozinha = itensPurosCozinha.map(i => `
+                        <div style="border-bottom:1px dashed #ccc; padding:6px 0;">
+                            <b>1x ${i.nome}</b> 
+                            ${i.comboPai ? `<br><small style="color:gray;">(Vem do ${i.comboPai})</small>` : ''}
+                            ${i.obs ? `<br><i style="color:red;font-size:0.8rem; font-weight:bold;">Observação: ${i.obs}</i>`:''}
+                        </div>
+                    `).join('');
+
+                    htmlCozinha += `
+                        <div class="card-pedido"><div class="status-bar bg-warning"></div>
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <h3 style="margin:0;">#${p.id}</h3>
+                            <b style="text-transform: uppercase; font-size: 1.1rem; color: #111827;">${p.cliente}</b>
+                        </div>
+                        <div style="font-size: 0.85rem; font-weight: bold; color: var(--primary); margin-top: 2px; margin-bottom: 5px;">[ ${p.tipoAtendimento || 'Comer no Local'} ]</div>
+                        <div class="lista-itens" style="margin-top:0;">${itensDetalhadosCozinha}</div>
+                        </div>`;
+                }
+
+                if((p.statusPainel === 'preparando' || p.statusPainel === 'pronto' || p.statusPainel === 'nenhum') && iAgoraPendentes.length > 0) {
+                    countBalc++;
+                    
+                    let btn = p.statusPainel === 'preparando' ? `
+                        <div style="display:flex; gap:5px;">
+                            <button class="btn btn-warning" style="width:100%;" onclick="chamarNoPainel(${p.id})">🔔 Chamar Painel</button>
+                        </div>` : `
+                        <div style="display:flex; gap:5px;">
+                            <button class="btn btn-success" style="width:100%;" onclick="finalizarEntrega(${p.id})">✅ Retirado</button>
+                        </div>`;
+                    
+                    const itensDetalhadosBalcao = iAgoraPendentes.map(item => {
+                        if (item.isCombo) {
+                            return item.itensComboEscolhidos.map(sub => {
+                                let btnTrocaSub = (!sub.cozinha && (p.statusPainel === 'pronto' || p.statusPainel === 'preparando')) ? `<button class="btn btn-warning" style="padding:2px 6px; font-size:0.75rem; margin-left:5px;" onclick="abrirModalTrocaItem(${p.id}, '${item.cartId}')" title="Trocar Sabor/Produto">✏️ Trocar</button>` : '';
+                                return `
+                                    <div style="border-bottom:1px dashed #ccc; padding:6px 0; display:flex; justify-content:space-between; align-items:center;">
+                                        <div><b>1x ${sub.nome}</b> <small style="color:gray;">(Do ${item.nome})</small>${item.obs ? `<br><i style="color:red;font-size:0.8rem;">Obs: ${item.obs}</i>`:''}</div>
+                                        <div>${btnTrocaSub}</div>
+                                    </div>
+                                `;
+                            }).join('');
+                        } else {
+                            let btnTroca = (!item.cozinha && (p.statusPainel === 'pronto' || p.statusPainel === 'preparando')) ? `<button class="btn btn-warning" style="padding:2px 6px; font-size:0.75rem; margin-left:5px;" onclick="abrirModalTrocaItem(${p.id}, '${item.cartId}')" title="Trocar Sabor/Produto">✏️ Trocar</button>` : '';
+                            return `
+                                <div style="border-bottom:1px dashed #ccc; padding:6px 0; display:flex; justify-content:space-between; align-items:center;">
+                                    <div><b>1x ${item.nome}</b>${item.obs ? `<br><i style="color:red;font-size:0.8rem;">Obs: ${item.obs}</i>`:''}</div>
+                                    <div style="display:flex; align-items:center; gap:4px;">
+                                        ${btnTroca}
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    }).join('');
+
+                    htmlBalcao += `
+                        <div class="card-pedido"><div class="status-bar ${p.statusPainel === 'preparando' ? 'bg-warning' : 'bg-pronto'}"></div>
+                        <div style="display:flex; justify-content:space-between;"><h3>#${p.id} - ${p.cliente}</h3><span>Entrada: ${p.hora}</span></div>
+                        <div style="font-size: 0.85rem; font-weight: bold; color: var(--primary); margin-top: -5px; margin-bottom: 5px;">[ ${p.tipoAtendimento || 'Comer no Local'} ]</div>
+                        <div class="lista-itens" style="margin-top:0;">${itensDetalhadosBalcao}</div>
+                        ${btn}</div>`;
+                }
+
+                if(iDepois.length > 0) {
+                    countAgend++;
+                    
+                    const itensDetalhadosFicha = iDepois.map(i => {
+                        let comboDet = i.isCombo ? `<br><small style="color:gray;">↳ ${i.itensComboEscolhidos.map(sub=>`1x ${sub.nome}`).join(', ')}</small>` : '';
+                        let obsDet = i.obs ? `<br><i style="color:red; font-size:0.8rem; font-weight:bold;">Observação: ${i.obs}</i>` : '';
+                        return `<div style="border-bottom:1px dashed #ccc; padding:4px 0;"><b>1x ${i.nome}</b>${comboDet}${obsDet}</div>`;
+                    }).join('');
+
+                    htmlAgenda += `
+                        <div class="card-pedido" style="border:1px solid var(--info);">
+                            <div class="status-bar bg-info"></div>
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <h3 style="margin:0;">#${p.id} - ${p.cliente}</h3>
+                                <b style="color:var(--info); font-size:0.85rem;">🕒 ${p.hora}</b>
+                            </div>
+                            <div style="font-size: 0.85rem; font-weight: bold; color: var(--primary); margin-top:2px;">[ ${p.tipoAtendimento || 'Comer no Local'} ]</div>
+                            <div class="lista-itens" style="margin-top:8px;">${itensDetalhadosFicha}</div>
+                            <button class="btn btn-info" onclick="moverParaAgora(${p.id})">📤 Enviar p/ Cozinha</button>
+                        </div>`;
+                }
+
+                if(p.statusPainel === 'preparando' && iAgoraPendentes.length > 0) { htmlPrepTV += `<div class="mc-num"><span class="id">#${String(p.id).padStart(2, '0')}</span><span class="nome">${p.cliente}</span></div>`; }
+                if(p.statusPainel === 'pronto') prontos.push(p);
+                if(p.statusPainel === 'entregue') entregues.push(p);
+            });
+
+            document.getElementById('fila-cozinha').innerHTML = htmlCozinha || '<p style="color:gray;">Livre.</p>';
+            document.getElementById('fila-entrega').innerHTML = htmlBalcao || '<p style="color:gray;">Livre.</p>';
+            document.getElementById('fila-agendados').innerHTML = htmlAgenda || '<p style="color:gray;">Nenhum retido.</p>';
+            
+            document.getElementById('badge-cozinha').innerText = countCoz; 
+            document.getElementById('badge-cozinha').style.display = countCoz ? 'inline-block' : 'none';
+            document.getElementById('badge-entrega').innerText = countBalc; 
+            document.getElementById('badge-entrega').style.display = countBalc ? 'inline-block' : 'none';
+            document.getElementById('badge-agendados').innerText = countAgend; 
+            document.getElementById('badge-agendados').style.display = countAgend ? 'inline-block' : 'none';
+
+            document.getElementById('tv-lista-preparando').innerHTML = htmlPrepTV || '<div style="color:gray;text-align:center;width:100%;font-size:1.5vw;margin-top:20px;">Aguardando...</div>';
+            
+            const tvDest = document.getElementById('tv-pronto-destaque');
+            if(prontos.length > 0) {
+                let ult = prontos.pop();
+                tvDest.style.display = 'flex'; 
+                tvDest.innerHTML = `<div class="mc-destaque-num">#${String(ult.id).padStart(2, '0')}</div><div class="mc-destaque-name">${ult.cliente}</div>`;
+            } else { tvDest.style.display = 'none'; }
+            
+            let hist = [...prontos.reverse(), ...entregues.slice(-8).reverse()].slice(0, 10);
+            document.getElementById('tv-lista-historico').innerHTML = hist.map(p => `<div class="mc-num ready"><span class="id">#${String(p.id).padStart(2, '0')}</span><span class="nome">${p.cliente}</span></div>`).join('');
+
+            if(document.getElementById('vw-cozinha')) document.getElementById('vw-cozinha').innerHTML = htmlCozinha;
+            if(document.getElementById('vw-balcao')) document.getElementById('vw-balcao').innerHTML = htmlBalcao;
+            if(document.getElementById('vw-tv')) {
+                document.getElementById('vw-tv').innerHTML = `
+                <div class="mc-tv-layout" style="height: 100%; border-radius: 0;">
+                    <div class="mc-tv-col preparando" style="padding: 2%;">
+                        <div class="mc-tv-title title-prep" style="margin-bottom: 15px;">Preparando</div>
+                        <div class="mc-list-vertical">${htmlPrepTV}</div>
+                    </div>
+                    <div class="mc-tv-col pronto" style="padding: 2%;">
+                        <div class="mc-tv-title title-pronto" style="margin-bottom: 15px;">Pronto</div>
+                        ${tvDest.style.display === 'flex' ? `<div class="mc-destaque blinking" style="margin-bottom:20px;">${tvDest.innerHTML}</div>` : ''}
+                        <div class="mc-list-vertical">${document.getElementById('tv-lista-historico').innerHTML}</div>
+                    </div>
+                </div>`;
+            }
+        }
+
+        function atualizarFiltrosGestao() {
+            const textoBusca = document.getElementById('filtro-texto-gestao').value.toLowerCase();
+            const dataBusca = document.getElementById('filtro-data-gestao').value;
+            const statusBusca = document.getElementById('filtro-status-gestao').value;
+            let dataFormatada = "";
+            if (dataBusca) { const partes = dataBusca.split('-'); dataFormatada = `${partes[2]}/${partes[1]}/${partes[0]}`; }
+
+            const tbody = document.getElementById('tabela-gestao'); tbody.innerHTML = '';
+            let pedidosFiltrados = [...pedidosGerais].reverse();
+
+            if (textoBusca) pedidosFiltrados = pedidosFiltrados.filter(p => p.cliente.toLowerCase().includes(textoBusca) || p.id.toString().includes(textoBusca));
+            if (dataFormatada) pedidosFiltrados = pedidosFiltrados.filter(p => p.data === dataFormatada);
+            if (statusBusca !== 'Todos') {
+                if (statusBusca === 'entregue') pedidosFiltrados = pedidosFiltrados.filter(p => p.statusPainel === 'entregue');
+                if (statusBusca === 'preparando') pedidosFiltrados = pedidosFiltrados.filter(p => p.statusPainel === 'preparando' || p.statusPainel === 'pronto');
+                if (statusBusca === 'cancelado') pedidosFiltrados = pedidosFiltrados.filter(p => p.statusPainel === 'cancelado');
+            }
+
+            if (pedidosFiltrados.length === 0) return tbody.innerHTML = '<tr><td colspan="9" style="padding: 15px; text-align: center; color: gray;">Nenhum pedido encontrado.</td></tr>';
+
+            pedidosFiltrados.forEach(p => {
+                let statusHtml = ''; let acoesHtml = '';
+                let btnImprimir = `<button onclick="reimprimirPedido(${p.id})" class="btn" style="background:#3b82f6; color:white; padding: 4px 8px; font-size: 0.8rem; margin-right: 5px;" title="Reimprimir">🖨️</button>`;
+
+                if (p.statusPainel === 'entregue') { 
+                    statusHtml = '<span class="status-badge" style="background:var(--success);">✅ Finalizado</span>'; 
+                    acoesHtml = btnImprimir + '<span style="color:gray; font-size: 0.8rem;">Bloqueado</span>'; 
+                } else if (p.statusPainel === 'cancelado') { 
+                    statusHtml = '<span class="status-badge" style="background:var(--danger);">❌ Cancelado</span>'; 
+                    acoesHtml = btnImprimir + '<span style="color:gray; font-size: 0.8rem;">Bloqueado</span>'; 
+                } else {
+                    if (p.statusPainel === 'pronto') statusHtml = '<span class="status-badge" style="background:var(--primary);">📺 Pronto TV</span>';
+                    else if (p.statusPainel === 'preparando') statusHtml = '<span class="status-badge" style="background:var(--warning); color:black;">👨‍🍳 Cozinha</span>';
+                    else statusHtml = '<span class="status-badge" style="background:var(--info);">📦 P/ Depois</span>';
+                    
+                    acoesHtml = btnImprimir + `<button onclick="editarPedido(${p.id})" class="btn btn-warning" style="padding: 4px 8px; font-size: 0.8rem; margin-right: 5px;">✏️</button> <button onclick="cancelarPedido(${p.id})" class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem;">🗑️</button>`;
+                }
+                const resumoItens = p.itens.map(i => `1x ${i.nome}`).join(', ');
+                const tempoPreparo = calcularDiferencaMinutos(p.horaEntradaCozinha || p.hora, p.horaEntrega);
+
+                tbody.innerHTML += `<tr style="border-bottom: 1px solid #f3f4f6; ${p.statusPainel === 'cancelado' ? 'opacity:0.5;' : ''}">
+                    <td style="padding: 12px; font-weight: bold;">#${p.id}</td>
+                    <td style="font-size: 0.75rem; color: #4b5563;">
+                        <b>Ent:</b> ${p.hora}<br>
+                        <b>Coz:</b> ${p.horaEntradaCozinha || '-'}<br>
+                        <b>Entr:</b> ${p.horaEntrega || '-'}
+                    </td>
+                    <td style="font-weight: bold; color: var(--primary);">${tempoPreparo}</td>
+                    <td style="font-weight: bold;">${p.cliente}</td><td style="font-size: 0.85rem; font-weight: bold; color: #4b5563;">${p.pagamento}</td>
+                    <td style="font-size: 0.85rem; max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${resumoItens}">${resumoItens}</td>
+                    <td>${statusHtml}</td><td style="font-weight: bold; color: var(--success);">R$ ${p.total.toFixed(2)}</td><td>${acoesHtml}</td></tr>`;
+            });
+        }
+
+        function abrirCaixa() {
+            const val = parseFloat(document.getElementById('valor-fundo-caixa').value);
+            if (isNaN(val) || val < 0) return exibirAviso("Insira um valor de fundo de caixa válido.");
+            
+            valorFundoCaixa = val;
+            caixaAberto = true;
+            
+            const dataObjeto = new Date();
+            const dataHoraAbertura = `${dataObjeto.toLocaleDateString('pt-BR')} ${dataObjeto.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+            dataHoraAberturaCaixa = dataHoraAbertura;
+            salvarNoBancoLocal();
+            
+            atualizarInterfaceCaixa();
+            exibirAviso(`Caixa aberto com sucesso! Fundo inicial: R$ ${valorFundoCaixa.toFixed(2)}`);
+            atualizarDashboard();
+        }
+
+        function fecharCaixaPrompt() {
+            if (!caixaAberto) return exibirAviso("O caixa já está fechado.");
+            
+            const nomeCampanha = prompt("Digite o NOME DA CAMPANHA / EVENTO para fechar o caixa (Obrigatório):");
+            if (!nomeCampanha || nomeCampanha.trim() === "") {
+                return exibirAviso("O Nome da Campanha é obrigatório para fechar o caixa!");
+            }
+
+            const senha = prompt("Digite a senha para fechar o caixa:");
+            if (senha === "@Santaritatv2030") {
+                
+                const validos = pedidosGerais.filter(p => p.statusPainel !== 'cancelado');
+                const totalVendas = validos.reduce((a, p) => a + p.total, 0);
+                const fatPix = validos.filter(p => p.pagamento === 'Pix').reduce((a, p) => a + p.total, 0);
+                const fatCredito = validos.filter(p => p.pagamento === 'Cartão Crédito').reduce((a, p) => a + p.total, 0);
+                const fatDebito = validos.filter(p => p.pagamento === 'Cartão Débito').reduce((a, p) => a + p.total, 0);
+                const fatDinheiro = validos.filter(p => p.pagamento === 'Dinheiro').reduce((a, p) => a + p.total, 0);
+                const fatBonificacao = validos.filter(p => p.pagamento.startsWith('Bonificação')).reduce((a, p) => a + p.total, 0);
+                
+                let resumoProdutosVendidos = {};
+                validos.forEach(p => {
+                    p.itens.forEach(i => {
+                        resumoProdutosVendidos[i.nome] = (resumoProdutosVendidos[i.nome] || 0) + i.qtd;
+                    });
+                });
+
+                const dataObjeto = new Date();
+                const dataHoraFechamento = `${dataObjeto.toLocaleDateString('pt-BR')} ${dataObjeto.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+                const dataHoraAbertura = dataHoraAberturaCaixa || dataHoraFechamento;
+
+                const registroFechamento = {
+                    id: historicoCaixasDB.length + 1,
+                    campanha: nomeCampanha.trim(),
+                    dataAbertura: dataHoraAbertura,
+                    dataFechamento: dataHoraFechamento,
+                    fundoInicial: valorFundoCaixa,
+                    totalVendas: totalVendas,
+                    pix: fatPix,
+                    credito: fatCredito,
+                    debito: fatDebito,
+                    dinheiroVendas: fatDinheiro,
+                    bonificacao: fatBonificacao,
+                    totalGaveta: valorFundoCaixa + fatDinheiro,
+                    qtdPedidos: validos.length,
+                    produtosVendidos: resumoProdutosVendidos,
+                    pedidosDetalhados: JSON.parse(JSON.stringify(pedidosGerais))
+                };
+
+                historicoCaixasDB.unshift(registroFechamento);
+
+                caixaAberto = false;
+                valorFundoCaixa = 0.00;
+                
+                pedidosGerais = [];
+                contadorPedidos = 1;
+
+                dataHoraAberturaCaixa = null;
+                salvarNoBancoLocal();
+
+                document.getElementById('valor-fundo-caixa').value = '';
+                atualizarInterfaceCaixa();
+                atualizarTelas();
+                atualizarFiltrosGestao();
+                atualizarDashboard();
+
+                exibirAviso("Caixa fechado com sucesso! Redirecionando para o Histórico de Caixas...");
+                
+                mudarAba('tela-fechamento-caixa', document.getElementById('btn-sub-fechamento'));
+
+            } else if (senha !== null) {
+                exibirAviso("Senha incorreta!");
+            }
+        }
+
+        function excluirRegistroCaixa(idCaixa) {
+            const senha = prompt(`Digite a senha para EXCLUIR permanentemente o Fechamento de Caixa #${idCaixa}:`);
+            if (senha === "@Santaritatv2030") {
+                historicoCaixasDB = historicoCaixasDB.filter(c => c.id !== idCaixa);
+                salvarNoBancoLocal();
+                renderizarHistoricoCaixas();
+                exibirAviso(`Registro de Caixa #${idCaixa} excluído com sucesso!`);
+            } else if (senha !== null) {
+                exibirAviso("Senha incorreta! O registro não foi excluído.");
+            }
+        }
+
+        function renderizarHistoricoCaixas() {
+            const tbody = document.getElementById('tabela-historico-caixas');
+            tbody.innerHTML = '';
+
+            if (historicoCaixasDB.length === 0) {
+                return tbody.innerHTML = '<tr><td colspan="9" style="padding: 20px; text-align: center; color: gray;">Nenhum caixa foi fechado ainda.</td></tr>';
+            }
+
+            historicoCaixasDB.forEach(c => {
+                tbody.innerHTML += `
+                    <tr style="border-bottom: 1px solid #e5e7eb;">
+                        <td style="padding: 12px; font-weight: bold;">#${c.id}</td>
+                        <td style="font-weight: bold; color: var(--primary); text-transform: uppercase;">${c.campanha || 'Padrão'}</td>
+                        <td style="font-size: 0.85rem; color: #4b5563;">${c.dataAbertura}</td>
+                        <td style="font-size: 0.85rem; color: #4b5563;">${c.dataFechamento}</td>
+                        <td style="font-weight: bold;">R$ ${c.fundoInicial.toFixed(2)}</td>
+                        <td style="font-weight: bold; color: var(--success);">R$ ${c.totalVendas.toFixed(2)}</td>
+                        <td style="font-weight: bold; color: #0284c7;">R$ ${c.totalGaveta.toFixed(2)}</td>
+                        <td style="text-align: center; font-weight: bold;">${c.qtdPedidos}</td>
+                        <td>
+                            <button onclick="verDetalhesCaixa(${c.id})" class="btn btn-info" style="padding: 6px 10px; font-size: 0.8rem; margin-right:2px;" title="Ver Detalhes">👁️</button>
+                            <button onclick="imprimirRelatorioFechamento(${c.id})" class="btn" style="background:#047857; color:white; padding: 6px 10px; font-size: 0.8rem; margin-right:2px;" title="Imprimir Comprovante">🖨️</button>
+                            <button onclick="excluirRegistroCaixa(${c.id})" class="btn btn-danger" style="padding: 6px 10px; font-size: 0.8rem;" title="Excluir Caixa">🗑️</button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        function verDetalhesCaixa(idCaixa) {
+            const c = historicoCaixasDB.find(item => item.id === idCaixa);
+            if (!c) return;
+
+            document.getElementById('titulo-detalhe-caixa').innerText = `Caixa #${c.id} - ${c.campanha || 'Fechamento'}`;
+            const corpo = document.getElementById('corpo-detalhes-caixa');
+
+            let htmlProds = '';
+            if (c.produtosVendidos && Object.keys(c.produtosVendidos).length > 0) {
+                for (let prod in c.produtosVendidos) {
+                    htmlProds += `<div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px dashed #eee;"><span>${prod}</span><b>${c.produtosVendidos[prod]} un.</b></div>`;
+                }
+            } else {
+                htmlProds = '<p style="color:gray;">Nenhum produto registrado.</p>';
+            }
+
+            let htmlListaPedidosCaixa = '';
+            if (c.pedidosDetalhados && c.pedidosDetalhados.length > 0) {
+                htmlListaPedidosCaixa = c.pedidosDetalhados.map(p => {
+                    const tempo = calcularDiferencaMinutos(p.horaEntradaCozinha || p.hora, p.horaEntrega);
+                    return `
+                        <tr style="border-bottom: 1px solid #f3f4f6; ${p.statusPainel === 'cancelado' ? 'opacity:0.5;' : ''}">
+                            <td style="padding:6px; font-weight:bold;">#${p.id}</td>
+                            <td>${p.cliente}</td>
+                            <td>${p.hora}</td>
+                            <td>${p.horaEntradaCozinha || '-'}</td>
+                            <td>${p.horaEntrega || '-'}</td>
+                            <td style="font-weight:bold; color:var(--primary);">${tempo}</td>
+                            <td>${p.pagamento}</td>
+                            <td style="font-weight:bold; color:var(--success);">R$ ${p.total.toFixed(2)}</td>
+                            <td>
+                                <button class="btn btn-info" style="padding: 2px 6px; font-size:0.75rem;" onclick="abrirVerPedidoUnicoDoCaixa(${c.id}, ${p.id})">🔍 Ver Pedido</button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            } else {
+                htmlListaPedidosCaixa = '<tr><td colspan="9" style="text-align:center; padding:10px; color:gray;">Sem registros de pedidos antigos.</td></tr>';
+            }
+
+            corpo.innerHTML = `
+                <div style="background:#f8fafc; padding:12px; border-radius:8px; margin-bottom:15px; font-size:0.9rem;">
+                    <div><b>Campanha/Evento:</b> <span style="color:var(--primary); font-weight:bold; text-transform:uppercase;">${c.campanha || 'Geral'}</span></div>
+                    <div><b>Abertura:</b> ${c.dataAbertura}</div>
+                    <div><b>Fechamento:</b> ${c.dataFechamento}</div>
+                    <div style="margin-top:5px;"><b>Fundo Inicial:</b> R$ ${c.fundoInicial.toFixed(2)} | <b>Qtd Pedidos:</b> ${c.qtdPedidos}</div>
+                </div>
+
+                <div style="background:#dcfce7; border:2px solid #16a34a; padding:15px; border-radius:8px; text-align:center; margin-bottom:15px;">
+                    <div style="font-size:0.9rem; font-weight:bold; color:#14532d; text-transform:uppercase;">Faturamento Total de Vendas</div>
+                    <div style="font-size:2.2rem; font-weight:900; color:#15803d;">R$ ${c.totalVendas.toFixed(2)}</div>
+                </div>
+
+                <h4 style="margin:10px 0 5px 0; color:#1f2937;">💳 Formas de Pagamento Entradas</h4>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:15px; font-size:0.9rem;">
+                    <div style="background:#ecfeff; padding:10px; border-radius:6px;">📱 <b>Pix:</b> R$ ${c.pix.toFixed(2)}</div>
+                    <div style="background:#fef3c7; padding:10px; border-radius:6px;">💳 <b>Crédito:</b> R$ ${c.credito.toFixed(2)}</div>
+                    <div style="background:#f3e8ff; padding:10px; border-radius:6px;">💳 <b>Débito:</b> R$ ${c.debito.toFixed(2)}</div>
+                    <div style="background:#dcfce7; padding:10px; border-radius:6px;">💵 <b>Dinheiro (Vendas):</b> R$ ${c.dinheiroVendas.toFixed(2)}</div>
+                    <div style="background:#fef9c3; padding:10px; border-radius:6px; grid-column: span 2;">🎁 <b>Bonificação:</b> R$ ${(c.bonificacao || 0).toFixed(2)}</div>
+                </div>
+
+                <div style="display:flex; justify-content:space-between; background:#e0f2fe; padding:12px; border-radius:8px; font-weight:bold; font-size:1.05rem; color:#0369a1; margin-bottom:15px;">
+                    <span>TOTAL GAVETA (Dinheiro + Fundo):</span>
+                    <span>R$ ${c.totalGaveta.toFixed(2)}</span>
+                </div>
+
+                <h4 style="margin:10px 0 5px 0; color:#1f2937;">📦 Produtos Vendidos</h4>
+                <div style="background:white; border:1px solid #e5e7eb; padding:10px; border-radius:8px; max-height:150px; overflow-y:auto; margin-bottom:15px;">
+                    ${htmlProds}
+                </div>
+
+                <h4 style="margin:10px 0 5px 0; color:#1f2937;">⏱️ Raio-X de Pedidos & Tempo de Preparo</h4>
+                <div style="background:white; border:1px solid #e5e7eb; border-radius:8px; max-height:200px; overflow-y:auto;">
+                    <table style="width:100%; border-collapse:collapse; font-size:0.8rem; text-align:left;">
+                        <thead>
+                            <tr style="background:#f8fafc; border-bottom:1px solid #ddd;">
+                                <th style="padding:6px;"># ID</th>
+                                <th>Cliente</th>
+                                <th>Entrada</th>
+                                <th>Cozinha</th>
+                                <th>Entrega</th>
+                                <th>Tempo</th>
+                                <th>Pagto</th>
+                                <th>Total</th>
+                                <th>Ação</th>
+                            </tr>
+                        </thead>
+                        <tbody>${htmlListaPedidosCaixa}</tbody>
+                    </table>
+                </div>
+            `;
+
+            document.getElementById('modal-detalhes-caixa').style.display = 'flex';
+        }
+
+        function abrirVerPedidoUnicoDoCaixa(idCaixa, idPedido) {
+            const c = historicoCaixasDB.find(item => item.id === idCaixa);
+            if (!c || !c.pedidosDetalhados) return;
+
+            const pedido = c.pedidosDetalhados.find(p => p.id === idPedido);
+            if (!pedido) return;
+
+            document.getElementById('titulo-ver-pedido-unico').innerText = `Pedido #${pedido.id} - ${pedido.cliente}`;
+            
+            const itensHtml = pedido.itens.map(i => {
+                let comboDet = i.isCombo ? `<br><small style="color:gray;">Contém: ${i.itensComboEscolhidos.map(sub=>sub.nome).join(', ')}</small>` : '';
+                let obsDet = i.obs ? `<br><small style="color:red; font-weight:bold;">Obs: ${i.obs}</small>` : '';
+                return `
+                    <div style="display:flex; justify-content:space-between; border-bottom:1px dashed #eee; padding:6px 0;">
+                        <div><b>1x ${i.nome}</b>${comboDet}${obsDet}</div>
+                        <b>R$ ${i.preco.toFixed(2)}</b>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('corpo-ver-pedido-unico').innerHTML = `
+                <div style="background:#f8fafc; padding:10px; border-radius:6px; margin-bottom:12px; font-size:0.85rem;">
+                    <div><b>Data/Hora Entrada:</b> ${pedido.data} ${pedido.hora}</div>
+                    <div><b>Entrada Cozinha:</b> ${pedido.horaEntradaCozinha || '-'}</div>
+                    <div><b>Horário Entrega:</b> ${pedido.horaEntrega || '-'}</div>
+                    <div><b>Tempo de Preparo:</b> ${calcularDiferencaMinutos(pedido.horaEntradaCozinha || pedido.hora, pedido.horaEntrega)}</div>
+                    <div><b>Pagamento:</b> ${pedido.pagamento}</div>
+                    <div><b>Tipo Retirada:</b> ${pedido.tipoAtendimento}</div>
+                </div>
+                <h4 style="margin:5px 0; color:#374151;">Itens do Pedido:</h4>
+                ${itensHtml}
+                <div style="display:flex; justify-content:space-between; background:#e5e7eb; padding:10px; border-radius:6px; font-weight:bold; margin-top:12px; font-size:1.1rem;">
+                    <span>Total:</span>
+                    <span>R$ ${pedido.total.toFixed(2)}</span>
+                </div>
+            `;
+
+            document.getElementById('btn-reimprimir-modal-unico').onclick = function() {
+                gerarHTMLImpressao(pedido);
+                window.print();
+            };
+
+            document.getElementById('modal-ver-pedido-unico').style.display = 'flex';
+        }
+
+        function fecharModalVerPedidoUnico() {
+            document.getElementById('modal-ver-pedido-unico').style.display = 'none';
+        }
+
+        function fecharModalDetalhesCaixa() {
+            document.getElementById('modal-detalhes-caixa').style.display = 'none';
+        }
+
+        function imprimirRelatorioFechamento(idFechamento) {
+            const c = historicoCaixasDB.find(item => item.id === idFechamento);
+            if (!c) return;
+
+            let htmlProdsPrint = '';
+            if (c.produtosVendidos && Object.keys(c.produtosVendidos).length > 0) {
+                for (let prod in c.produtosVendidos) {
+                    htmlProdsPrint += `<div class="print-row"><span>${prod}</span><span class="print-bold">${c.produtosVendidos[prod]} un</span></div>`;
+                }
+            }
+
+            const areaPrint = document.getElementById('area-impressao');
+            areaPrint.innerHTML = `
+                <div class="print-center print-bold" style="font-size: 18px;">SANTUÁRIO SANTA RITA</div>
+                <div class="print-center print-bold" style="font-size: 14px; margin-top: 5px;">FECHAMENTO DE CAIXA #${c.id}</div>
+                <div class="print-center print-bold" style="font-size: 12px; margin-top: 2px; text-transform:uppercase;">EVENTO: ${c.campanha || 'GERAL'}</div>
+                <div class="print-divider"></div>
+                <div style="font-size: 11px;">
+                    <div><b>Abertura:</b> ${c.dataAbertura}</div>
+                    <div><b>Fechamento:</b> ${c.dataFechamento}</div>
+                </div>
+                <div class="print-divider"></div>
+                
+                <div class="print-center print-bold" style="font-size: 13px; margin-bottom:2px;">FATURAMENTO TOTAL</div>
+                <div class="print-center print-bold" style="font-size: 28px; margin-bottom:5px;">R$ ${c.totalVendas.toFixed(2)}</div>
+                
+                <div class="print-divider"></div>
+                <div class="print-row"><span>Fundo Inicial:</span><span class="print-bold">R$ ${c.fundoInicial.toFixed(2)}</span></div>
+                <div class="print-row"><span>Qtd de Pedidos:</span><span class="print-bold">${c.qtdPedidos}</span></div>
+                <div class="print-divider"></div>
+                <div class="print-center print-bold" style="margin-bottom: 5px;">DETALHAMENTO FORMAS PAGTO</div>
+                <div class="print-row"><span>📱 Pix:</span><span>R$ ${c.pix.toFixed(2)}</span></div>
+                <div class="print-row"><span>💳 Cartão Crédito:</span><span>R$ ${c.credito.toFixed(2)}</span></div>
+                <div class="print-row"><span>💳 Cartão Débito:</span><span>R$ ${c.debito.toFixed(2)}</span></div>
+                <div class="print-row"><span>💵 Dinheiro Vendas:</span><span>R$ ${c.dinheiroVendas.toFixed(2)}</span></div>
+                <div class="print-row"><span>🎁 Bonificação:</span><span>R$ ${(c.bonificacao || 0).toFixed(2)}</span></div>
+                <div class="print-divider"></div>
+                <div class="print-row print-bold" style="font-size: 15px;"><span>TOTAL GAVETA:</span><span>R$ ${c.totalGaveta.toFixed(2)}</span></div>
+                ${htmlProdsPrint ? `<div class="print-divider"></div><div class="print-center print-bold" style="margin-bottom:5px;">PRODUTOS VENDIDOS</div>${htmlProdsPrint}` : ''}
+                <div class="print-divider"></div>
+                <div class="print-center" style="margin-top: 10px; font-size: 11px; font-style: italic;">
+                    Relatório emitido para conferência interna.
+                </div>
+            `;
+
+            window.print();
+        }
+
+        function atualizarInterfaceCaixa() {
+            const statusTxt = document.getElementById('status-caixa-texto');
+            const inputCaixa = document.getElementById('valor-fundo-caixa');
+            if (caixaAberto) {
+                statusTxt.innerText = `Status do Caixa: Aberto (Fundo Inicial: R$ ${valorFundoCaixa.toFixed(2)})`;
+                statusTxt.style.color = "var(--success)";
+                inputCaixa.value = valorFundoCaixa;
+                inputCaixa.disabled = true;
+            } else {
+                statusTxt.innerText = "Status do Caixa: Fechado";
+                statusTxt.style.color = "var(--danger)";
+                inputCaixa.value = "";
+                inputCaixa.disabled = false;
+            }
+        }
+
+        function atualizarDashboard() {
+            const validos = pedidosGerais.filter(p => p.statusPainel !== 'cancelado');
+            const totalVendas = validos.reduce((a, p) => a + p.total, 0);
+            
+            const fatPix = validos.filter(p => p.pagamento === 'Pix').reduce((a, p) => a + p.total, 0);
+            const fatCredito = validos.filter(p => p.pagamento === 'Cartão Crédito').reduce((a, p) => a + p.total, 0);
+            const fatDebito = validos.filter(p => p.pagamento === 'Cartão Débito').reduce((a, p) => a + p.total, 0);
+            const fatDinheiro = validos.filter(p => p.pagamento === 'Dinheiro').reduce((a, p) => a + p.total, 0);
+            const fatBonificacao = validos.filter(p => p.pagamento.startsWith('Bonificação')).reduce((a, p) => a + p.total, 0);
+            
+            const totalGaveta = caixaAberto ? (valorFundoCaixa + fatDinheiro) : 0.00;
+
+            document.getElementById('rel-total').innerText = totalVendas.toFixed(2);
+            document.getElementById('rel-total-dinheiro').innerText = totalGaveta.toFixed(2);
+            document.getElementById('rel-qtd-pedidos').innerText = validos.length;
+            document.getElementById('rel-ticket').innerText = (validos.length ? (totalVendas / validos.length) : 0).toFixed(2);
+
+            document.getElementById('rel-pix').innerText = fatPix.toFixed(2);
+            document.getElementById('rel-credito').innerText = fatCredito.toFixed(2);
+            document.getElementById('rel-debito').innerText = fatDebito.toFixed(2);
+            document.getElementById('rel-dinheiro-vendas').innerText = fatDinheiro.toFixed(2);
+            document.getElementById('rel-bonificacao').innerText = fatBonificacao.toFixed(2);
+
+            gerarGraficos(validos);
+        }
+
+        function gerarGraficos(pedidos) {
+            let contagemProdutos = {}; let contagemHoras = {}; let contagemCategorias = {}; let contagemRetirada = { 'Agora': 0, 'Depois': 0 };
+
+            pedidos.forEach(p => {
+                const horaCheia = p.hora.split(':')[0] + 'h'; contagemHoras[horaCheia] = (contagemHoras[horaCheia] || 0) + 1;
+                p.itens.forEach(i => {
+                    contagemProdutos[i.nome] = (contagemProdutos[i.nome] || 0) + i.qtd;
+                    contagemCategorias[i.categoria] = (contagemCategorias[i.categoria] || 0) + i.qtd;
+                    if (i.fase === 'agora' || i.fase === 'entregue') contagemRetirada['Agora'] += i.qtd; else contagemRetirada['Depois'] += i.qtd;
+                });
+            });
+
+            const topProdutos = Object.entries(contagemProdutos).sort((a, b) => b[1] - a[1]).slice(0, 5);
+            const horasOrdenadas = Object.keys(contagemHoras).sort(); const dadosHoras = horasOrdenadas.map(h => contagemHoras[h]);
+            if (chartVendas) chartVendas.destroy(); if (chartHorarios) chartHorarios.destroy(); if (chartCategorias) chartCategorias.destroy(); if (chartRetirada) chartRetirada.destroy();
+            const coresBase = ['#2563eb', '#16a34a', '#f59e0b', '#8b5cf6', '#ef4444', '#0ea5e9', '#14b8a6'];
+
+            chartVendas = new Chart(document.getElementById('chartMaisVendidos').getContext('2d'), { type: 'bar', data: { labels: topProdutos.map(item => item[0]), datasets: [{ label: 'Unidades Vendidas', data: topProdutos.map(item => item[1]), backgroundColor: '#2563eb', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false } });
+            chartHorarios = new Chart(document.getElementById('chartHorarios').getContext('2d'), { type: 'line', data: { labels: horasOrdenadas.length > 0 ? horasOrdenadas : ['Sem dados'], datasets: [{ label: 'Qtd de Pedidos', data: dadosHoras.length > 0 ? dadosHoras : [0], borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.2)', fill: true, tension: 0.3 }] }, options: { responsive: true, maintainAspectRatio: false } });
+            chartCategorias = new Chart(document.getElementById('chartCategorias').getContext('2d'), { type: 'doughnut', data: { labels: Object.keys(contagemCategorias), datasets: [{ data: Object.values(contagemCategorias), backgroundColor: coresBase }] }, options: { responsive: true, maintainAspectRatio: false } });
+            chartRetirada = new Chart(document.getElementById('chartRetirada').getContext('2d'), { type: 'pie', data: { labels: ['🟢 Retirar Agora', '📦 Retirar Depois'], datasets: [{ data: [contagemRetirada['Agora'], contagemRetirada['Depois']], backgroundColor: ['#16a34a', '#8b5cf6'] }] }, options: { responsive: true, maintainAspectRatio: false } });
+        }
+
+        function editarPedido(id) {
+            const p = pedidosGerais.find(x => x.id === id); 
+            if(!p) return;
+
+            carrinho = JSON.parse(JSON.stringify(p.itens));
+            document.getElementById('nome-cliente').value = p.cliente; 
+            
+            if (p.pagamento.startsWith('Bonificação')) {
+                document.getElementById('forma-pagto').value = 'Bonificação';
+                const partes = p.pagamento.match(/\((.*?)\)/);
+                document.getElementById('obs-bonificacao').value = partes ? partes[1] : '';
+            } else {
+                document.getElementById('forma-pagto').value = p.pagamento;
+            }
+
+            if(p.tipoAtendimento) document.getElementById('tipo-atendimento').value = p.tipoAtendimento;
+            
+            toggleCampoDinheiro(); 
+            pedidoEmEdicaoId = id;
+
+            document.getElementById('lbl-id-pedido-edicao').innerText = `#${id}`;
+            document.getElementById('banner-alerta-edicao').style.display = 'block';
+            document.getElementById('box-carrinho-container').classList.add('modo-edicao');
+            document.getElementById('titulo-painel-carrinho').innerText = `Alterando Pedido #${id}`;
+
+            document.getElementById('btn-finalizar-pedido').innerHTML = `Salvar Alteração e Reimprimir 🖨️`;
+            document.getElementById('btn-finalizar-pedido').classList.replace('btn-primary', 'btn-warning');
+            
+            mudarAba('tela-pedido', document.querySelectorAll('nav button')[0]); 
+            atualizarCarrinhoUI();
+        }
+
+        window.onload = async () => {
+            await carregarEstadoSupabase();
+            atualizarInterfaceCaixa();
+            renderizarCategoriasUI();
+            renderizarMenu();
+            atualizarTelas();
+            atualizarFiltrosGestao();
+            renderizarHistoricoCaixas();
+            iniciarRealtimeSupabase();
+        };
+    </script>
+</body>
+</html>
