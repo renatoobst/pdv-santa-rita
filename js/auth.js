@@ -321,7 +321,10 @@ export async function renderizarTelaGestaoUsuarios() {
 
     tbody.querySelectorAll('button[data-apagar-usuario-id]').forEach(btn => {
         btn.onclick = async () => {
-            if (!confirm('Remover este usuário? Ele não vai mais conseguir entrar no sistema.')) return;
+            const confirmou = window.pedirConfirmacao
+                ? await window.pedirConfirmacao('Remover este usuário? Ele não vai mais conseguir entrar no sistema.', { titulo: '🗑️ Remover Usuário' })
+                : confirm('Remover este usuário? Ele não vai mais conseguir entrar no sistema.');
+            if (!confirmou) return;
             try {
                 const { error } = await supabaseClient.from('pdv_perfis').delete().eq('id', btn.dataset.apagarUsuarioId);
                 if (error) throw error;

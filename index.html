@@ -8,6 +8,10 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- BIBLIOTECA PARA GERAR PDF DIRETO -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- html2pdf empacota o html2canvas por dentro, mas não deixa ele acessível
+         como window.html2canvas — os botões de "Baixar JPG" (gerarJPG em
+         app.js) chamam html2canvas direto, então precisa dessa cópia solta. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
 
@@ -212,6 +216,32 @@
         </div>
     </div>
 
+    <!-- MODAIS GENÉRICOS: substituem prompt()/confirm() nativos do navegador
+         (que não dá pra estilizar nem mascarar senha) — usados via as funções
+         pedirTexto()/pedirConfirmacao() em app.js. -->
+    <div id="modal-prompt-generico" class="modal-geral">
+        <div class="modal-content" style="width:420px; max-width:92%;">
+            <h3 id="titulo-prompt-generico" style="margin-top:0; color:var(--primary);">Confirme</h3>
+            <p id="texto-prompt-generico" style="color:#4b5563; font-size:0.9rem; white-space:pre-line;"></p>
+            <input type="text" id="input-prompt-generico" style="margin-bottom:15px;">
+            <div style="display:flex; gap:10px;">
+                <button class="btn btn-success" style="flex:1;" id="btn-ok-prompt-generico">OK</button>
+                <button class="btn" style="flex:1;" id="btn-cancelar-prompt-generico">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-confirm-generico" class="modal-geral">
+        <div class="modal-content" style="width:420px; max-width:92%; text-align:center;">
+            <h3 id="titulo-confirm-generico" style="margin-top:0; color:var(--danger);">Confirmar ação</h3>
+            <p id="texto-confirm-generico" style="color:#374151; font-size:0.95rem; white-space:pre-line;"></p>
+            <div style="display:flex; gap:10px; margin-top:15px;">
+                <button class="btn btn-danger" style="flex:1;" id="btn-sim-confirm-generico">Sim</button>
+                <button class="btn" style="flex:1;" id="btn-nao-confirm-generico">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL: ABRIR TV SENHA EM OUTRO MONITOR -->
     <div id="modal-tv-senha" class="modal-geral">
         <div class="modal-content" style="width: 420px; max-width: 92%;">
@@ -259,7 +289,7 @@
         
         <!-- TELA 1: PEDIDO -->
         <div id="tela-pedido" class="tab-content active">
-            <div class="layout-pedido" id="conteudo-zoom-pedido">
+            <div class="layout-pedido">
                 <div>
                     <!-- BARRA DE BUSCA DE PRODUTOS -->
                     <div style="margin-bottom: 12px; display:flex; gap:8px;">
@@ -272,8 +302,13 @@
                         <button class="btn" style="padding: 10px 14px; background:#475569; color:white;" onclick="abrirModalConfigPedido()" title="Parâmetros padrão da tela de Pedido">⚙️</button>
                     </div>
 
-                    <div class="menu-categorias" id="menu-categorias-container"></div>
-                    <div class="menu-grid" id="menu-produtos"></div>
+                    <!-- Zoom afeta só a lista de produtos, não o carrinho ao
+                         lado (que fica sempre com altura cheia da tela, valor
+                         de pagamento sempre encostado no rodapé). -->
+                    <div id="conteudo-zoom-pedido">
+                        <div class="menu-categorias" id="menu-categorias-container"></div>
+                        <div class="menu-grid" id="menu-produtos"></div>
+                    </div>
                 </div>
 
                 <div class="carrinho" id="box-carrinho-container">
@@ -291,6 +326,7 @@
                         <div style="display:flex; gap:6px; flex-wrap: wrap;">
                             <button class="btn btn-info" style="font-size: 0.8rem; padding: 6px 12px;" onclick="abrirModalTodosPedidos()">📋 Ver Todos os Pedidos</button>
                             <button class="btn" style="font-size: 0.8rem; padding: 6px 12px; background:#7c3aed; color:white;" onclick="imprimirMeuCaixa()" title="Imprimir relatório do seu caixa">🖨️ Relatório</button>
+                            <button class="btn" style="font-size: 0.8rem; padding: 6px 10px; background:#0891b2; color:white;" onclick="verMeuRelatorioCaixa()" title="Ver relatório do seu caixa">👁️</button>
                         </div>
                     </div>
 
@@ -426,10 +462,7 @@
 
         <!-- TELA 2: PEDIDOS EM PAUSA -->
         <div id="tela-agendados" class="tab-content">
-            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 20px;">
-                <h2 style="border: none; padding: 0; margin: 0;">Pedidos em Pausa</h2>
-                <input type="text" id="busca-agendados" placeholder="🔍 Pesquisar nº ou nome..." oninput="atualizarTelas()" style="width: 300px; margin: 0;" spellcheck="true" lang="pt-BR">
-            </div>
+            <h2 style="border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 20px;">Pedidos em Pausa</h2>
             <div class="grid-pedidos" id="fila-agendados"></div>
         </div>
 
@@ -438,7 +471,6 @@
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
                 <h2 style="margin:0;">Fila da Cozinha (Apenas Leitura)</h2>
                 <div style="display:flex; gap:8px; align-items:center;">
-                    <button class="btn btn-success btn-toggle-voz" onclick="alternarVozAnuncio()">🗣️ Voz Ligada</button>
                     <div class="controle-zoom-tela">
                         <button onclick="ajustarZoomTela('conteudo-zoom-preparo', -10)">➖</button>
                         <span id="txt-zoom-conteudo-zoom-preparo">100%</span>

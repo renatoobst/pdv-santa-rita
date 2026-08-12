@@ -204,6 +204,50 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             }
         }
 
+        // --- Substitutos de prompt()/confirm() nativos (janela própria em
+        // HTML, dá pra mascarar senha e não fica com a cara do navegador) ---
+
+        function pedirTexto(mensagem, { titulo = 'Confirme', senha = false, valorInicial = '' } = {}) {
+            return new Promise(resolve => {
+                const modal = document.getElementById('modal-prompt-generico');
+                document.getElementById('titulo-prompt-generico').innerText = titulo;
+                document.getElementById('texto-prompt-generico').innerText = mensagem;
+                const input = document.getElementById('input-prompt-generico');
+                input.type = senha ? 'password' : 'text';
+                input.value = valorInicial;
+                modal.style.display = 'flex';
+                setTimeout(() => input.focus(), 50);
+
+                const btnOk = document.getElementById('btn-ok-prompt-generico');
+                const btnCancelar = document.getElementById('btn-cancelar-prompt-generico');
+                const limpar = () => {
+                    modal.style.display = 'none';
+                    btnOk.onclick = null; btnCancelar.onclick = null; input.onkeydown = null;
+                };
+                btnOk.onclick = () => { const v = input.value; limpar(); resolve(v); };
+                btnCancelar.onclick = () => { limpar(); resolve(null); };
+                input.onkeydown = (e) => {
+                    if (e.key === 'Enter') btnOk.onclick();
+                    if (e.key === 'Escape') btnCancelar.onclick();
+                };
+            });
+        }
+
+        function pedirConfirmacao(mensagem, { titulo = 'Confirmar ação' } = {}) {
+            return new Promise(resolve => {
+                const modal = document.getElementById('modal-confirm-generico');
+                document.getElementById('titulo-confirm-generico').innerText = titulo;
+                document.getElementById('texto-confirm-generico').innerText = mensagem;
+                modal.style.display = 'flex';
+
+                const btnSim = document.getElementById('btn-sim-confirm-generico');
+                const btnNao = document.getElementById('btn-nao-confirm-generico');
+                const limpar = () => { modal.style.display = 'none'; btnSim.onclick = null; btnNao.onclick = null; };
+                btnSim.onclick = () => { limpar(); resolve(true); };
+                btnNao.onclick = () => { limpar(); resolve(false); };
+            });
+        }
+
         // --- Multi-caixa: cada usuário abre/fecha o próprio caixa ---
 
         function caixaDoUsuarioAtual() {
@@ -515,7 +559,6 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if(idAba === 'tela-gestao') atualizarFiltrosGestao();
             if(idAba === 'tela-relatorio') atualizarDashboard();
             if(idAba === 'tela-fechamento-caixa') renderizarHistoricoCaixas();
-            if(idAba === 'tela-agendados') document.getElementById('busca-agendados').focus();
             if(idAba === 'tela-produtos') { renderizarCategoriasUI(); renderizarTabelaProdutos(); if (produtoEmEdicaoId === null) renderizarChecklistBarracasProduto(); }
             if(idAba === 'tela-pedido') {
                 renderizarCategoriasUI();
@@ -858,8 +901,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             salvarCatalogo();
             renderizarCategoriasUI();
         }
-        function editarCategoria(nomeAntigo) {
-            let novoNome = prompt(`Editar categoria: "${nomeAntigo}"\nDigite o novo nome:`, nomeAntigo);
+        async function editarCategoria(nomeAntigo) {
+            let novoNome = await pedirTexto(`Editar categoria: "${nomeAntigo}"\nDigite o novo nome:`, { titulo: '✏️ Editar Categoria', valorInicial: nomeAntigo });
             if (novoNome && novoNome.trim() !== '') {
                 novoNome = novoNome.charAt(0).toUpperCase() + novoNome.slice(1);
                 if (categoriasDB.includes(novoNome) && novoNome !== nomeAntigo) return exibirAviso("Esta categoria já existe.");
@@ -870,9 +913,9 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 renderizarCategoriasUI(); renderizarTabelaProdutos(); renderizarMenu(categoriaFiltroAtual);
             }
         }
-        function excluirCategoria(nome) {
+        async function excluirCategoria(nome) {
             if (produtosDB.some(p => p.categoria === nome)) return exibirAviso(`Existem produtos vinculados a "${nome}". Remova os produtos antes.`);
-            if (confirm(`Excluir a categoria "${nome}"? Isso afeta TODAS as barracas, não só a sua.`)) {
+            if (await pedirConfirmacao(`Excluir a categoria "${nome}"? Isso afeta TODAS as barracas, não só a sua.`, { titulo: '🗑️ Excluir Categoria' })) {
                 categoriasDB = categoriasDB.filter(c => c !== nome);
                 if (categoriaFiltroAtual === nome) categoriaFiltroAtual = 'Todos';
                 salvarCatalogo();
@@ -1175,13 +1218,13 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             return true;
         }
 
-        function adicionarEstoqueManual(idProduto) {
+        async function adicionarEstoqueManual(idProduto) {
             const p = produtosDB.find(prod => prod.id === idProduto);
             if(p.isCombo) return;
             const atual = estoquePorProduto[idProduto];
             const atualVal = (atual === undefined) ? null : atual;
             if(atualVal === null) return exibirAviso("Este produto possui Estoque Livre nesta barraca.");
-            const add = prompt(`Adicionar estoque ao ${p.nome} nesta barraca (Atual: ${atualVal}):`);
+            const add = await pedirTexto(`Adicionar estoque ao ${p.nome} nesta barraca (Atual: ${atualVal}):`, { titulo: '📦 Adicionar Estoque' });
             if(add && !isNaN(add)) {
                 const novoEstoque = atualVal + parseInt(add);
                 estoquePorProduto[idProduto] = novoEstoque;
@@ -1191,8 +1234,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             }
         }
 
-        function apagarProduto(idProduto) {
-            if (confirm(`Excluir este produto/combo do catálogo? Isso remove ele de TODAS as barracas que o vendem, não só da sua. Para tirar só da sua barraca, edite o produto e desmarque sua barraca na lista.`)) {
+        async function apagarProduto(idProduto) {
+            if (await pedirConfirmacao(`Excluir este produto/combo do catálogo? Isso remove ele de TODAS as barracas que o vendem, não só da sua. Para tirar só da sua barraca, edite o produto e desmarque sua barraca na lista.`, { titulo: '🗑️ Excluir Produto' })) {
                 produtosDB = produtosDB.filter(p => p.id !== idProduto);
                 if (produtoEmEdicaoId === idProduto) cancelarEdicaoProduto();
                 delete estoquePorProduto[idProduto];
@@ -1781,8 +1824,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         // venda concluída (finalizarPedido) — não pode pedir confirmação ali,
         // senão travaria o fluxo normal de checkout. Só o botão "Limpar
         // Pedido" (clique manual) passa por este wrapper com o confirm().
-        function limparCarrinhoComConfirmacao() {
-            if (carrinho.length > 0 && !confirm('Deseja limpar o pedido?')) return;
+        async function limparCarrinhoComConfirmacao() {
+            if (carrinho.length > 0 && !(await pedirConfirmacao('Deseja limpar o pedido?', { titulo: '❌ Limpar Pedido' }))) return;
             limparCarrinho();
         }
 
@@ -2334,7 +2377,18 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     const detalhes = await window.getScreenDetails();
                     const tela = detalhes.screens[Number(idx)];
                     if (tela) {
-                        window.open(url, '_blank', `left=${tela.left},top=${tela.top},width=${tela.width},height=${tela.height}`);
+                        const janela = window.open(url, '_blank', `left=${tela.left},top=${tela.top},width=${tela.width},height=${tela.height}`);
+                        // Alguns navegadores/combos de driver de tela sem fio
+                        // ignoram a posição passada em window.open — força de
+                        // novo depois que a janela já existe, como reforço.
+                        if (janela) {
+                            setTimeout(() => {
+                                try {
+                                    janela.moveTo(tela.left, tela.top);
+                                    janela.resizeTo(tela.width, tela.height);
+                                } catch (e) { /* alguns navegadores bloqueiam mover janela de outra origem/foco — sem problema, é só reforço */ }
+                            }, 300);
+                        }
                         fecharModalTvSenha();
                         return;
                     }
@@ -2376,8 +2430,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             atualizarTelas(); 
         }
 
-        function cancelarPedido(id) {
-            if(confirm(`Tem certeza que deseja CANCELAR o Pedido #${id}?`)) {
+        async function cancelarPedido(id) {
+            if(await pedirConfirmacao(`Tem certeza que deseja CANCELAR o Pedido #${id}?`, { titulo: '🗑️ Cancelar Pedido' })) {
                 const p = pedidosGerais.find(x => x.id === id);
                 if (p && p.statusPainel !== 'cancelado') {
                     let catalogoAlteradoPorEstoque = false;
@@ -2790,12 +2844,12 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (!usuarioPodeAbrirFecharCaixa()) return exibirAviso("Você não tem permissão para abrir caixa.");
             if (caixaDoUsuarioAtual()) return exibirAviso("Você já tem um caixa aberto.");
 
-            const valStr = prompt("Valor inicial em dinheiro (fundo de caixa):");
+            const valStr = await pedirTexto("Valor inicial em dinheiro (fundo de caixa):", { titulo: '🟢 Abrir Caixa' });
             if (valStr === null) return;
             const val = parseFloat(valStr.replace(',', '.'));
             if (isNaN(val) || val < 0) return exibirAviso("Valor de fundo de caixa inválido.");
 
-            const senha = prompt(`Confirme sua senha (${usuarioAtual.nome}) para abrir o caixa:`);
+            const senha = await pedirTexto(`Confirme sua senha (${usuarioAtual.nome}) para abrir o caixa:`, { titulo: '🔒 Confirmar senha', senha: true });
             if (senha === null) return;
             const senhaOk = await confirmarSenhaUsuarioAtual(senha);
             if (!senhaOk) return exibirAviso("Senha incorreta.");
@@ -2829,12 +2883,12 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 return exibirAviso("Você não tem permissão para fechar caixa.");
             }
 
-            const senha = prompt(`Confirme sua senha (${usuarioAtual.nome}) para fechar o caixa de ${caixa.usuarioNome}:`);
+            const senha = await pedirTexto(`Confirme sua senha (${usuarioAtual.nome}) para fechar o caixa de ${caixa.usuarioNome}:`, { titulo: '🔒 Confirmar senha', senha: true });
             if (senha === null) return;
             const senhaOk = await confirmarSenhaUsuarioAtual(senha);
             if (!senhaOk) return exibirAviso("Senha incorreta.");
 
-            const nomeCampanha = prompt("Digite o NOME DA CAMPANHA / EVENTO para fechar o caixa (Obrigatório):");
+            const nomeCampanha = await pedirTexto("Nome da campanha/evento para fechar o caixa (obrigatório):", { titulo: '🔒 Fechar Caixa' });
             if (!nomeCampanha || nomeCampanha.trim() === "") {
                 return exibirAviso("O Nome da Campanha é obrigatório para fechar o caixa!");
             }
@@ -2914,11 +2968,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             mudarAba('tela-fechamento-caixa', document.getElementById('btn-sub-fechamento'));
         }
 
-        function excluirRegistroCaixa(idCaixa) {
+        async function excluirRegistroCaixa(idCaixa) {
             if (!usuarioAtual || !usuarioAtual.isMaster) {
                 return exibirAviso("Só o usuário Master pode excluir um fechamento de caixa.");
             }
-            if (confirm(`Excluir permanentemente o Fechamento de Caixa #${idCaixa}?`)) {
+            if (await pedirConfirmacao(`Excluir permanentemente o Fechamento de Caixa #${idCaixa}?`, { titulo: '🗑️ Excluir Fechamento' })) {
                 historicoCaixasDB = historicoCaixasDB.filter(c => c.id !== idCaixa);
                 salvarNoBancoLocal();
                 renderizarHistoricoCaixas();
@@ -2960,7 +3014,37 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         function verDetalhesCaixa(idCaixa) {
             const c = historicoCaixasDB.find(item => item.id === idCaixa);
             if (!c) return;
+            renderizarDetalhesCaixaNoModal(c);
+        }
 
+        // Mesmo modal de "Ver Detalhes" do Histórico, mas alimentado com dados
+        // AO VIVO do caixa do usuário logado (ainda aberto, não fechado) — é o
+        // que o botão 👁️ na tela de Pedido abre.
+        function verMeuRelatorioCaixa() {
+            const meuCaixa = caixaDoUsuarioAtual();
+            if (!meuCaixa) return exibirAviso("Você não tem caixa aberto.");
+            const dados = obterDadosRelatorioCaixa(meuCaixa.id);
+            const pedidosDoCaixa = pedidosGerais.filter(p => p.caixaId === meuCaixa.id);
+            renderizarDetalhesCaixaNoModal({
+                id: meuCaixa.id,
+                campanha: 'Caixa em aberto',
+                dataAbertura: meuCaixa.dataHoraAbertura,
+                dataFechamento: 'Em aberto',
+                fundoInicial: meuCaixa.valorFundoCaixa,
+                totalVendas: dados.totalVendas,
+                pix: dados.fatPix,
+                pixDireto: dados.fatPixDireto,
+                credito: dados.fatCredito,
+                debito: dados.fatDebito,
+                dinheiroVendas: dados.fatDinheiro,
+                totalGaveta: dados.totalGaveta,
+                qtdPedidos: dados.validos.length,
+                produtosVendidos: dados.resumoProdutosVendidos,
+                pedidosDetalhados: pedidosDoCaixa
+            });
+        }
+
+        function renderizarDetalhesCaixaNoModal(c) {
             document.getElementById('titulo-detalhe-caixa').innerText = `Caixa #${c.id} - ${c.campanha || 'Fechamento'}`;
             const corpo = document.getElementById('corpo-detalhes-caixa');
 
@@ -3055,9 +3139,9 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
         function abrirVerPedidoUnicoDoCaixa(idCaixa, idPedido) {
             const c = historicoCaixasDB.find(item => item.id === idCaixa);
-            if (!c || !c.pedidosDetalhados) return;
-
-            const pedido = c.pedidosDetalhados.find(p => p.id === idPedido);
+            // Caixa ainda aberto (visto pelo 👁️ na tela de Pedido) não está no
+            // histórico ainda — procura direto nos pedidos ao vivo desse caixa.
+            const pedido = c ? c.pedidosDetalhados.find(p => p.id === idPedido) : pedidosGerais.find(p => p.id === idPedido && p.caixaId === idCaixa);
             if (!pedido) return;
 
             document.getElementById('titulo-ver-pedido-unico').innerText = `Pedido #${pedido.id} - ${pedido.cliente}`;
@@ -3418,13 +3502,22 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             iniciarRealtimeRegistroBarracas();
             iniciarRealtimeCatalogo();
 
-            // Suporte a abrir direto numa tela específica em tela cheia — usado
-            // pelo "📺 Abrir TV Senha em outro monitor" (ver abrirModalTvSenha),
-            // que abre uma nova janela desta mesma URL com ?abrirTela=tela-tv.
+            // Suporte a abrir direto numa tela específica — usado pelo "📺 Abrir
+            // TV Senha em outro monitor" (ver abrirModalTvSenha), que abre uma
+            // nova janela desta mesma URL com ?abrirTela=tela-tv. Não chama
+            // requestFullscreen() sozinho aqui: navegador bloqueia tela cheia
+            // disparada fora de um clique direto do usuário nesta janela — por
+            // isso mostra um botão flutuante pra confirmar com 1 clique.
             const telaAutoAbrir = new URLSearchParams(location.search).get('abrirTela');
             if (telaAutoAbrir && usuarioTemAcesso(telaAutoAbrir)) {
                 mudarAba(telaAutoAbrir, null);
-                document.documentElement.requestFullscreen().catch(() => {});
+                const btnFull = document.createElement('button');
+                btnFull.innerText = '🖥️ Clique para Tela Cheia';
+                btnFull.style.cssText = 'position:fixed; top:10px; right:10px; z-index:99999; padding:12px 18px; font-size:1rem; font-weight:bold; background:#2563eb; color:white; border:none; border-radius:8px; cursor:pointer; box-shadow:0 4px 10px rgba(0,0,0,0.3);';
+                btnFull.onclick = () => {
+                    document.documentElement.requestFullscreen().then(() => btnFull.remove()).catch(() => {});
+                };
+                document.body.appendChild(btnFull);
             }
         };
 
@@ -3473,6 +3566,9 @@ window.gerarJPGDashboardGeral = gerarJPGDashboardGeral;
 window.gerarPDFDashboardGeral = gerarPDFDashboardGeral;
 window.gerarJPGFechamento = gerarJPGFechamento;
 window.imprimirMeuCaixa = imprimirMeuCaixa;
+window.pedirTexto = pedirTexto;
+window.pedirConfirmacao = pedirConfirmacao;
+window.verMeuRelatorioCaixa = verMeuRelatorioCaixa;
 window.limparCarrinhoComConfirmacao = limparCarrinhoComConfirmacao;
 window.alternarVozAnuncio = alternarVozAnuncio;
 window.ajustarZoomTela = ajustarZoomTela;
