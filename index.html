@@ -599,7 +599,10 @@
 
         <!-- TELA 2: PEDIDOS EM PAUSA -->
         <div id="tela-agendados" class="tab-content">
-            <h2 style="border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 20px;">Pedidos em Pausa</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+                <h2 style="border: none; padding: 0; margin: 0;">Pedidos em Pausa</h2>
+                <button class="btn" style="background:#475569; color:white;" onclick="imprimirPedidosEmPausa()" title="Imprime o recibo de todos os pedidos em pausa de uma vez">🖨️ Imprimir Todos</button>
+            </div>
             <div class="grid-pedidos" id="fila-agendados"></div>
         </div>
 

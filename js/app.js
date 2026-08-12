@@ -2425,23 +2425,26 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             atualizarTelas();
         }
 
-        function gerarHTMLImpressao(pedido) {
-            const areaPrint = document.getElementById('area-impressao');
+        // Retorna o HTML do recibo (sem escrever em lugar nenhum) — usado
+        // tanto pra imprimir 1 pedido (gerarHTMLImpressao) quanto vários de
+        // uma vez (imprimirPedidosEmPausa).
+        function montarHTMLReciboPedido(pedido, quebrarPagina = false) {
             // Qualquer coisa que não seja explicitamente 'mais_tarde' entra aqui
             // (não só 'agora'/'entregue') — cobre pedidos antigos que ficaram com
             // item.fase = 'agora_sem_cozinha' salvo por engano (bug já corrigido
             // em mudarTipoRetiradaGlobal), que senão sumiriam do recibo de vez.
             const iAgora = pedido.itens.filter(i => i.fase !== 'mais_tarde');
             const iDepois = pedido.itens.filter(i => i.fase === 'mais_tarde');
-            
+
             const htmlItem = (i) => {
                 let det = '';
                 if(i.isCombo) { det = `<div style="font-size:12px; font-weight:bold; padding-left:5px; color:#000;">↳ ${i.itensComboEscolhidos.map(sub=> `1x ${sub.nome}`).join('<br>↳ ')}</div>`; }
                 let obs = i.obs ? `<div style="font-size:12px; font-weight:bold;">Observação: ${i.obs}</div>` : '';
                 return `<div style="margin-top:5px;"><div class="print-row"><span class="print-bold">1x ${i.nome}</span><span class="print-bold">R$ ${(i.preco).toFixed(2)}</span></div>${det}${obs}</div>`;
             };
-            
-            areaPrint.innerHTML = `
+
+            return `
+                <div ${quebrarPagina ? 'class="print-page-break"' : ''}>
                 <div class="print-center print-bold" style="font-size: 16px;">SANTUÁRIO SANTA RITA</div>
                 <div class="print-divider"></div>
                 <div class="print-center print-bold" style="font-size: 42px; margin: 5px 0;">#${pedido.id}</div>
@@ -2452,17 +2455,32 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 ${iAgora.length ? `<div class="print-center print-bold" style="margin-bottom:5px;">(RETIRAR AGORA)</div>` + iAgora.map(htmlItem).join('') : ''}
                 ${iDepois.length ? `<div class="print-divider"></div><div class="print-center print-bold" style="margin-bottom:5px;">[ RETIRAR DEPOIS ]</div>` + iDepois.map(htmlItem).join('') : ''}
                 <div class="print-divider"></div>
-                
+
                 <div class="print-pagto-box">
                     PAGAMENTO: ${pedido.pagamento}
                 </div>
-                
+
                 <div class="print-row print-bold" style="font-size: 16px; margin-top:6px;"><span>TOTAL:</span><span>R$ ${pedido.total.toFixed(2)}</span></div>
                 <div class="print-divider"></div>
                 <div class="print-center print-bold" style="margin-top: 15px; font-size: 12px; line-height: 1.3;">
                     Muito obrigado pela sua ajuda! Que Santa Rita interceda e derrame muitas bênçãos sobre a sua vida e a de sua família. 🙏
                 </div>
+                </div>
             `;
+        }
+
+        function gerarHTMLImpressao(pedido) {
+            document.getElementById('area-impressao').innerHTML = montarHTMLReciboPedido(pedido);
+        }
+
+        // Botão "🖨️ Imprimir Todos" na tela de Pedidos em Pausa — imprime de
+        // uma vez o recibo de cada pedido que ainda tem item parado (fase
+        // "mais_tarde"), com quebra de página entre eles.
+        function imprimirPedidosEmPausa() {
+            const pausados = pedidosGerais.filter(p => p.statusPainel !== 'cancelado' && p.itens.some(i => i.fase === 'mais_tarde'));
+            if (pausados.length === 0) return exibirAviso("Não há pedidos em pausa pra imprimir.");
+            document.getElementById('area-impressao').innerHTML = pausados.map((p, i) => montarHTMLReciboPedido(p, i > 0)).join('');
+            window.print();
         }
 
         // O cálculo em si mora em barracas.js (calcularResumoPedidos), como uma
@@ -4162,6 +4180,7 @@ window.gerarPDFCaixaAtual = gerarPDFCaixaAtual;
 window.gerarPDFEstoquePorCategoria = gerarPDFEstoquePorCategoria;
 window.imprimirEstoquePorCategoria = imprimirEstoquePorCategoria;
 window.imprimirRelatorioCaixaAtual = imprimirRelatorioCaixaAtual;
+window.imprimirPedidosEmPausa = imprimirPedidosEmPausa;
 window.imprimirRelatorioFechamento = imprimirRelatorioFechamento;
 window.iniciarGravaçãoAtalho = iniciarGravaçãoAtalho;
 window.limparCarrinho = limparCarrinho;

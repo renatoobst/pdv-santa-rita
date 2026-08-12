@@ -320,5 +320,6 @@
             .print-divider { border-top: 2px dashed black; margin: 8px 0; }
             .print-row { display: flex; justify-content: space-between; margin-bottom: 4px; font-weight: bold; }
             .print-pagto-box { font-size: 18px !important; font-weight: 900 !important; margin: 8px 0 !important; text-transform: uppercase; background: #000 !important; color: #fff !important; padding: 6px 2px !important; text-align: center; border: 2px solid #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .print-page-break { page-break-before: always; }
             @page { margin: 0; }
         }
