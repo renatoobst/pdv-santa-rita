@@ -2154,12 +2154,31 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             atualizarTelas(); 
         }
 
-        function chamarNoPainel(id) { 
+        // Fala "Pedido número X, Fulano" em voz alta (Web Speech API). O beep
+        // toca primeiro pra chamar atenção; a fala vem logo depois, sem
+        // sobrepor. Se o navegador/dispositivo não suportar (raro, mas
+        // acontece em alguns tablets), falha em silêncio — o beep já cumpriu
+        // o papel de avisar.
+        function falarChamadaPedido(numeroPedido, nomeCliente) {
+            try {
+                if (!('speechSynthesis' in window)) return;
+                const utter = new SpeechSynthesisUtterance(`Pedido número ${numeroPedido}, ${nomeCliente}`);
+                utter.lang = 'pt-BR';
+                utter.rate = 0.95;
+                speechSynthesis.cancel();
+                speechSynthesis.speak(utter);
+            } catch (e) {
+                console.log('Fala por voz não suportada neste dispositivo:', e);
+            }
+        }
+
+        function chamarNoPainel(id) {
             const p = pedidosGerais.find(x => x.id === id);
-            p.statusPainel = 'pronto'; 
-            tocarBeep(); 
+            p.statusPainel = 'pronto';
+            tocarBeep();
+            setTimeout(() => falarChamadaPedido(p.id, p.cliente), 700);
             salvarNoBancoLocal();
-            atualizarTelas(); 
+            atualizarTelas();
         }
         
         function finalizarEntrega(id) { 
