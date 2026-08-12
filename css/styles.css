@@ -60,7 +60,7 @@
         .badge { background: red; color: white; border-radius: 50%; padding: 2px 6px; font-size: 12px; margin-left: 8px; display: none; font-weight: bold; }
         .container { padding: 20px; max-width: 100%; margin: 0 auto; box-sizing: border-box; }
         
-        .container.container-tv, .container.container-vw { padding: 0 !important; max-width: 100% !important; margin: 0 !important; width: 100vw; }
+        .container.container-tv { padding: 0 !important; max-width: 100% !important; margin: 0 !important; width: 100vw; }
 
         .tab-content { display: none; animation: fadeIn 0.3s; }
         .tab-content.active { display: block; }
@@ -112,7 +112,19 @@
         .controle-zoom-tela button { border: none; background: white; border-radius: 6px; width: 26px; height: 26px; cursor: pointer; font-size: 0.85rem; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
         .controle-zoom-tela span { font-size: 0.75rem; font-weight: bold; color: #374151; min-width: 34px; text-align: center; }
 
-        .menu-grid { display: flex; flex-direction: column; gap: 12px; max-height: 75vh; overflow-y: auto; padding-right: 8px; }
+        .teclado-flutuante { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2000000; background: white; border-top: 2px solid #cbd5e1; box-shadow: 0 -4px 12px rgba(0,0,0,0.15); padding: 10px; }
+        .teclado-flutuante-topo { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; max-width: 640px; margin-left: auto; margin-right: auto; }
+        .grid-teclado-texto { max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 6px; }
+        .linha-teclado-texto { display: flex; gap: 5px; justify-content: center; }
+        .tecla-texto { flex: 1; max-width: 56px; height: 42px; border: none; background: #e5e7eb; color: #1f2937; border-radius: 6px; font-size: 1rem; font-weight: bold; cursor: pointer; text-transform: none; }
+        .tecla-texto:active { background: #cbd5e1; }
+        .tecla-especial { background: #94a3b8; color: white; }
+        .tecla-espaco { max-width: 400px; flex: 3; }
+        .teclado-texto-ok { width: 100%; max-width: 640px; display: block; margin: 10px auto 0; }
+
+        .coluna-produtos-pedido { display: flex; flex-direction: column; height: calc(100vh - 140px); }
+        .scroll-produtos-pedido { flex: 1; min-height: 0; overflow-y: auto; padding-right: 8px; }
+        .menu-grid { display: flex; flex-direction: column; gap: 12px; }
         .subgrupo-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
         .subgrupo-header { grid-column: 1 / -1; font-size: 0.95rem; font-weight: 800; color: #1f2937; border-bottom: 2px solid #e5e7eb; padding-bottom: 3px; margin-top: 5px; text-transform: uppercase; letter-spacing: 0.5px; }
         
@@ -188,27 +200,6 @@
         .cat-acoes button { background: none; border: none; cursor: pointer; font-size: 1rem; opacity: 0.7; margin-left: 2px; }
         .cat-acoes button:hover { opacity: 1; transform: scale(1.1); }
 
-        /* MULTIVIEW 4X4 */
-        #tela-videowall.active { padding: 0; margin: 0; width: 100vw; height: calc(100vh - 65px); background: #0f172a; overflow: hidden; }
-        .videowall-container { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; width: 100vw; height: calc(100vh - 65px); gap: 2px; background: #334155; box-sizing: border-box; }
-        .vw-quadrant { background: #f8fafc; overflow: hidden; display: flex; flex-direction: column; position: relative; height: 100%; width: 100%; box-sizing: border-box; }
-        .vw-header { padding: 8px 12px; font-weight: 900; text-align: center; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 1px; flex-shrink: 0; }
-        .vw-body { padding: 10px; overflow-y: auto; flex-grow: 1; box-sizing: border-box; }
-        .btn-exit-vw { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.8); color: white; border: 1px solid #333; padding: 10px 15px; border-radius: 6px; cursor: pointer; z-index: 100000; font-weight: bold; opacity: 0.05; transition: opacity 0.3s; }
-        .btn-exit-vw:hover { opacity: 1; }
-        .vw-quadrant-select { width: 100%; margin: 0; padding: 6px; font-size: 0.85rem; font-weight: bold; }
-        .vw-quadrant-iframe { flex-grow: 1; width: 100%; border: 0; background: #0f172a; }
-
-        /* ESTILOS COMPACTOS DA TV DENTRO DO MULTIVIEW (menores que a TV cheia) */
-        .vw-tv-compacta { display: flex; height: 100%; width: 100%; background: #000; color: #fff; }
-        .vw-tv-col { flex: 1; padding: 6px; display: flex; flex-direction: column; overflow-y: auto; box-sizing: border-box; }
-        .vw-tv-col.preparando { border-right: 1px solid #334155; }
-        .vw-tv-title { font-size: 1rem; font-weight: 900; text-align: center; text-transform: uppercase; margin-bottom: 8px; border-bottom: 1px solid #334155; padding-bottom: 4px; }
-        .vw-num { background: #1f2937; color: #f8fafc; padding: 6px 10px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid #facc15; font-size: 0.85rem; font-weight: bold; margin-bottom: 6px; }
-        .vw-num.ready { background: #064e3b; border-left: 4px solid #10b981; color: #86efac; }
-        .vw-destaque { background: #16a34a; color: white; padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 8px; border: 1px solid #4ade80; }
-        .vw-destaque-num { font-size: 2.2rem; font-weight: 900; line-height: 1; }
-        .vw-destaque-name { font-size: 0.9rem; font-weight: bold; text-transform: uppercase; margin-top: 2px; }
 
         .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
         .chart-box { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); display: flex; flex-direction: column; align-items: center; }
@@ -237,7 +228,8 @@
 
         @media (max-width: 900px) {
             .layout-pedido { grid-template-columns: 1fr; }
-            .menu-grid { max-height: none; }
+            .coluna-produtos-pedido { height: auto; }
+            .scroll-produtos-pedido { overflow-y: visible; }
             .carrinho { height: auto; max-height: none; }
             .itens-carrinho { max-height: 45vh; }
 

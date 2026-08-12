@@ -25,6 +25,9 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         // `barracas: string[]` com os ids das barracas onde ele deve aparecer.
         const CATALOGO_ID = '__catalogo__';
         let categoriasDB = JSON.parse(JSON.stringify(categoriasPadrao));
+        // Subcategorias organizadas por categoria: { "Bebidas": ["Refrigerantes","Sucos"] }.
+        // Faz parte do catálogo compartilhado, igual categoriasDB/produtosDB.
+        let subcategoriasDB = {};
         let produtosDB = JSON.parse(JSON.stringify(produtosPadrao)).map(p => {
             const { estoque, ...resto } = p; // estoque não é mais um campo do produto — é por barraca (estoquePorProduto)
             return { ...resto, barracas: [] };
@@ -304,6 +307,67 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             input.dispatchEvent(new Event('input', { bubbles: true }));
         }
 
+        // --- Teclado de texto próprio em tablet/celular — mesma ideia do
+        // numérico, mas para nome, busca, senha etc. Cobre tanto os campos
+        // type="text" quanto type="password" (a senha continua mascarada
+        // normalmente, só quem digita é o teclado próprio em vez do nativo). ---
+        let inputTecladoTextoAtivo = null;
+        let shiftAtivoTecladoTexto = false;
+
+        function configurarTecladoTexto(input) {
+            if (input.dataset.tecladoTextoConfigurado) return;
+            input.dataset.tecladoTextoConfigurado = '1';
+            input.setAttribute('inputmode', 'none');
+            input.readOnly = true;
+            input.style.cursor = 'pointer';
+            input.addEventListener('focus', () => abrirTecladoTexto(input));
+            input.addEventListener('click', () => abrirTecladoTexto(input));
+        }
+
+        function ativarTecladoTextoSeTablet() {
+            if (!ehDispositivoDeToque()) return;
+            document.querySelectorAll('input').forEach(input => {
+                const tipo = input.type;
+                if (tipo === 'text' || tipo === 'password' || tipo === 'search' || tipo === '') {
+                    configurarTecladoTexto(input);
+                }
+            });
+        }
+
+        function abrirTecladoTexto(input) {
+            inputTecladoTextoAtivo = input;
+            document.getElementById('teclado-texto-flutuante').style.display = 'block';
+            atualizarTeclasTexto();
+        }
+
+        function fecharTecladoTexto() {
+            document.getElementById('teclado-texto-flutuante').style.display = 'none';
+            inputTecladoTextoAtivo = null;
+        }
+
+        function digitarTecladoTexto(tecla) {
+            const input = inputTecladoTextoAtivo;
+            if (!input) return;
+            if (tecla === '⌫') {
+                input.value = input.value.slice(0, -1);
+            } else if (tecla === '⇧') {
+                shiftAtivoTecladoTexto = !shiftAtivoTecladoTexto;
+                atualizarTeclasTexto();
+                return;
+            } else if (tecla === '␣') {
+                input.value += ' ';
+            } else {
+                input.value += shiftAtivoTecladoTexto ? tecla.toUpperCase() : tecla;
+            }
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+
+        function atualizarTeclasTexto() {
+            document.querySelectorAll('#grid-teclado-texto .tecla-letra').forEach(btn => {
+                btn.innerText = shiftAtivoTecladoTexto ? btn.dataset.tecla.toUpperCase() : btn.dataset.tecla;
+            });
+        }
+
         // --- Substitutos de prompt()/confirm() nativos (janela própria em
         // HTML, dá pra mascarar senha e não fica com a cara do navegador) ---
 
@@ -442,6 +506,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             return {
                 categoriasDB,
                 produtosDB,
+                subcategoriasDB,
                 origem: PDV_CLIENT_ID,
                 salvoEm: new Date().toISOString()
             };
@@ -456,6 +521,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             carregandoCatalogoRemoto = true;
             categoriasDB = Array.isArray(catalogo.categoriasDB) ? catalogo.categoriasDB : categoriasDB;
             produtosDB = Array.isArray(catalogo.produtosDB) ? catalogo.produtosDB : produtosDB;
+            subcategoriasDB = (catalogo.subcategoriasDB && typeof catalogo.subcategoriasDB === 'object') ? catalogo.subcategoriasDB : subcategoriasDB;
             produtosDB.forEach(p => {
                 if (p.ativo === undefined) p.ativo = true;
                 if (!Array.isArray(p.barracas)) p.barracas = [];
@@ -653,13 +719,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             const mainContainer = document.getElementById('container-principal');
             if (idAba === 'tela-tv') {
                 mainContainer.classList.add('container-tv');
-                mainContainer.classList.remove('container-vw');
-            } else if (idAba === 'tela-videowall') {
-                mainContainer.classList.add('container-vw');
-                mainContainer.classList.remove('container-tv');
             } else {
                 mainContainer.classList.remove('container-tv');
-                mainContainer.classList.remove('container-vw');
             }
 
             const abaAtiva = document.getElementById(idAba); if(abaAtiva) abaAtiva.classList.add('active');
@@ -674,6 +735,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if(idAba === 'tela-gestao') atualizarFiltrosGestao();
             if(idAba === 'tela-relatorio') atualizarDashboard();
             if(idAba === 'tela-fechamento-caixa') renderizarHistoricoCaixas();
+            if(idAba === 'tela-dashboard-caixas') renderizarDashboardCaixas();
             if(idAba === 'tela-produtos') { renderizarCategoriasUI(); renderizarTabelaProdutos(); if (produtoEmEdicaoId === null) renderizarChecklistBarracasProduto(); }
             if(idAba === 'tela-pedido') {
                 renderizarCategoriasUI();
@@ -684,62 +746,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 if (carrinho.length === 0 && pedidoEmEdicaoId === null) aplicarConfigPadroesNoFormulario();
             }
             if(idAba === 'tela-atalhos') renderizarPainelAtalhos();
-            if(idAba === 'tela-videowall') renderizarVideoWall();
             if(idAba === 'tela-entrega') atualizarTelas();
             if(idAba === 'tela-preparo') atualizarTelas();
             if(idAba === 'tela-barracas') renderizarPainelBarracas();
             if(idAba === 'tela-gestao-usuarios') renderizarTelaGestaoUsuarios();
             if(idAba === 'tela-dashboard-geral') carregarDashboardGeral();
-        }
-        function sairVideoWall() { mudarAba('tela-pedido', document.querySelectorAll('nav button')[0]); }
-
-        // Multiview 4x4: cada quadrante é um <iframe> independente carregando
-        // este mesmo app com ?abrirTela=<escolha> (mesmo mecanismo da "TV
-        // Senha em outro monitor") — reaproveita a renderização de qualquer
-        // tela sem duplicar nenhuma lógica, e cada quadrante escolhe a sua
-        // livremente (inclusive o Dashboard/Relatório). Pensado pro uso com
-        // divisor HDMI: 1 PC com 4 saídas, cada uma mostrando 1 quadrante.
-        const TELAS_VIDEOWALL = [
-            { id: '', label: '🔗 Em branco' },
-            { id: 'tela-tv', label: '📺 TV Senha' },
-            { id: 'tela-preparo', label: '🍳 Cozinha' },
-            { id: 'tela-entrega', label: '🛍️ Balcão/Entrega' },
-            { id: 'tela-agendados', label: '⏸️ Pedidos em Pausa' },
-            { id: 'tela-relatorio', label: '📈 Dashboard Analytics' },
-            { id: 'tela-dashboard-geral', label: '🏬 Dashboard Geral' },
-            { id: 'tela-gestao', label: '📋 Gestão de Pedidos' },
-            { id: 'tela-fechamento-caixa', label: '📜 Histórico de Caixas' }
-        ];
-        const PADRAO_VIDEOWALL = { 1: 'tela-agendados', 2: 'tela-preparo', 3: 'tela-entrega', 4: 'tela-tv' };
-
-        function chaveVideoWall(quadrante) { return `pdv_videowall_quadrante_${quadrante}`; }
-
-        function renderizarVideoWall() {
-            for (let q = 1; q <= 4; q++) {
-                const select = document.querySelector(`.vw-quadrant-select[data-quadrante="${q}"]`);
-                if (select && !select.dataset.montado) {
-                    select.innerHTML = TELAS_VIDEOWALL.map(t => `<option value="${t.id}">${t.label}</option>`).join('');
-                    select.dataset.montado = '1';
-                    const salvo = localStorage.getItem(chaveVideoWall(q));
-                    select.value = salvo !== null ? salvo : (PADRAO_VIDEOWALL[q] || '');
-                }
-                if (select) carregarIframeVideoWall(q, select.value);
-            }
-        }
-
-        function carregarIframeVideoWall(quadrante, idTela) {
-            const iframe = document.querySelector(`.vw-quadrant-iframe[data-quadrante="${quadrante}"]`);
-            if (!iframe) return;
-            const novoSrc = idTela ? `${location.origin}${location.pathname}?abrirTela=${idTela}` : 'about:blank';
-            if (iframe.getAttribute('data-src-atual') !== novoSrc) {
-                iframe.src = novoSrc;
-                iframe.setAttribute('data-src-atual', novoSrc);
-            }
-        }
-
-        function mudarTelaVideoWall(quadrante, idTela) {
-            localStorage.setItem(chaveVideoWall(quadrante), idTela);
-            carregarIframeVideoWall(quadrante, idTela);
         }
 
         function calcularDiferencaMinutos(horaInicio, horaFim) {
@@ -902,6 +913,13 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         function abrirModalTodosPedidos() {
             renderizarTabelaModalTodosPedidos();
             document.getElementById('modal-todos-pedidos').style.display = 'flex';
+        }
+
+        // Atalho usado pelo botão "Pedidos Já Entregues" no Balcão — mesmo
+        // modal de "Ver Todos os Pedidos", só que já abre filtrado.
+        function abrirModalPedidosEntregues() {
+            document.getElementById('filtro-modal-status').value = 'entregue';
+            abrirModalTodosPedidos();
         }
 
         function fecharModalTodosPedidos() {
@@ -1099,12 +1117,17 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 document.getElementById('box-estoque-simples').style.display = 'none';
                 document.getElementById('box-cozinha-simples').style.display = 'none';
                 document.getElementById('box-itens-combo').style.display = 'block';
+                // Combo já é a categoria "Combos" por definição — não faz
+                // sentido escolher categoria/subcategoria pra ele.
+                document.getElementById('box-categoria-subcategoria').style.display = 'none';
                 document.getElementById('novo-prod-categoria').value = 'Combos';
+                document.getElementById('novo-prod-subcategoria').value = '';
                 document.getElementById('titulo-form-produto').innerText = "Cadastrar Combo";
             } else {
                 document.getElementById('box-estoque-simples').style.display = 'block';
                 document.getElementById('box-cozinha-simples').style.display = 'block';
                 document.getElementById('box-itens-combo').style.display = 'none';
+                document.getElementById('box-categoria-subcategoria').style.display = 'block';
                 document.getElementById('titulo-form-produto').innerText = "Cadastrar Produto";
             }
         }
@@ -1294,10 +1317,94 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         // e "Sucos" se algum produto de Bebidas já tiver essas subcategorias.
         function atualizarListaSubcategoriasExistentes() {
             const categoria = document.getElementById('novo-prod-categoria').value;
-            const lista = document.getElementById('lista-subcategorias-existentes');
-            if (!lista) return;
-            const subcats = [...new Set(produtosDB.filter(p => p.categoria === categoria && p.subcategoria).map(p => p.subcategoria))];
-            lista.innerHTML = subcats.map(s => `<option value="${s}">`).join('');
+            const select = document.getElementById('novo-prod-subcategoria');
+            if (!select) return;
+            const valorAtual = select.value;
+            const subcats = subcategoriasDB[categoria] || [];
+            select.innerHTML = '<option value="">-- Nenhuma --</option>' + subcats.map(s => `<option value="${s}">${s}</option>`).join('');
+            if (subcats.includes(valorAtual)) select.value = valorAtual;
+        }
+
+        // --- Gerenciar categorias (modal) ---
+
+        function abrirModalGerenciarCategorias() {
+            renderizarCategoriasUI();
+            document.getElementById('modal-gerenciar-categorias').style.display = 'flex';
+        }
+
+        function fecharModalGerenciarCategorias() {
+            document.getElementById('modal-gerenciar-categorias').style.display = 'none';
+        }
+
+        // --- Gerenciar subcategorias (modal, sempre da categoria escolhida
+        // agora no formulário de cadastro) ---
+
+        function abrirModalGerenciarSubcategorias() {
+            const categoria = document.getElementById('novo-prod-categoria').value;
+            if (!categoria) return exibirAviso("Escolha uma categoria primeiro.");
+            document.getElementById('titulo-modal-subcategorias').innerText = `📂 Subcategorias de "${categoria}"`;
+            document.getElementById('modal-gerenciar-subcategorias').dataset.categoria = categoria;
+            renderizarTabelaSubcategorias(categoria);
+            document.getElementById('modal-gerenciar-subcategorias').style.display = 'flex';
+        }
+
+        function fecharModalGerenciarSubcategorias() {
+            document.getElementById('modal-gerenciar-subcategorias').style.display = 'none';
+        }
+
+        function renderizarTabelaSubcategorias(categoria) {
+            const tbody = document.getElementById('tabela-gestao-subcategorias');
+            const subcats = subcategoriasDB[categoria] || [];
+            if (subcats.length === 0) {
+                tbody.innerHTML = '<tr><td style="padding:12px; text-align:center; color:gray;">Nenhuma subcategoria ainda.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = subcats.map((s, i) => `
+                <tr style="border-bottom:1px solid #f3f4f6;">
+                    <td style="padding:8px; font-weight:bold;">${s}</td>
+                    <td style="text-align:right; white-space:nowrap;">
+                        <button class="btn btn-warning" style="padding:4px 8px; font-size:0.8rem;" onclick="editarSubcategoria('${categoria}', ${i})" title="Renomear">✏️</button>
+                        <button class="btn btn-danger" style="padding:4px 8px; font-size:0.8rem;" onclick="excluirSubcategoria('${categoria}', ${i})" title="Excluir">🗑️</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function adicionarSubcategoria() {
+            const categoria = document.getElementById('modal-gerenciar-subcategorias').dataset.categoria;
+            const input = document.getElementById('nova-subcat-nome');
+            const nome = input.value.trim();
+            if (!nome) return;
+            if (!subcategoriasDB[categoria]) subcategoriasDB[categoria] = [];
+            if (subcategoriasDB[categoria].includes(nome)) return exibirAviso("Essa subcategoria já existe.");
+            subcategoriasDB[categoria].push(nome);
+            input.value = '';
+            salvarCatalogo();
+            renderizarTabelaSubcategorias(categoria);
+            atualizarListaSubcategoriasExistentes();
+        }
+
+        async function editarSubcategoria(categoria, index) {
+            const atual = subcategoriasDB[categoria][index];
+            const novoNome = await pedirTexto(`Editar subcategoria: "${atual}"\nDigite o novo nome:`, { titulo: '✏️ Editar Subcategoria', valorInicial: atual });
+            if (!novoNome || !novoNome.trim()) return;
+            const nome = novoNome.trim();
+            subcategoriasDB[categoria][index] = nome;
+            // Produtos que já usavam o nome antigo acompanham a renomeação,
+            // senão ficariam com uma subcategoria "fantasma" fora da lista.
+            produtosDB.forEach(p => { if (p.categoria === categoria && p.subcategoria === atual) p.subcategoria = nome; });
+            salvarCatalogo();
+            renderizarTabelaSubcategorias(categoria);
+            atualizarListaSubcategoriasExistentes();
+        }
+
+        async function excluirSubcategoria(categoria, index) {
+            const nome = subcategoriasDB[categoria][index];
+            if (!(await pedirConfirmacao(`Excluir a subcategoria "${nome}"? Produtos que já usam ela mantêm o nome, só não vai mais aparecer na lista pra escolher.`, { titulo: '🗑️ Excluir Subcategoria' }))) return;
+            subcategoriasDB[categoria].splice(index, 1);
+            salvarCatalogo();
+            renderizarTabelaSubcategorias(categoria);
+            atualizarListaSubcategoriasExistentes();
         }
 
         function prepararEdicaoProduto(id) {
@@ -1305,8 +1412,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             document.getElementById('novo-prod-nome').value = p.nome;
             document.getElementById('novo-prod-preco').value = p.preco;
             document.getElementById('novo-prod-categoria').value = p.categoria;
-            document.getElementById('novo-prod-subcategoria').value = p.subcategoria || '';
+            // Repopula as opções de subcategoria (dependem da categoria) ANTES
+            // de tentar selecionar o valor salvo, senão o <select> ainda
+            // estaria com as opções da categoria anterior e a seleção não colaria.
             atualizarListaSubcategoriasExistentes();
+            document.getElementById('novo-prod-subcategoria').value = p.subcategoria || '';
             document.getElementById('novo-prod-foto').value = p.foto || '';
             document.getElementById('novo-prod-ativo').value = (p.ativo !== false).toString();
             document.getElementById('novo-prod-ingredientes').value = p.ingredientes || '';
@@ -1810,7 +1920,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
             document.getElementById('modal-troca-info').innerText = `Pedido #${pedido.id} (${pedido.cliente}) - Item atual: ${item.nome}${precoItem ? ` (R$ ${precoItem.toFixed(2)})` : ''}`;
 
-            const produtosDisponiveis = produtosDB.filter(p => p.categoria === item.categoria && !p.isCombo && (subIndex !== null || Math.abs(p.preco - precoItem) < 0.01) && p.ativo !== false && Array.isArray(p.barracas) && p.barracas.includes(barracaStateId));
+            // Sempre exige mesmo valor, dentro ou fora de combo — pra sub-item
+            // de combo isso compara com o preço do produto ORIGINAL daquele
+            // slot (via prodOriginal.preco acima), não com o preço do combo
+            // inteiro.
+            const produtosDisponiveis = produtosDB.filter(p => p.categoria === item.categoria && !p.isCombo && Math.abs(p.preco - precoItem) < 0.01 && p.ativo !== false && Array.isArray(p.barracas) && p.barracas.includes(barracaStateId));
             const select = document.getElementById('select-novo-item-troca');
 
             if (produtosDisponiveis.length === 0) {
@@ -2771,22 +2885,29 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 const iAgoraPendentes = p.itens.filter(i => i.fase !== 'mais_tarde');
                 const iDepois = p.itens.filter(i => i.fase === 'mais_tarde');
 
+                // Só conta/mostra em produção quem está REALMENTE "preparando"
+                // agora — antes isso somava também pedidos já "pronto" ou
+                // "entregue" (o forEach rodava pra qualquer pedido não
+                // cancelado), inflando o contador do resumo da Cozinha com
+                // itens que já saíram da produção.
                 let itensPurosCozinha = [];
-                iAgoraPendentes.forEach(item => {
-                    if (item.isCombo) {
-                        item.itensComboEscolhidos.forEach(sub => {
-                            if(sub.cozinha && sub.fase !== 'entregue') {
-                                itensPurosCozinha.push({nome: sub.nome, obs: item.obs, comboPai: item.nome});
-                                resumoProducaoCozinha[sub.nome] = (resumoProducaoCozinha[sub.nome] || 0) + 1;
+                if (p.statusPainel === 'preparando') {
+                    iAgoraPendentes.forEach(item => {
+                        if (item.isCombo) {
+                            item.itensComboEscolhidos.forEach(sub => {
+                                if(sub.cozinha && sub.fase !== 'entregue') {
+                                    itensPurosCozinha.push({nome: sub.nome, obs: item.obs, comboPai: item.nome});
+                                    resumoProducaoCozinha[sub.nome] = (resumoProducaoCozinha[sub.nome] || 0) + 1;
+                                }
+                            });
+                        } else {
+                            if(item.cozinha) {
+                                itensPurosCozinha.push({nome: item.nome, obs: item.obs});
+                                resumoProducaoCozinha[item.nome] = (resumoProducaoCozinha[item.nome] || 0) + item.qtd;
                             }
-                        });
-                    } else {
-                        if(item.cozinha) {
-                            itensPurosCozinha.push({nome: item.nome, obs: item.obs});
-                            resumoProducaoCozinha[item.nome] = (resumoProducaoCozinha[item.nome] || 0) + item.qtd;
                         }
-                    }
-                });
+                    });
+                }
 
                 // FILTRO DE COZINHA: MOSTRA APENAS SE TIVER ITENS DE PRODUÇÃO
                 if(p.statusPainel === 'preparando' && itensPurosCozinha.length > 0) {
@@ -3051,7 +3172,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 if (statusBusca === 'cancelado') pedidosFiltrados = pedidosFiltrados.filter(p => p.statusPainel === 'cancelado');
             }
 
-            if (pedidosFiltrados.length === 0) return tbody.innerHTML = '<tr><td colspan="9" style="padding: 15px; text-align: center; color: gray;">Nenhum pedido encontrado.</td></tr>';
+            if (pedidosFiltrados.length === 0) return tbody.innerHTML = '<tr><td colspan="10" style="padding: 15px; text-align: center; color: gray;">Nenhum pedido encontrado.</td></tr>';
 
             pedidosFiltrados.forEach(p => {
                 let statusHtml = ''; let acoesHtml = '';
@@ -3072,9 +3193,12 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 }
                 const resumoItens = p.itens.map(i => `1x ${i.nome}`).join(', ');
                 const tempoPreparo = calcularDiferencaMinutos(p.horaEntradaCozinha || p.hora, p.horaEntrega);
+                const caixaDoPedido = caixasAbertos.find(c => c.id === p.caixaId);
+                const nomeCaixaPedido = caixaDoPedido ? caixaDoPedido.usuarioNome : '-';
 
                 tbody.innerHTML += `<tr style="border-bottom: 1px solid #f3f4f6; ${p.statusPainel === 'cancelado' ? 'opacity:0.5;' : ''}">
                     <td style="padding: 12px; font-weight: bold;">#${p.id}</td>
+                    <td style="font-size: 0.8rem; font-weight: bold; color: #4b5563;">${nomeCaixaPedido}</td>
                     <td style="font-size: 0.75rem; color: #4b5563;">
                         <b>Ent:</b> ${p.hora}<br>
                         <b>Coz:</b> ${p.horaEntradaCozinha || '-'}<br>
@@ -3235,10 +3359,103 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             const senhaOk = await confirmarSenhaUsuarioAtual(senha);
             if (!senhaOk) return exibirAviso("Senha incorreta.");
 
+            // Devolve ao estoque tudo que foi vendido nesse fechamento — feito
+            // pra cobrir caixas abertos só de teste, onde as vendas nunca
+            // deveriam ter descontado estoque de verdade. Pedidos já
+            // cancelados não entram aqui: cancelarPedido() já devolveu o
+            // estoque deles na hora, devolver de novo duplicaria.
+            const registro = historicoCaixasDB.find(c => c.id === idCaixa);
+            let catalogoAlteradoPorEstoque = false;
+            if (registro && Array.isArray(registro.pedidosDetalhados)) {
+                registro.pedidosDetalhados.forEach(p => {
+                    if (p.statusPainel === 'cancelado') return;
+                    (p.itens || []).forEach(item => {
+                        const devolverUm = (idProduto) => {
+                            const est = estoquePorProduto[idProduto];
+                            if (est === undefined || est === null) return;
+                            const novoEst = est + 1;
+                            estoquePorProduto[idProduto] = novoEst;
+                            const prod = produtosDB.find(prod => prod.id === idProduto);
+                            if (prod && sincronizarAtivoPorEstoque(prod, novoEst)) catalogoAlteradoPorEstoque = true;
+                        };
+                        if (item.isCombo) {
+                            (item.itensComboEscolhidos || []).forEach(sub => devolverUm(sub.idProduto));
+                        } else {
+                            devolverUm(item.idProduto);
+                        }
+                    });
+                });
+            }
+
             historicoCaixasDB = historicoCaixasDB.filter(c => c.id !== idCaixa);
+            if (catalogoAlteradoPorEstoque) salvarCatalogo();
             salvarNoBancoLocal();
             renderizarHistoricoCaixas();
-            exibirAviso(`Registro de Caixa #${idCaixa} excluído com sucesso!`);
+            renderizarTabelaProdutos();
+            renderizarMenu(categoriaFiltroAtual);
+            exibirAviso(`Registro de Caixa #${idCaixa} excluído e estoque devolvido com sucesso!`);
+        }
+
+        // "dd/mm/yyyy hh:mm" (formato usado em dataFechamento) -> Date.
+        function parseDataFechamentoBR(dataStr) {
+            if (!dataStr) return null;
+            const [dataParte] = dataStr.split(' ');
+            const [d, m, y] = dataParte.split('/').map(Number);
+            if (!d || !m || !y) return null;
+            return new Date(y, m - 1, d);
+        }
+
+        function renderizarDashboardCaixas() {
+            const inicio = document.getElementById('filtro-caixas-data-inicio').value;
+            const fim = document.getElementById('filtro-caixas-data-fim').value;
+            const selectOperador = document.getElementById('filtro-caixas-operador');
+
+            if (!selectOperador.dataset.montado) {
+                const nomes = [...new Set(historicoCaixasDB.map(c => c.usuarioNome).filter(Boolean))];
+                selectOperador.innerHTML = '<option value="Todos">Todos os operadores</option>' + nomes.map(n => `<option value="${n}">${n}</option>`).join('');
+                selectOperador.dataset.montado = '1';
+            }
+            const operador = selectOperador.value;
+
+            let lista = [...historicoCaixasDB];
+            if (inicio) {
+                const dtInicio = new Date(inicio + 'T00:00:00');
+                lista = lista.filter(c => { const d = parseDataFechamentoBR(c.dataFechamento); return d && d >= dtInicio; });
+            }
+            if (fim) {
+                const dtFim = new Date(fim + 'T23:59:59');
+                lista = lista.filter(c => { const d = parseDataFechamentoBR(c.dataFechamento); return d && d <= dtFim; });
+            }
+            if (operador && operador !== 'Todos') {
+                lista = lista.filter(c => c.usuarioNome === operador);
+            }
+
+            const totalVendas = lista.reduce((a, c) => a + c.totalVendas, 0);
+            const totalGaveta = lista.reduce((a, c) => a + c.totalGaveta, 0);
+            const qtdPedidos = lista.reduce((a, c) => a + c.qtdPedidos, 0);
+            const ticketMedio = qtdPedidos > 0 ? totalVendas / qtdPedidos : 0;
+
+            document.getElementById('dc-total-vendas').innerText = totalVendas.toFixed(2);
+            document.getElementById('dc-total-gaveta').innerText = totalGaveta.toFixed(2);
+            document.getElementById('dc-qtd-fechamentos').innerText = lista.length;
+            document.getElementById('dc-ticket-medio').innerText = ticketMedio.toFixed(2);
+
+            const tbody = document.getElementById('tabela-dashboard-caixas');
+            if (lista.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px; color:gray;">Nenhum fechamento nesse período.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = lista.map(c => `
+                <tr style="border-bottom:1px solid #e5e7eb;">
+                    <td style="padding:10px; font-weight:bold;">#${c.id}</td>
+                    <td style="font-weight:bold; color:#4b5563;">${c.usuarioNome || '-'}</td>
+                    <td style="text-transform:uppercase; color:var(--primary); font-weight:bold;">${c.campanha || 'Padrão'}</td>
+                    <td style="font-size:0.85rem; color:#4b5563;">${c.dataFechamento}</td>
+                    <td style="font-weight:bold; color:var(--success);">R$ ${c.totalVendas.toFixed(2)}</td>
+                    <td style="font-weight:bold; color:#0284c7;">R$ ${c.totalGaveta.toFixed(2)}</td>
+                    <td style="text-align:center; font-weight:bold;">${c.qtdPedidos}</td>
+                </tr>
+            `).join('');
         }
 
         function renderizarHistoricoCaixas() {
@@ -3728,6 +3945,22 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         }
 
         window.onload = async () => {
+            // Ativa os teclados próprios (numérico e de texto) ANTES de
+            // qualquer coisa que possa travar em await — inclusive a própria
+            // tela de login usa campos de senha/usuário que precisam disso
+            // desde o primeiro instante em tablet/celular, e essa tela
+            // aparece antes de qualquer login existir.
+            ativarTecladoNumericoSeTablet();
+            document.getElementById('grid-teclado-numerico').addEventListener('click', e => {
+                const btn = e.target.closest('.tecla-num');
+                if (btn) digitarTecladoNumerico(btn.dataset.tecla);
+            });
+            ativarTecladoTextoSeTablet();
+            document.getElementById('grid-teclado-texto').addEventListener('click', e => {
+                const btn = e.target.closest('.tecla-texto');
+                if (btn) digitarTecladoTexto(btn.dataset.tecla);
+            });
+
             // Antes de qualquer coisa: quem está usando este dispositivo? Mostra
             // a tela de login (ou de criar a conta Master, na primeiríssima vez)
             // e só segue depois disso resolver — ninguém vê nem a lista de
@@ -3759,11 +3992,6 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             renderizarHistoricoCaixas();
             atualizarBotoesVozAnuncio();
             aplicarTodosZoomsSalvos();
-            ativarTecladoNumericoSeTablet();
-            document.getElementById('grid-teclado-numerico').addEventListener('click', e => {
-                const btn = e.target.closest('.tecla-num');
-                if (btn) digitarTecladoNumerico(btn.dataset.tecla);
-            });
             iniciarRealtimeSupabase();
             iniciarRealtimeRegistroBarracas();
             iniciarRealtimeCatalogo();
@@ -3855,11 +4083,22 @@ window.limparCarrinhoComConfirmacao = limparCarrinhoComConfirmacao;
 window.alternarVozAnuncio = alternarVozAnuncio;
 window.ajustarZoomTela = ajustarZoomTela;
 window.fecharTecladoNumerico = fecharTecladoNumerico;
+window.fecharTecladoTexto = fecharTecladoTexto;
 window.tratarDragStartProduto = tratarDragStartProduto;
 window.tratarDragOverProduto = tratarDragOverProduto;
 window.tratarDropProduto = tratarDropProduto;
 window.tratarDragEndProduto = tratarDragEndProduto;
 window.atualizarListaSubcategoriasExistentes = atualizarListaSubcategoriasExistentes;
+window.abrirModalPedidosEntregues = abrirModalPedidosEntregues;
+window.renderizarDashboardCaixas = renderizarDashboardCaixas;
+window.gerarJPG = gerarJPG;
+window.abrirModalGerenciarCategorias = abrirModalGerenciarCategorias;
+window.fecharModalGerenciarCategorias = fecharModalGerenciarCategorias;
+window.abrirModalGerenciarSubcategorias = abrirModalGerenciarSubcategorias;
+window.fecharModalGerenciarSubcategorias = fecharModalGerenciarSubcategorias;
+window.adicionarSubcategoria = adicionarSubcategoria;
+window.editarSubcategoria = editarSubcategoria;
+window.excluirSubcategoria = excluirSubcategoria;
 window.abrirModalTvSenha = abrirModalTvSenha;
 window.fecharModalTvSenha = fecharModalTvSenha;
 window.abrirTvSenhaNoMonitorSelecionado = abrirTvSenhaNoMonitorSelecionado;
@@ -3900,8 +4139,6 @@ window.removerItemComboTemporario = removerItemComboTemporario;
 window.renderizarTabelaModalTodosPedidos = renderizarTabelaModalTodosPedidos;
 window.renderizarTabelaProdutos = renderizarTabelaProdutos;
 window.filtrarTabelaProdutosPorCategoria = filtrarTabelaProdutosPorCategoria;
-window.sairVideoWall = sairVideoWall;
-window.mudarTelaVideoWall = mudarTelaVideoWall;
 window.salvarObsModal = salvarObsModal;
 window.salvarProduto = salvarProduto;
 window.setFaseItem = setFaseItem;

@@ -34,7 +34,6 @@ const TELAS_DISPONIVEIS = [
     { id: 'tela-preparo', label: '🍳 Cozinha' },
     { id: 'tela-entrega', label: '🛍️ Balcão/Entrega' },
     { id: 'tela-tv', label: '📺 TV Senha' },
-    { id: 'tela-videowall', label: '🎛️ Multiview 4x4' },
     { id: 'tela-produtos', label: '📦 Produtos & Estoque' },
     { id: 'tela-atalhos', label: '⌨️ Teclas de Atalho' },
     { id: 'tela-configuracoes', label: '⚙️ Configurações & Parâmetros' },
@@ -42,7 +41,8 @@ const TELAS_DISPONIVEIS = [
     { id: 'tela-gestao', label: '📋 Gestão de Pedidos' },
     { id: 'tela-relatorio', label: '📈 Dashboard Analytics' },
     { id: 'tela-dashboard-geral', label: '🏬 Dashboard Geral' },
-    { id: 'tela-fechamento-caixa', label: '📜 Histórico de Caixas' }
+    { id: 'tela-fechamento-caixa', label: '📜 Histórico de Caixas' },
+    { id: 'tela-dashboard-caixas', label: '📅 Fechamentos por Período' }
 ];
 
 async function hashSenha(senha) {
