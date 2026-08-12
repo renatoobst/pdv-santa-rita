@@ -80,6 +80,21 @@
         .btn-danger { background-color: var(--danger); }
         .btn-warning { background-color: var(--warning); color: #000; }
         .btn-info { background-color: var(--info); }
+        .btn-neutro { background-color: #e5e7eb; color: #1f2937; }
+
+        .produtos-layout { display: flex; gap: 20px; align-items: flex-start; }
+        .produtos-coluna-esquerda { display: flex; flex-direction: column; gap: 20px; width: 340px; flex-shrink: 0; }
+        .produtos-coluna-lista { flex: 1; min-width: 0; height: calc(100vh - 220px); min-height: 400px; display: flex; flex-direction: column; box-sizing: border-box; }
+        .card-produtos { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); box-sizing: border-box; }
+        .secao-form-produto { border-top: 1px solid #f1f5f9; margin-top: 14px; padding-top: 14px; }
+        .secao-form-produto:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+        .secao-form-produto h4 { margin: 0 0 8px 0; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; font-weight: 800; }
+
+        @media (max-width: 900px) {
+            .produtos-layout { flex-direction: column; }
+            .produtos-coluna-esquerda { width: 100%; }
+            .produtos-coluna-lista { height: 70vh; }
+        }
         
         .layout-pedido { display: grid; grid-template-columns: 2fr 1.3fr; gap: 20px; }
         .menu-categorias { display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; }
@@ -179,6 +194,8 @@
         .vw-body { padding: 10px; overflow-y: auto; flex-grow: 1; box-sizing: border-box; }
         .btn-exit-vw { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.8); color: white; border: 1px solid #333; padding: 10px 15px; border-radius: 6px; cursor: pointer; z-index: 100000; font-weight: bold; opacity: 0.05; transition: opacity 0.3s; }
         .btn-exit-vw:hover { opacity: 1; }
+        .vw-quadrant-select { width: 100%; margin: 0; padding: 6px; font-size: 0.85rem; font-weight: bold; }
+        .vw-quadrant-iframe { flex-grow: 1; width: 100%; border: 0; background: #0f172a; }
 
         /* ESTILOS COMPACTOS DA TV DENTRO DO MULTIVIEW (menores que a TV cheia) */
         .vw-tv-compacta { display: flex; height: 100%; width: 100%; background: #000; color: #fff; }

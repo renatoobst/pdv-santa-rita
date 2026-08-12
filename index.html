@@ -155,6 +155,7 @@
                 <div class="dropdown-inner">
                     <button onclick="mudarAba('tela-produtos', this)">📦 Produtos & Estoque</button>
                     <button id="btn-nav-barracas" onclick="mudarAba('tela-barracas', this)">🏪 Barracas</button>
+                    <button id="btn-sub-gestao" onclick="mudarAba('tela-gestao', this)">📋 Gestão de Pedidos</button>
                 </div>
             </div>
         </div>
@@ -172,7 +173,6 @@
             <button class="dropbtn">📊 Relatórios ▾</button>
             <div class="dropdown-content">
                 <div class="dropdown-inner">
-                    <button id="btn-sub-gestao" onclick="mudarAba('tela-gestao', this)">📋 Gestão de Pedidos</button>
                     <button id="btn-sub-dash" onclick="mudarAba('tela-relatorio', this)">📈 Dashboard Analytics</button>
                     <button id="btn-sub-dash-geral" onclick="mudarAba('tela-dashboard-geral', this)">🏬 Dashboard Geral (Todas as Barracas)</button>
                     <button id="btn-sub-fechamento" onclick="mudarAba('tela-fechamento-caixa', this)">📜 Histórico de Caixas</button>
@@ -198,7 +198,10 @@
             <label style="font-size: 0.85rem; font-weight: bold;">Usuário:</label>
             <input type="text" id="input-login-nome" placeholder="Seu nome de usuário" spellcheck="false" onkeydown="if(event.key==='Enter') document.getElementById('input-login-senha').focus()">
             <label style="font-size: 0.85rem; font-weight: bold;">Senha:</label>
-            <input type="password" id="input-login-senha" placeholder="Sua senha" onkeydown="if(event.key==='Enter') fazerLogin()">
+            <div style="display:flex; gap:6px;">
+                <input type="password" id="input-login-senha" placeholder="Sua senha" style="flex:1;" onkeydown="if(event.key==='Enter') fazerLogin()">
+                <button type="button" class="btn btn-neutro" style="padding:0 12px;" onclick="alternarMostrarSenha('input-login-senha', this)" title="Mostrar/ocultar senha">👁️</button>
+            </div>
             <button id="btn-fazer-login" class="btn btn-primary" style="width:100%;" onclick="fazerLogin()">Entrar</button>
         </div>
     </div>
@@ -211,7 +214,10 @@
             <label style="font-size: 0.85rem; font-weight: bold;">Nome:</label>
             <input type="text" id="input-master-nome" placeholder="Seu nome" spellcheck="false">
             <label style="font-size: 0.85rem; font-weight: bold;">Senha (mínimo 6 caracteres):</label>
-            <input type="password" id="input-master-senha" placeholder="Escolha uma senha">
+            <div style="display:flex; gap:6px;">
+                <input type="password" id="input-master-senha" placeholder="Escolha uma senha" style="flex:1;">
+                <button type="button" class="btn btn-neutro" style="padding:0 12px;" onclick="alternarMostrarSenha('input-master-senha', this)" title="Mostrar/ocultar senha">👁️</button>
+            </div>
             <button id="btn-criar-master" class="btn btn-success" style="width:100%;" onclick="criarContaMaster()">Criar Conta Master</button>
         </div>
     </div>
@@ -223,10 +229,13 @@
         <div class="modal-content" style="width:420px; max-width:92%;">
             <h3 id="titulo-prompt-generico" style="margin-top:0; color:var(--primary);">Confirme</h3>
             <p id="texto-prompt-generico" style="color:#4b5563; font-size:0.9rem; white-space:pre-line;"></p>
-            <input type="text" id="input-prompt-generico" style="margin-bottom:15px;">
+            <div style="display:flex; gap:6px; margin-bottom:15px;">
+                <input type="text" id="input-prompt-generico" style="margin-bottom:0; flex:1;">
+                <button type="button" id="btn-olho-prompt-generico" class="btn btn-neutro" style="display:none; padding:0 12px;" onclick="alternarMostrarSenha('input-prompt-generico', this)" title="Mostrar/ocultar senha">👁️</button>
+            </div>
             <div style="display:flex; gap:10px;">
                 <button class="btn btn-success" style="flex:1;" id="btn-ok-prompt-generico">OK</button>
-                <button class="btn" style="flex:1;" id="btn-cancelar-prompt-generico">Cancelar</button>
+                <button class="btn btn-neutro" style="flex:1;" id="btn-cancelar-prompt-generico">Cancelar</button>
             </div>
         </div>
     </div>
@@ -237,7 +246,7 @@
             <p id="texto-confirm-generico" style="color:#374151; font-size:0.95rem; white-space:pre-line;"></p>
             <div style="display:flex; gap:10px; margin-top:15px;">
                 <button class="btn btn-danger" style="flex:1;" id="btn-sim-confirm-generico">Sim</button>
-                <button class="btn" style="flex:1;" id="btn-nao-confirm-generico">Cancelar</button>
+                <button class="btn btn-neutro" style="flex:1;" id="btn-nao-confirm-generico">Cancelar</button>
             </div>
         </div>
     </div>
@@ -246,11 +255,17 @@
     <div id="modal-tv-senha" class="modal-geral">
         <div class="modal-content" style="width: 420px; max-width: 92%;">
             <h3 style="margin-top:0; border-bottom: 2px solid #e5e7eb; padding-bottom:10px; color:var(--primary);">📺 Abrir TV Senha</h3>
-            <p style="font-size: 0.85rem; color: #4b5563;">Escolha em qual tela/monitor conectado a este computador a TV Senha deve abrir em tela cheia (útil com divisores HDMI).</p>
+
+            <div style="background:#eff6ff; border:1px solid #93c5fd; border-radius:8px; padding:12px; margin-bottom:15px;">
+                <p style="font-size: 0.85rem; color: #1e40af; margin:0 0 10px 0;"><b>TV sem fio (Chromecast / Smart TV)?</b> Use este botão — ele usa o próprio recurso de transmissão do Chrome.</p>
+                <button class="btn btn-success" style="width:100%; background:#0891b2;" onclick="transmitirTvSenhaSemFio()">📡 Transmitir para TV sem fio</button>
+            </div>
+
+            <p style="font-size: 0.85rem; color: #4b5563;"><b>Monitor conectado por cabo?</b> Escolha em qual tela abrir em tela cheia (útil com divisores HDMI).</p>
             <label style="font-size: 0.85rem; font-weight: bold; display:block; margin-bottom:4px;">Monitor:</label>
             <select id="select-monitor-tv-senha" style="margin-bottom: 15px;"></select>
-            <button class="btn btn-success" style="width:100%;" onclick="abrirTvSenhaNoMonitorSelecionado()">Abrir TV Senha</button>
-            <button class="btn" style="width:100%; margin-top:8px;" onclick="fecharModalTvSenha()">Cancelar</button>
+            <button class="btn btn-success" style="width:100%;" onclick="abrirTvSenhaNoMonitorSelecionado()">Abrir em Monitor com Fio</button>
+            <button class="btn btn-neutro" style="width:100%; margin-top:8px;" onclick="fecharModalTvSenha()">Cancelar</button>
         </div>
     </div>
 
@@ -259,7 +274,10 @@
         <div class="modal-content" style="width: 480px; max-width: 92%;">
             <h3 id="titulo-modal-permissoes" style="margin-top:0; border-bottom: 2px solid #e5e7eb; padding-bottom:10px; color:var(--primary);">Editar Usuário</h3>
             <label style="font-size: 0.85rem; font-weight: bold;">Nova senha (deixe em branco pra não alterar):</label>
-            <input type="password" id="input-nova-senha-usuario" placeholder="Mínimo 6 caracteres">
+            <div style="display:flex; gap:6px;">
+                <input type="password" id="input-nova-senha-usuario" placeholder="Mínimo 6 caracteres" style="flex:1;">
+                <button type="button" class="btn btn-neutro" style="padding:0 12px;" onclick="alternarMostrarSenha('input-nova-senha-usuario', this)" title="Mostrar/ocultar senha">👁️</button>
+            </div>
             <label style="font-size: 0.85rem; font-weight: bold; display: block; margin-bottom: 4px;">Telas liberadas:</label>
             <div class="grid-obs-ingredientes" id="grid-telas-editar-usuario" style="max-height:220px;"></div>
             <label class="item-checkbox-ingrediente" id="box-chk-editar-usuario-caixa" style="margin-top:8px; display:none;">
@@ -539,24 +557,29 @@
         <div id="tela-videowall" class="tab-content">
             <button class="btn-exit-vw" onclick="sairVideoWall()">⬅ Voltar ao Menu</button>
             <div class="videowall-container">
-                <div class="vw-quadrant" style="background: white;">
-                    <div class="vw-header bg-warning">👨‍🍳 Monitor Cozinha</div>
-                    <div class="vw-body grid-pedidos" id="vw-cozinha" style="align-content: flex-start;"></div>
-                </div>
-                <div class="vw-quadrant" style="background:#000;">
-                    <div class="vw-body" id="vw-tv" style="padding: 0; display:flex; flex-direction:column;"></div>
-                </div>
-                <div class="vw-quadrant" style="background: #f8fafc;">
-                    <div class="vw-header bg-info" style="color:white;">📦 Monitor Entregas</div>
-                    <div class="vw-body grid-pedidos" id="vw-balcao" style="align-content: flex-start;"></div>
-                </div>
-                <div class="vw-quadrant" style="background: #e2e8f0;">
-                    <div class="vw-header" style="background:#10b981; color:white;">🔗 Sinal Livre / Câmeras</div>
-                    <div class="vw-body" style="display:flex; align-items:center; justify-content:center; flex-direction:column; color:gray; text-align:center;">
-                        <svg style="width:50px; height:50px; margin-bottom:15px; color:#94a3b8;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
-                        <p style="margin:0; font-size:1.1rem; font-weight:bold;">Sinal Aberto</p>
-                        <p style="font-size:0.9rem;">Insira seu Iframe, CFTV ou capture direto pelo OBS Studio.</p>
+                <div class="vw-quadrant" data-quadrante="1">
+                    <div class="vw-header">
+                        <select class="vw-quadrant-select" data-quadrante="1" onchange="mudarTelaVideoWall(1, this.value)"></select>
                     </div>
+                    <iframe class="vw-quadrant-iframe" data-quadrante="1" frameborder="0"></iframe>
+                </div>
+                <div class="vw-quadrant" data-quadrante="2">
+                    <div class="vw-header">
+                        <select class="vw-quadrant-select" data-quadrante="2" onchange="mudarTelaVideoWall(2, this.value)"></select>
+                    </div>
+                    <iframe class="vw-quadrant-iframe" data-quadrante="2" frameborder="0"></iframe>
+                </div>
+                <div class="vw-quadrant" data-quadrante="3">
+                    <div class="vw-header">
+                        <select class="vw-quadrant-select" data-quadrante="3" onchange="mudarTelaVideoWall(3, this.value)"></select>
+                    </div>
+                    <iframe class="vw-quadrant-iframe" data-quadrante="3" frameborder="0"></iframe>
+                </div>
+                <div class="vw-quadrant" data-quadrante="4">
+                    <div class="vw-header">
+                        <select class="vw-quadrant-select" data-quadrante="4" onchange="mudarTelaVideoWall(4, this.value)"></select>
+                    </div>
+                    <iframe class="vw-quadrant-iframe" data-quadrante="4" frameborder="0"></iframe>
                 </div>
             </div>
         </div>
@@ -571,93 +594,107 @@
                     <button class="btn btn-success" onclick="gerarJPGEstoque()" style="background:#7c3aed;">🖼️ JPG</button>
                 </div>
             </div>
-            
-            <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start;">
-                
-                <div style="flex: 1; min-width: 250px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-                    <h3 style="margin-top: 0; display:flex; justify-content:space-between; align-items:center;">
-                        Categorias
-                        <small style="font-size:0.7rem; color:gray; font-weight:normal;">✨ Arraste para reordenar</small>
-                    </h3>
-                    <div style="display: flex; gap: 8px; margin-bottom: 15px;">
-                        <input type="text" id="nova-cat-nome" placeholder="Nova Categoria..." style="margin-bottom: 0; flex: 1;" spellcheck="true" lang="pt-BR">
-                        <button class="btn btn-success" style="padding: 10px; width: 45px;" onclick="adicionarCategoria()">➕</button>
+
+            <div class="produtos-layout">
+
+                <div class="produtos-coluna-esquerda">
+                    <div class="card-produtos">
+                        <h3 style="margin-top: 0; display:flex; justify-content:space-between; align-items:center;">
+                            Categorias
+                            <small style="font-size:0.7rem; color:gray; font-weight:normal;">✨ Arraste para reordenar</small>
+                        </h3>
+                        <div style="display: flex; gap: 8px; margin-bottom: 15px;">
+                            <input type="text" id="nova-cat-nome" placeholder="Nova Categoria..." style="margin-bottom: 0; flex: 1;" spellcheck="true" lang="pt-BR">
+                            <button class="btn btn-success" style="padding: 10px; width: 45px;" onclick="adicionarCategoria()">➕</button>
+                        </div>
+                        <ul id="lista-gestao-categorias" style="list-style: none; padding: 0; margin: 0; max-height: 250px; overflow-y: auto;"></ul>
                     </div>
-                    <ul id="lista-gestao-categorias" style="list-style: none; padding: 0; margin: 0; max-height: 250px; overflow-y: auto;"></ul>
+
+                    <div class="card-produtos">
+                        <div style="display:flex; gap:5px; margin-bottom: 15px; background: #f3f4f6; padding: 5px; border-radius: 8px;">
+                            <button id="tab-simples" class="btn btn-primary" style="flex:1; padding: 8px;" onclick="mudarModoCadastro('simples')">Produto Simples</button>
+                            <button id="tab-combo" class="btn" style="flex:1; padding: 8px; background:transparent; color:#333;" onclick="mudarModoCadastro('combo')">Criar Combo</button>
+                        </div>
+
+                        <h3 id="titulo-form-produto" style="margin-top: 0;">Cadastrar Produto</h3>
+
+                        <div class="secao-form-produto">
+                            <h4>📝 Informações</h4>
+                            <label style="font-size: 0.85rem; font-weight: bold;">Nome (Produto ou Combo):</label>
+                            <input type="text" id="novo-prod-nome" placeholder="Ex: X-Bacon" required spellcheck="true" lang="pt-BR">
+
+                            <label style="font-size: 0.85rem; font-weight: bold; color:#0284c7;">Ingredientes / Itens Inclusos (Separados por vírgula):</label>
+                            <input type="text" id="novo-prod-ingredientes" placeholder="Ex: Pão, Hamburguer, Queijo, Tomate, Alface" spellcheck="true" lang="pt-BR">
+
+                            <label style="font-size: 0.85rem; font-weight: bold;">Status do Produto (Visibilidade no PDV):</label>
+                            <select id="novo-prod-ativo" style="font-weight: bold;">
+                                <option value="true">🟢 ATIVO (Aparece nas Vendas)</option>
+                                <option value="false">🔴 INATIVO (Oculto das Vendas)</option>
+                            </select>
+                        </div>
+
+                        <div class="secao-form-produto">
+                            <h4>🖼️ Foto</h4>
+                            <input type="file" id="file-prod-foto" accept="image/*" style="margin-bottom: 5px;" onchange="processarUploadFoto(this)">
+                            <input type="hidden" id="novo-prod-foto">
+                            <div id="preview-foto-container" style="display:none;">
+                                <img id="preview-foto-img" style="width: 70px; height: 70px; object-fit: cover; border-radius: 6px; border: 1px solid #ccc;">
+                            </div>
+                        </div>
+
+                        <div class="secao-form-produto">
+                            <h4>💰 Preço &amp; Estoque</h4>
+                            <div class="row-inputs">
+                                <div style="flex: 1;">
+                                    <label style="font-size: 0.85rem; font-weight: bold;">Preço Total (R$):</label>
+                                    <input type="number" id="novo-prod-preco" placeholder="0.00" step="0.01" required>
+                                </div>
+                                <div style="flex: 1;" id="box-estoque-simples">
+                                    <label style="font-size: 0.85rem; font-weight: bold;">Estoque nesta barraca:</label>
+                                    <input type="number" id="novo-prod-estoque" placeholder="Vazio = Livre">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="secao-form-produto">
+                            <h4>🏪 Visibilidade</h4>
+                            <p style="font-size: 0.75rem; color: #6b7280; margin: 0 0 8px 0;">O produto é único — cadastrado uma vez, mas só é vendido nas barracas marcadas aqui. Cada barraca marcada controla seu próprio estoque dele.</p>
+                            <div id="checklist-barracas-produto" style="display:flex; flex-wrap:wrap; gap:6px 14px; background:#f9fafb; padding:10px; border-radius:6px; border:1px solid #e5e7eb;"></div>
+                        </div>
+
+                        <div id="box-itens-combo" class="secao-form-produto" style="display:none; background: #fef08a; padding: 12px; border-radius: 8px; border-top: none; margin-top: 14px;">
+                            <h4 style="color: #854d0e;">✨ Itens Inclusos no Combo</h4>
+                            <p style="font-size: 0.75rem; color: #854d0e; margin: 0 0 10px 0;">Você pode adicionar uma categoria inteira ou um produto fixo.</p>
+                            <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+                                <select id="combo-add-select" style="margin-bottom:0; flex:1;"></select>
+                                <input type="number" id="combo-add-qtd" value="1" min="1" style="margin-bottom:0; width:60px;">
+                                <button class="btn btn-success" style="padding: 10px;" onclick="addProdutoTemporarioAoCombo()">➕</button>
+                            </div>
+                            <ul id="lista-combo-temporario" style="margin:0; padding-left:20px; font-size: 0.85rem; font-weight:bold;"></ul>
+                        </div>
+
+                        <div class="secao-form-produto">
+                            <h4>📁 Categoria &amp; Cozinha</h4>
+                            <label style="font-size: 0.85rem; font-weight: bold;">Categoria Vinculada:</label>
+                            <select id="novo-prod-categoria"></select>
+
+                            <div id="box-cozinha-simples">
+                                <label style="font-size: 0.85rem; font-weight: bold;">Direcionamento (Apenas P/ Produtos Simples):</label>
+                                <select id="novo-prod-cozinha">
+                                    <option value="true">👨‍🍳 Vai para a Cozinha (Preparo)</option>
+                                    <option value="false">🛍️ Apenas Balcão (Pronto/Geladeira)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; gap: 10px; margin-top: 15px;">
+                            <button id="btn-salvar-produto" class="btn btn-primary" style="flex: 1;" onclick="salvarProduto()">Salvar 💾</button>
+                            <button id="btn-cancelar-edicao-prod" class="btn btn-danger" style="display: none; padding: 12px 15px;" onclick="cancelarEdicaoProduto()" title="Cancelar Edição">❌</button>
+                        </div>
+                    </div>
                 </div>
 
-                <div style="flex: 1.5; min-width: 320px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-                    
-                    <div style="display:flex; gap:5px; margin-bottom: 15px; background: #f3f4f6; padding: 5px; border-radius: 8px;">
-                        <button id="tab-simples" class="btn btn-primary" style="flex:1; padding: 8px;" onclick="mudarModoCadastro('simples')">Produto Simples</button>
-                        <button id="tab-combo" class="btn" style="flex:1; padding: 8px; background:transparent; color:#333;" onclick="mudarModoCadastro('combo')">Criar Combo</button>
-                    </div>
-
-                    <h3 id="titulo-form-produto" style="margin-top: 0;">Cadastrar Produto</h3>
-                    
-                    <label style="font-size: 0.85rem; font-weight: bold;">Nome (Produto ou Combo):</label>
-                    <input type="text" id="novo-prod-nome" placeholder="Ex: X-Bacon" required spellcheck="true" lang="pt-BR">
-
-                    <label style="font-size: 0.85rem; font-weight: bold; color:#0284c7;">Ingredientes / Itens Inclusos (Separados por vírgula):</label>
-                    <input type="text" id="novo-prod-ingredientes" placeholder="Ex: Pão, Hamburguer, Queijo, Tomate, Alface" spellcheck="true" lang="pt-BR">
-
-                    <label style="font-size: 0.85rem; font-weight: bold;">Status do Produto (Visibilidade no PDV):</label>
-                    <select id="novo-prod-ativo" style="margin-bottom: 15px; font-weight: bold;">
-                        <option value="true">🟢 ATIVO (Aparece nas Vendas)</option>
-                        <option value="false">🔴 INATIVO (Oculto das Vendas)</option>
-                    </select>
-
-                    <label style="font-size: 0.85rem; font-weight: bold;">Carregar Foto do Computador:</label>
-                    <input type="file" id="file-prod-foto" accept="image/*" style="margin-bottom: 5px;" onchange="processarUploadFoto(this)">
-                    <input type="hidden" id="novo-prod-foto">
-                    <div id="preview-foto-container" style="margin-bottom: 15px; display:none;">
-                        <img id="preview-foto-img" style="width: 70px; height: 70px; object-fit: cover; border-radius: 6px; border: 1px solid #ccc;">
-                    </div>
-
-                    <div class="row-inputs">
-                        <div style="flex: 1;">
-                            <label style="font-size: 0.85rem; font-weight: bold;">Preço Total (R$):</label>
-                            <input type="number" id="novo-prod-preco" placeholder="0.00" step="0.01" required>
-                        </div>
-                        <div style="flex: 1;" id="box-estoque-simples">
-                            <label style="font-size: 0.85rem; font-weight: bold;">Estoque nesta barraca:</label>
-                            <input type="number" id="novo-prod-estoque" placeholder="Vazio = Livre">
-                        </div>
-                    </div>
-
-                    <label style="font-size: 0.85rem; font-weight: bold;">🏪 Barracas onde este produto aparece:</label>
-                    <p style="font-size: 0.75rem; color: #6b7280; margin: 0 0 8px 0;">O produto é único — cadastrado uma vez, mas só é vendido nas barracas marcadas aqui. Cada barraca marcada controla seu próprio estoque dele.</p>
-                    <div id="checklist-barracas-produto" style="display:flex; flex-wrap:wrap; gap:6px 14px; margin-bottom:15px; background:#f9fafb; padding:10px; border-radius:6px; border:1px solid #e5e7eb;"></div>
-
-                    <div id="box-itens-combo" style="display:none; background: #fef08a; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                        <label style="font-size: 0.85rem; font-weight: bold; color: #854d0e;">Itens Inclusos no Combo:</label>
-                        <p style="font-size: 0.75rem; color: #854d0e; margin: 0 0 10px 0;">Você pode adicionar uma categoria inteira ou um produto fixo.</p>
-                        <div style="display: flex; gap: 5px; margin-bottom: 10px;">
-                            <select id="combo-add-select" style="margin-bottom:0; flex:1;"></select>
-                            <input type="number" id="combo-add-qtd" value="1" min="1" style="margin-bottom:0; width:60px;">
-                            <button class="btn btn-success" style="padding: 10px;" onclick="addProdutoTemporarioAoCombo()">➕</button>
-                        </div>
-                        <ul id="lista-combo-temporario" style="margin:0; padding-left:20px; font-size: 0.85rem; font-weight:bold;"></ul>
-                    </div>
-
-                    <label style="font-size: 0.85rem; font-weight: bold;">Categoria Vinculada:</label>
-                    <select id="novo-prod-categoria"></select>
-                    
-                    <div id="box-cozinha-simples">
-                        <label style="font-size: 0.85rem; font-weight: bold;">Direcionamento (Apenas P/ Produtos Simples):</label>
-                        <select id="novo-prod-cozinha">
-                            <option value="true">👨‍🍳 Vai para a Cozinha (Preparo)</option>
-                            <option value="false">🛍️ Apenas Balcão (Pronto/Geladeira)</option>
-                        </select>
-                    </div>
-
-                    <div style="display: flex; gap: 10px; margin-top: 15px;">
-                        <button id="btn-salvar-produto" class="btn btn-primary" style="flex: 1;" onclick="salvarProduto()">Salvar 💾</button>
-                        <button id="btn-cancelar-edicao-prod" class="btn btn-danger" style="display: none; padding: 12px 15px;" onclick="cancelarEdicaoProduto()" title="Cancelar Edição">❌</button>
-                    </div>
-                </div>
-
-                <div style="flex: 3; min-width: 100%; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-height: 60vh; overflow-y: auto; overflow-x: auto;">
+                <div class="produtos-coluna-lista card-produtos">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
                         <h3 style="margin: 0;">Lista de Produtos & Combos</h3>
                         <div style="width: 280px; max-width: 100%;">
@@ -665,24 +702,26 @@
                         </div>
                     </div>
 
-                    <div class="menu-categorias" id="abas-tabela-produtos-container" style="margin-bottom: 15px;"></div>
+                    <div class="menu-categorias" id="abas-tabela-produtos-container" style="margin-bottom: 12px;"></div>
 
-                    <table style="width: 100%; min-width: 700px; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
-                        <thead>
-                            <tr style="border-bottom: 2px solid #e5e7eb;">
-                                <th style="padding: 10px;">Cód</th>
-                                <th>Foto</th>
-                                <th>Status</th>
-                                <th>Nome / Descrição</th>
-                                <th>Categoria</th>
-                                <th>Barracas</th>
-                                <th>Preço</th>
-                                <th>Estoque (aqui)</th>
-                                <th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabela-produtos"></tbody>
-                    </table>
+                    <div style="flex: 1; min-height: 0; overflow-y: auto; overflow-x: auto;">
+                        <table style="width: 100%; min-width: 700px; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
+                            <thead>
+                                <tr style="border-bottom: 2px solid #e5e7eb;">
+                                    <th style="padding: 10px;">Cód</th>
+                                    <th>Foto</th>
+                                    <th>Status</th>
+                                    <th>Nome / Descrição</th>
+                                    <th>Categoria</th>
+                                    <th>Barracas</th>
+                                    <th>Preço</th>
+                                    <th>Estoque (aqui)</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabela-produtos"></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -772,7 +811,7 @@
                         </select>
                     </div>
                 </div>
-                <button class="btn" style="width:100%; margin-top:15px;" onclick="fecharModalConfigPedido()">Fechar</button>
+                <button class="btn btn-neutro" style="width:100%; margin-top:15px;" onclick="fecharModalConfigPedido()">Fechar</button>
             </div>
         </div>
 
@@ -815,6 +854,7 @@
                 <div class="row-inputs">
                     <input type="text" id="input-novo-usuario-nome" placeholder="Nome" style="margin-bottom: 0;" spellcheck="true" lang="pt-BR">
                     <input type="password" id="input-novo-usuario-senha" placeholder="Senha (mínimo 6 caracteres)" style="margin-bottom: 0;">
+                    <button type="button" class="btn btn-neutro" style="padding:0 12px;" onclick="alternarMostrarSenha('input-novo-usuario-senha', this)" title="Mostrar/ocultar senha">👁️</button>
                 </div>
                 <label style="font-size: 0.85rem; font-weight: bold; display: block; margin: 12px 0 4px;">Telas liberadas para este usuário:</label>
                 <div class="grid-obs-ingredientes" id="grid-telas-novo-usuario" style="max-height:220px;"></div>

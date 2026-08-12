@@ -207,6 +207,17 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         // --- Substitutos de prompt()/confirm() nativos (janela própria em
         // HTML, dá pra mascarar senha e não fica com a cara do navegador) ---
 
+        // Alterna um <input type="password"> pra "text" e volta — usado pelo
+        // ícone de olho em toda tela que pede senha (login, criar usuário,
+        // resetar senha, confirmar senha do caixa).
+        function alternarMostrarSenha(idInput, btnEl) {
+            const input = document.getElementById(idInput);
+            if (!input) return;
+            const mostrando = input.type === 'text';
+            input.type = mostrando ? 'password' : 'text';
+            btnEl.innerText = mostrando ? '👁️' : '🙈';
+        }
+
         function pedirTexto(mensagem, { titulo = 'Confirme', senha = false, valorInicial = '' } = {}) {
             return new Promise(resolve => {
                 const modal = document.getElementById('modal-prompt-generico');
@@ -215,6 +226,9 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 const input = document.getElementById('input-prompt-generico');
                 input.type = senha ? 'password' : 'text';
                 input.value = valorInicial;
+                const btnOlho = document.getElementById('btn-olho-prompt-generico');
+                btnOlho.style.display = senha ? 'inline-block' : 'none';
+                btnOlho.innerText = '👁️';
                 modal.style.display = 'flex';
                 setTimeout(() => input.focus(), 50);
 
@@ -569,7 +583,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 if (carrinho.length === 0 && pedidoEmEdicaoId === null) aplicarConfigPadroesNoFormulario();
             }
             if(idAba === 'tela-atalhos') renderizarPainelAtalhos();
-            if(idAba === 'tela-videowall') atualizarTelas();
+            if(idAba === 'tela-videowall') renderizarVideoWall();
             if(idAba === 'tela-entrega') atualizarTelas();
             if(idAba === 'tela-preparo') atualizarTelas();
             if(idAba === 'tela-barracas') renderizarPainelBarracas();
@@ -577,6 +591,55 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if(idAba === 'tela-dashboard-geral') carregarDashboardGeral();
         }
         function sairVideoWall() { mudarAba('tela-pedido', document.querySelectorAll('nav button')[0]); }
+
+        // Multiview 4x4: cada quadrante é um <iframe> independente carregando
+        // este mesmo app com ?abrirTela=<escolha> (mesmo mecanismo da "TV
+        // Senha em outro monitor") — reaproveita a renderização de qualquer
+        // tela sem duplicar nenhuma lógica, e cada quadrante escolhe a sua
+        // livremente (inclusive o Dashboard/Relatório). Pensado pro uso com
+        // divisor HDMI: 1 PC com 4 saídas, cada uma mostrando 1 quadrante.
+        const TELAS_VIDEOWALL = [
+            { id: '', label: '🔗 Em branco' },
+            { id: 'tela-tv', label: '📺 TV Senha' },
+            { id: 'tela-preparo', label: '🍳 Cozinha' },
+            { id: 'tela-entrega', label: '🛍️ Balcão/Entrega' },
+            { id: 'tela-agendados', label: '⏸️ Pedidos em Pausa' },
+            { id: 'tela-relatorio', label: '📈 Dashboard Analytics' },
+            { id: 'tela-dashboard-geral', label: '🏬 Dashboard Geral' },
+            { id: 'tela-gestao', label: '📋 Gestão de Pedidos' },
+            { id: 'tela-fechamento-caixa', label: '📜 Histórico de Caixas' }
+        ];
+        const PADRAO_VIDEOWALL = { 1: 'tela-agendados', 2: 'tela-preparo', 3: 'tela-entrega', 4: 'tela-tv' };
+
+        function chaveVideoWall(quadrante) { return `pdv_videowall_quadrante_${quadrante}`; }
+
+        function renderizarVideoWall() {
+            for (let q = 1; q <= 4; q++) {
+                const select = document.querySelector(`.vw-quadrant-select[data-quadrante="${q}"]`);
+                if (select && !select.dataset.montado) {
+                    select.innerHTML = TELAS_VIDEOWALL.map(t => `<option value="${t.id}">${t.label}</option>`).join('');
+                    select.dataset.montado = '1';
+                    const salvo = localStorage.getItem(chaveVideoWall(q));
+                    select.value = salvo !== null ? salvo : (PADRAO_VIDEOWALL[q] || '');
+                }
+                if (select) carregarIframeVideoWall(q, select.value);
+            }
+        }
+
+        function carregarIframeVideoWall(quadrante, idTela) {
+            const iframe = document.querySelector(`.vw-quadrant-iframe[data-quadrante="${quadrante}"]`);
+            if (!iframe) return;
+            const novoSrc = idTela ? `${location.origin}${location.pathname}?abrirTela=${idTela}` : 'about:blank';
+            if (iframe.getAttribute('data-src-atual') !== novoSrc) {
+                iframe.src = novoSrc;
+                iframe.setAttribute('data-src-atual', novoSrc);
+            }
+        }
+
+        function mudarTelaVideoWall(quadrante, idTela) {
+            localStorage.setItem(chaveVideoWall(quadrante), idTela);
+            carregarIframeVideoWall(quadrante, idTela);
+        }
 
         function calcularDiferencaMinutos(horaInicio, horaFim) {
             if (!horaInicio || !horaFim) return "-";
@@ -2367,6 +2430,27 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             document.getElementById('modal-tv-senha').style.display = 'none';
         }
 
+        // Transmissão sem fio de verdade (Chromecast, TV com webOS/Miracast
+        // etc.) usa a Presentation API, não a Window Management API — essa
+        // segunda só serve pra monitor fisicamente estendido no Windows; pra
+        // TV sem fio ela até detecta a tela, mas não consegue posicionar uma
+        // janela nela de forma confiável. A Presentation API abre o mesmo
+        // seletor de dispositivo nativo do botão "Transmitir" do Chrome.
+        async function transmitirTvSenhaSemFio() {
+            if (!('PresentationRequest' in window)) {
+                return exibirAviso('Este navegador não suporta transmissão sem fio direto pelo app. Abra a TV Senha numa aba normal e use o botão "Transmitir" do próprio Chrome (⋮ no canto superior direito).');
+            }
+            const url = `${location.origin}${location.pathname}?abrirTela=tela-tv`;
+            try {
+                const request = new PresentationRequest([url]);
+                await request.start();
+                fecharModalTvSenha();
+                exibirAviso('Transmitindo a TV Senha para o dispositivo escolhido!');
+            } catch (erro) {
+                console.log('Transmissão sem fio cancelada ou indisponível:', erro);
+            }
+        }
+
         async function abrirTvSenhaNoMonitorSelecionado() {
             const select = document.getElementById('select-monitor-tv-senha');
             const idx = select.value;
@@ -2469,20 +2553,6 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         }
 
         // Único critério pra "tem item de verdade na cozinha agora": fase
-        // 'agora' (não 'mais_tarde', que ainda está só na Pedido Ficha) e
-        // marcado como cozinha (ou, no caso de combo, algum sub-item marcado
-        // e ainda não entregue). Usado tanto na TV cheia quanto na TV
-        // compacta do Multiview, pra nunca mostrarem pedidos diferentes.
-        function pedidoTemItemNaCozinha(pedido) {
-            return pedido.itens.some(item => {
-                if (item.fase !== 'agora') return false;
-                if (item.isCombo) {
-                    return item.itensComboEscolhidos && item.itensComboEscolhidos.some(sub => sub.cozinha && sub.fase !== 'entregue');
-                }
-                return item.cozinha;
-            });
-        }
-
         function atualizarTelas() {
             let htmlCozinha = '', htmlBalcao = '', htmlAgenda = '', htmlPrepTV = '';
             let countCoz = 0, countBalc = 0, countAgend = 0;
@@ -2751,30 +2821,6 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             let hist = [...prontos.reverse(), ...entregues.slice(-8).reverse()].slice(0, 10);
             document.getElementById('tv-lista-historico').innerHTML = hist.map(p => `<div class="mc-num ready"><span class="id">#${String(p.id).padStart(2, '0')}</span><span class="nome">${p.cliente}</span></div>`).join('');
 
-            if(document.getElementById('vw-cozinha')) document.getElementById('vw-cozinha').innerHTML = htmlCozinha;
-            if(document.getElementById('vw-balcao')) document.getElementById('vw-balcao').innerHTML = htmlBalcao;
-            if(document.getElementById('vw-tv')) {
-                let ultPronto = prontos.length > 0 ? prontos[prontos.length - 1] : null;
-
-                document.getElementById('vw-tv').innerHTML = `
-                <div class="vw-tv-compacta">
-                    <div class="vw-tv-col preparando">
-                        <div class="vw-tv-title" style="color:#facc15;">Preparando</div>
-                        ${pedidosGerais.filter(p=>p.statusPainel==='preparando' && pedidoTemItemNaCozinha(p)).map(p=>`<div class="vw-num"><span>#${String(p.id).padStart(2, '0')}</span><span>${p.cliente}</span></div>`).join('') || '<p style="font-size:0.75rem; color:gray; text-align:center;">Livre</p>'}
-                    </div>
-                    <div class="vw-tv-col pronto" style="background:#022c22;">
-                        <div class="vw-tv-title" style="color:#4ade80;">Pronto</div>
-                        ${ultPronto ? `
-                            <div class="vw-destaque">
-                                <div class="vw-destaque-num">#${String(ultPronto.id).padStart(2, '0')}</div>
-                                <div class="vw-destaque-name">${ultPronto.cliente}</div>
-                            </div>
-                        ` : ''}
-                        ${hist.map(p => `<div class="vw-num ready"><span>#${String(p.id).padStart(2, '0')}</span><span>${p.cliente}</span></div>`).join('')}
-                    </div>
-                </div>`;
-            }
-
             const cardsBalcaoVisiveis = Array.from(document.querySelectorAll('#fila-entrega .card-pedido'));
             if (cardsBalcaoVisiveis.length > 0) {
                 destacarCardBalcao(cardsBalcaoVisiveis);
@@ -2883,6 +2929,14 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 return exibirAviso("Você não tem permissão para fechar caixa.");
             }
 
+            // Só deixa fechar se não sobrou nada pendente desse caixa no
+            // Balcão (preparando/pronto/nenhum) nem em Pedidos em Pausa —
+            // senão esses pedidos ficariam "órfãos" depois do fechamento.
+            const pendentes = pedidosGerais.filter(p => p.caixaId === idCaixa && p.statusPainel !== 'entregue' && p.statusPainel !== 'cancelado');
+            if (pendentes.length > 0) {
+                return exibirAviso(`Ainda há ${pendentes.length} pedido(s) pendente(s) desse caixa no Balcão ou em Pedidos em Pausa. Finalize ou cancele todos antes de fechar o caixa.`, "Caixa não pode ser fechado");
+            }
+
             const senha = await pedirTexto(`Confirme sua senha (${usuarioAtual.nome}) para fechar o caixa de ${caixa.usuarioNome}:`, { titulo: '🔒 Confirmar senha', senha: true });
             if (senha === null) return;
             const senhaOk = await confirmarSenhaUsuarioAtual(senha);
@@ -2972,12 +3026,17 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (!usuarioAtual || !usuarioAtual.isMaster) {
                 return exibirAviso("Só o usuário Master pode excluir um fechamento de caixa.");
             }
-            if (await pedirConfirmacao(`Excluir permanentemente o Fechamento de Caixa #${idCaixa}?`, { titulo: '🗑️ Excluir Fechamento' })) {
-                historicoCaixasDB = historicoCaixasDB.filter(c => c.id !== idCaixa);
-                salvarNoBancoLocal();
-                renderizarHistoricoCaixas();
-                exibirAviso(`Registro de Caixa #${idCaixa} excluído com sucesso!`);
-            }
+            if (!(await pedirConfirmacao(`Excluir permanentemente o Fechamento de Caixa #${idCaixa}?`, { titulo: '🗑️ Excluir Fechamento' }))) return;
+
+            const senha = await pedirTexto(`Confirme sua senha (${usuarioAtual.nome}) para excluir este fechamento:`, { titulo: '🔒 Confirmar senha', senha: true });
+            if (senha === null) return;
+            const senhaOk = await confirmarSenhaUsuarioAtual(senha);
+            if (!senhaOk) return exibirAviso("Senha incorreta.");
+
+            historicoCaixasDB = historicoCaixasDB.filter(c => c.id !== idCaixa);
+            salvarNoBancoLocal();
+            renderizarHistoricoCaixas();
+            exibirAviso(`Registro de Caixa #${idCaixa} excluído com sucesso!`);
         }
 
         function renderizarHistoricoCaixas() {
@@ -3511,13 +3570,18 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             const telaAutoAbrir = new URLSearchParams(location.search).get('abrirTela');
             if (telaAutoAbrir && usuarioTemAcesso(telaAutoAbrir)) {
                 mudarAba(telaAutoAbrir, null);
-                const btnFull = document.createElement('button');
-                btnFull.innerText = '🖥️ Clique para Tela Cheia';
-                btnFull.style.cssText = 'position:fixed; top:10px; right:10px; z-index:99999; padding:12px 18px; font-size:1rem; font-weight:bold; background:#2563eb; color:white; border:none; border-radius:8px; cursor:pointer; box-shadow:0 4px 10px rgba(0,0,0,0.3);';
-                btnFull.onclick = () => {
-                    document.documentElement.requestFullscreen().then(() => btnFull.remove()).catch(() => {});
-                };
-                document.body.appendChild(btnFull);
+                // Dentro de um <iframe> (quadrante do Multiview) não faz
+                // sentido nem funciona pedir tela cheia — só mostra o botão
+                // quando é mesmo uma janela própria (aberta via TV Senha).
+                if (window.self === window.top) {
+                    const btnFull = document.createElement('button');
+                    btnFull.innerText = '🖥️ Clique para Tela Cheia';
+                    btnFull.style.cssText = 'position:fixed; top:10px; right:10px; z-index:99999; padding:12px 18px; font-size:1rem; font-weight:bold; background:#2563eb; color:white; border:none; border-radius:8px; cursor:pointer; box-shadow:0 4px 10px rgba(0,0,0,0.3);';
+                    btnFull.onclick = () => {
+                        document.documentElement.requestFullscreen().then(() => btnFull.remove()).catch(() => {});
+                    };
+                    document.body.appendChild(btnFull);
+                }
             }
         };
 
@@ -3567,6 +3631,7 @@ window.gerarPDFDashboardGeral = gerarPDFDashboardGeral;
 window.gerarJPGFechamento = gerarJPGFechamento;
 window.imprimirMeuCaixa = imprimirMeuCaixa;
 window.pedirTexto = pedirTexto;
+window.alternarMostrarSenha = alternarMostrarSenha;
 window.pedirConfirmacao = pedirConfirmacao;
 window.verMeuRelatorioCaixa = verMeuRelatorioCaixa;
 window.limparCarrinhoComConfirmacao = limparCarrinhoComConfirmacao;
@@ -3575,6 +3640,7 @@ window.ajustarZoomTela = ajustarZoomTela;
 window.abrirModalTvSenha = abrirModalTvSenha;
 window.fecharModalTvSenha = fecharModalTvSenha;
 window.abrirTvSenhaNoMonitorSelecionado = abrirTvSenhaNoMonitorSelecionado;
+window.transmitirTvSenhaSemFio = transmitirTvSenhaSemFio;
 window.abrirModalConfigPedido = abrirModalConfigPedido;
 window.fecharModalConfigPedido = fecharModalConfigPedido;
 window.fecharModalCombo = fecharModalCombo;
@@ -3612,6 +3678,7 @@ window.renderizarTabelaModalTodosPedidos = renderizarTabelaModalTodosPedidos;
 window.renderizarTabelaProdutos = renderizarTabelaProdutos;
 window.filtrarTabelaProdutosPorCategoria = filtrarTabelaProdutosPorCategoria;
 window.sairVideoWall = sairVideoWall;
+window.mudarTelaVideoWall = mudarTelaVideoWall;
 window.salvarObsModal = salvarObsModal;
 window.salvarProduto = salvarProduto;
 window.setFaseItem = setFaseItem;
