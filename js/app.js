@@ -496,7 +496,6 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             if(idAba === 'tela-videowall') atualizarTelas(); 
             if(idAba === 'tela-entrega') atualizarTelas();
             if(idAba === 'tela-preparo') atualizarTelas();
-            if(idAba === 'tela-retirada') atualizarTelas();
             if(idAba === 'tela-barracas') renderizarPainelBarracas();
             if(idAba === 'tela-dashboard-geral') carregarDashboardGeral();
         }
@@ -668,7 +667,6 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                 if (filtroStatus === 'mais_tarde') lista = lista.filter(p => p.itens.some(i => i.fase === 'mais_tarde'));
                 if (filtroStatus === 'entregue') lista = lista.filter(p => p.statusPainel === 'entregue');
                 if (filtroStatus === 'cancelado') lista = lista.filter(p => p.statusPainel === 'cancelado');
-                if (filtroStatus === 'pendente') lista = lista.filter(p => p.pagamentoPendente);
             }
 
             if (lista.length === 0) {
@@ -677,7 +675,6 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                 lista.forEach(p => {
                     let statusTag = '';
                     if (p.statusPainel === 'cancelado') statusTag = '<span style="background:var(--danger); color:white; padding:3px 6px; border-radius:4px; font-weight:bold;">CANCELADO</span>';
-                    else if (p.pagamentoPendente) statusTag = '<span style="background:#0284c7; color:white; padding:3px 6px; border-radius:4px; font-weight:bold;">🌐 PENDENTE</span>';
                     else if (p.itens.some(i => i.fase === 'mais_tarde')) statusTag = '<span style="background:var(--info); color:white; padding:3px 6px; border-radius:4px; font-weight:bold;">📦 P. MAIS TARDE</span>';
                     else if (p.statusPainel === 'entregue') statusTag = '<span style="background:var(--success); color:white; padding:3px 6px; border-radius:4px; font-weight:bold;">FINALIZADO</span>';
                     else statusTag = '<span style="background:var(--warning); color:black; padding:3px 6px; border-radius:4px; font-weight:bold;">EM PREPARO</span>';
@@ -1760,7 +1757,6 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             if (!cliente) return exibirAviso("Por favor, informe o Nome do Cliente ou Mesa!");
 
             let formaPagto = document.getElementById('forma-pagto').value;
-            const pagamentoPendente = formaPagto === 'Pendente';
             const tipoAtendimento = document.getElementById('tipo-atendimento').value;
             const tipoGlobalRetirada = document.getElementById('tipo-retirada-global').value;
 
@@ -1816,11 +1812,6 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                     { forma: f1, valor: v1 },
                     { forma: f2, valor: v2 }
                 ];
-            } else if (formaPagto === 'Pendente') {
-                // Pedido Online: a forma de pagamento de verdade só é escolhida
-                // quando a pessoa vier retirar (ver 🌐 Pedido Retirada). Nada de
-                // valor recebido/troco pra validar agora.
-                formaPagto = 'Pedido Online (Pagar na Retirada)';
             }
 
             const dataObjeto = new Date();
@@ -1853,8 +1844,7 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                 horaEntradaCozinha: horaEntradaCozinhaCalculada,
                 horaEntrega: horaEntregaCalculada,
                 statusPainel: statusPainelCalculado,
-                pagamentoPendente: pagamentoPendente,
-                itens: JSON.parse(JSON.stringify(carrinho))
+                itens: JSON.parse(JSON.stringify(carrinho)) 
             };
 
             let catalogoAlteradoPorEstoque = false;
@@ -2238,8 +2228,8 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
         }
 
         function atualizarTelas() {
-            let htmlCozinha = '', htmlBalcao = '', htmlAgenda = '', htmlPrepTV = '', htmlRetirada = '';
-            let countCoz = 0, countBalc = 0, countAgend = 0, countRetirada = 0;
+            let htmlCozinha = '', htmlBalcao = '', htmlAgenda = '', htmlPrepTV = '';
+            let countCoz = 0, countBalc = 0, countAgend = 0;
             let prontos = [], entregues = [];
 
             // MAPAS PARA AS SIDEBARS EM FORMATO DE TABELA
@@ -2359,31 +2349,6 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                             <div style="font-size: 0.85rem; font-weight: bold; color: var(--primary); margin-top:2px;">[ ${p.tipoAtendimento || 'Levar (Viagem)'} ]</div>
                             <div class="lista-itens" style="margin-top:8px;">${itensDetalhadosFicha}</div>
                             <button class="btn btn-info" onclick="moverParaAgora(${p.id})">📤 Enviar p/ Cozinha</button>
-                        </div>`;
-                }
-
-                if(p.pagamentoPendente) {
-                    countRetirada++;
-
-                    const itensDetalhadosRetirada = p.itens.map(i => {
-                        let comboDet = i.isCombo ? `<br><small style="color:gray;">↳ ${i.itensComboEscolhidos.map(sub=>`1x ${sub.nome}`).join(', ')}</small>` : '';
-                        let obsDet = i.obs ? `<br><i style="color:red; font-size:0.8rem; font-weight:bold;">Observação: ${i.obs}</i>` : '';
-                        return `<div style="border-bottom:1px dashed #ccc; padding:4px 0;"><b>1x ${i.nome}</b>${comboDet}${obsDet}</div>`;
-                    }).join('');
-
-                    htmlRetirada += `
-                        <div class="card-pedido" style="border:1px solid #0284c7;">
-                            <div class="status-bar" style="background-color:#0284c7;"></div>
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <h3 style="margin:0;">#${p.id} - ${p.cliente}</h3>
-                                <b style="color:#0284c7; font-size:0.85rem;">🕒 ${p.hora}</b>
-                            </div>
-                            <div style="font-size: 0.85rem; font-weight: bold; color: var(--primary); margin-top:2px;">[ ${p.tipoAtendimento || 'Levar (Viagem)'} ]</div>
-                            <div class="lista-itens" style="margin-top:8px;">${itensDetalhadosRetirada}</div>
-                            <div style="display:flex; justify-content:space-between; font-weight:bold; margin:8px 0; font-size:1.05rem;">
-                                <span>Total:</span><span>R$ ${p.total.toFixed(2)}</span>
-                            </div>
-                            <button class="btn btn-primary" style="background:#0284c7;" onclick="editarPedido(${p.id})">💳 Cobrar Agora</button>
                         </div>`;
                 }
 
@@ -2510,16 +2475,13 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             document.getElementById('fila-cozinha').innerHTML = htmlCozinha || '<p style="color:gray;">Livre.</p>';
             document.getElementById('fila-entrega').innerHTML = htmlBalcao || '<p style="color:gray;">Livre.</p>';
             document.getElementById('fila-agendados').innerHTML = htmlAgenda || '<p style="color:gray;">Nenhum retido.</p>';
-            document.getElementById('fila-retirada').innerHTML = htmlRetirada || '<p style="color:gray;">Nenhum pedido aguardando pagamento na retirada.</p>';
-
-            document.getElementById('badge-cozinha').innerText = countCoz;
+            
+            document.getElementById('badge-cozinha').innerText = countCoz; 
             document.getElementById('badge-cozinha').style.display = countCoz ? 'inline-block' : 'none';
-            document.getElementById('badge-entrega').innerText = countBalc;
+            document.getElementById('badge-entrega').innerText = countBalc; 
             document.getElementById('badge-entrega').style.display = countBalc ? 'inline-block' : 'none';
-            document.getElementById('badge-agendados').innerText = countAgend;
+            document.getElementById('badge-agendados').innerText = countAgend; 
             document.getElementById('badge-agendados').style.display = countAgend ? 'inline-block' : 'none';
-            document.getElementById('badge-retirada').innerText = countRetirada;
-            document.getElementById('badge-retirada').style.display = countRetirada ? 'inline-block' : 'none';
 
             document.getElementById('tv-lista-preparando').innerHTML = htmlPrepTV || '<div style="color:gray;text-align:center;width:100%;font-size:1.5vw;margin-top:20px;">Aguardando...</div>';
             
@@ -2640,16 +2602,7 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
 
         function fecharCaixaPrompt() {
             if (!caixaAberto) return exibirAviso("O caixa já está fechado.");
-
-            // Fechar o caixa zera pedidosGerais (mais abaixo) — se ainda houver
-            // Pedido Retirada sem pagamento definido, ele seria perdido de vez
-            // (sem ninguém pra cobrar depois). Precisa resolver (🌐 Pedido
-            // Retirada → Cobrar Agora) ou cancelar antes de fechar.
-            const pendentesAbertos = pedidosGerais.filter(p => p.pagamentoPendente && p.statusPainel !== 'cancelado');
-            if (pendentesAbertos.length > 0) {
-                return exibirAviso(`Existe(m) ${pendentesAbertos.length} pedido(s) em "🌐 Pedido Retirada" ainda sem forma de pagamento definida. Cobre (ou cancele) todos antes de fechar o caixa.`, "Pedidos Pendentes de Pagamento");
-            }
-
+            
             const nomeCampanha = prompt("Digite o NOME DA CAMPANHA / EVENTO para fechar o caixa (Obrigatório):");
             if (!nomeCampanha || nomeCampanha.trim() === "") {
                 return exibirAviso("O Nome da Campanha é obrigatório para fechar o caixa!");
@@ -2657,8 +2610,8 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
 
             const senha = prompt("Digite a senha para fechar o caixa:");
             if (senha === "@Santaritatv2030") {
-
-                const validos = pedidosGerais.filter(p => p.statusPainel !== 'cancelado' && !p.pagamentoPendente);
+                
+                const validos = pedidosGerais.filter(p => p.statusPainel !== 'cancelado');
                 const validosFinanceiros = validos.filter(p => p.pagamento && !p.pagamento.startsWith('Bonificação'));
                 
                 const totalVendas = validosFinanceiros.reduce((a, p) => a + p.total, 0);
@@ -3009,8 +2962,6 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             document.getElementById('rel-debito').innerText = dados.fatDebito.toFixed(2);
             document.getElementById('rel-dinheiro-vendas').innerText = dados.fatDinheiro.toFixed(2);
             document.getElementById('rel-qtd-bonificacao').innerText = dados.qtdBonificacoes;
-            document.getElementById('rel-qtd-pendente').innerText = dados.pendentesPagamento.length;
-            document.getElementById('rel-total-pendente').innerText = dados.totalPendentePagamento.toFixed(2);
 
             const painelBono = document.getElementById('painel-resumo-bonificacoes');
             if (dados.bonificacoesLista.length > 0) {
@@ -3039,7 +2990,7 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                         contagemProdutos[i.nome] = (contagemProdutos[i.nome] || 0) + i.qtd;
                     }
                     contagemCategorias[i.categoria] = (contagemCategorias[i.categoria] || 0) + i.qtd;
-                    if (i.fase === 'mais_tarde') contagemRetirada['Depois'] += i.qtd; else contagemRetirada['Agora'] += i.qtd;
+                    if (i.fase === 'agora' || i.fase === 'entregue') contagemRetirada['Agora'] += i.qtd; else contagemRetirada['Depois'] += i.qtd;
                 });
             });
 
