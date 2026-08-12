@@ -9,6 +9,7 @@
 import { supabaseClient, PDV_CLIENT_ID } from './config.js';
 import { categoriasPadrao, produtosPadrao } from './data.js';
 import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCacheAtalhos, renderizarPainelBarracas, carregarDashboardGeral, iniciarRealtimeRegistroBarracas, registroBarracas } from './barracas.js';
+import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderizarTelaGestaoUsuarios, dispararLogoutForcado, iniciarRealtimeLogoutForcado, usuarioAtual } from './auth.js';
 
         // Id da barraca ativa neste dispositivo (linha correspondente na tabela
         // `pdv_state` do Supabase). Só é conhecido depois que resolverBarracaAtiva()
@@ -453,6 +454,14 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
         inicializarDropdownsToque();
 
         function mudarAba(idAba, botao) {
+            // Checagem de verdade (não só esconder o botão no menu) — sem isso,
+            // bastaria abrir o DevTools e chamar mudarAba() na mão pra contornar
+            // uma tela escondida por falta de permissão.
+            if (!usuarioTemAcesso(idAba)) {
+                exibirAviso('Você não tem permissão para acessar esta tela.');
+                return;
+            }
+
             document.querySelectorAll('.tab-content').forEach(aba => aba.classList.remove('active'));
             document.querySelectorAll('nav button, .dropdown-content button').forEach(btn => btn.classList.remove('active'));
             document.getElementById('nav-principal').classList.remove('menu-mobile-aberto');
@@ -497,6 +506,7 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             if(idAba === 'tela-entrega') atualizarTelas();
             if(idAba === 'tela-preparo') atualizarTelas();
             if(idAba === 'tela-barracas') renderizarPainelBarracas();
+            if(idAba === 'tela-gestao-usuarios') renderizarTelaGestaoUsuarios();
             if(idAba === 'tela-dashboard-geral') carregarDashboardGeral();
         }
         function sairVideoWall() { mudarAba('tela-pedido', document.querySelectorAll('nav button')[0]); }
@@ -2628,105 +2638,104 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
 
         function fecharCaixaPrompt() {
             if (!caixaAberto) return exibirAviso("O caixa já está fechado.");
-            
+            if (!usuarioAtual || !usuarioAtual.isMaster) {
+                return exibirAviso("Só o usuário Master pode fechar o caixa.");
+            }
+
             const nomeCampanha = prompt("Digite o NOME DA CAMPANHA / EVENTO para fechar o caixa (Obrigatório):");
             if (!nomeCampanha || nomeCampanha.trim() === "") {
                 return exibirAviso("O Nome da Campanha é obrigatório para fechar o caixa!");
             }
 
-            const senha = prompt("Digite a senha para fechar o caixa:");
-            if (senha === "@Santaritatv2030") {
-                
-                const validos = pedidosGerais.filter(p => p.statusPainel !== 'cancelado');
-                const validosFinanceiros = validos.filter(p => p.pagamento && !p.pagamento.startsWith('Bonificação'));
-                
-                const totalVendas = validosFinanceiros.reduce((a, p) => a + p.total, 0);
+            const validos = pedidosGerais.filter(p => p.statusPainel !== 'cancelado');
+            const validosFinanceiros = validos.filter(p => p.pagamento && !p.pagamento.startsWith('Bonificação'));
 
-                let fatPix = 0, fatPixDireto = 0, fatCredito = 0, fatDebito = 0, fatDinheiro = 0, fatBonificacao = 0;
+            const totalVendas = validosFinanceiros.reduce((a, p) => a + p.total, 0);
 
-                validos.forEach(p => {
-                    if (p.detalhesMisto && Array.isArray(p.detalhesMisto)) {
-                        p.detalhesMisto.forEach(d => {
-                            if (d.forma === 'Pix') fatPix += d.valor;
-                            if (d.forma === 'Pix Direto') fatPixDireto += d.valor;
-                            if (d.forma === 'Cartão Crédito') fatCredito += d.valor;
-                            if (d.forma === 'Cartão Débito') fatDebito += d.valor;
-                            if (d.forma === 'Dinheiro') fatDinheiro += d.valor;
-                        });
-                    } else if (p.pagamento) {
-                        if (p.pagamento === 'Pix') fatPix += p.total;
-                        else if (p.pagamento === 'Pix Direto') fatPixDireto += p.total;
-                        else if (p.pagamento === 'Cartão Crédito') fatCredito += p.total;
-                        else if (p.pagamento === 'Cartão Débito') fatDebito += p.total;
-                        else if (p.pagamento === 'Dinheiro') fatDinheiro += p.total;
-                        else if (p.pagamento.startsWith('Bonificação')) fatBonificacao += p.total;
-                    }
-                });
-                
-                let resumoProdutosVendidos = {};
-                validosFinanceiros.forEach(p => {
-                    p.itens.forEach(i => {
-                        resumoProdutosVendidos[i.nome] = (resumoProdutosVendidos[i.nome] || 0) + i.qtd;
+            let fatPix = 0, fatPixDireto = 0, fatCredito = 0, fatDebito = 0, fatDinheiro = 0, fatBonificacao = 0;
+
+            validos.forEach(p => {
+                if (p.detalhesMisto && Array.isArray(p.detalhesMisto)) {
+                    p.detalhesMisto.forEach(d => {
+                        if (d.forma === 'Pix') fatPix += d.valor;
+                        if (d.forma === 'Pix Direto') fatPixDireto += d.valor;
+                        if (d.forma === 'Cartão Crédito') fatCredito += d.valor;
+                        if (d.forma === 'Cartão Débito') fatDebito += d.valor;
+                        if (d.forma === 'Dinheiro') fatDinheiro += d.valor;
                     });
+                } else if (p.pagamento) {
+                    if (p.pagamento === 'Pix') fatPix += p.total;
+                    else if (p.pagamento === 'Pix Direto') fatPixDireto += p.total;
+                    else if (p.pagamento === 'Cartão Crédito') fatCredito += p.total;
+                    else if (p.pagamento === 'Cartão Débito') fatDebito += p.total;
+                    else if (p.pagamento === 'Dinheiro') fatDinheiro += p.total;
+                    else if (p.pagamento.startsWith('Bonificação')) fatBonificacao += p.total;
+                }
+            });
+
+            let resumoProdutosVendidos = {};
+            validosFinanceiros.forEach(p => {
+                p.itens.forEach(i => {
+                    resumoProdutosVendidos[i.nome] = (resumoProdutosVendidos[i.nome] || 0) + i.qtd;
                 });
+            });
 
-                const dataObjeto = new Date();
-                const dataHoraFechamento = `${dataObjeto.toLocaleDateString('pt-BR')} ${dataObjeto.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
-                const dataHoraAbertura = dataHoraAberturaCaixa || dataHoraFechamento;
+            const dataObjeto = new Date();
+            const dataHoraFechamento = `${dataObjeto.toLocaleDateString('pt-BR')} ${dataObjeto.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+            const dataHoraAbertura = dataHoraAberturaCaixa || dataHoraFechamento;
 
-                const registroFechamento = {
-                    id: historicoCaixasDB.length + 1,
-                    campanha: nomeCampanha.trim(),
-                    dataAbertura: dataHoraAbertura,
-                    dataFechamento: dataHoraFechamento,
-                    fundoInicial: valorFundoCaixa,
-                    totalVendas: totalVendas,
-                    pix: fatPix,
-                    pixDireto: fatPixDireto,
-                    credito: fatCredito,
-                    debito: fatDebito,
-                    dinheiroVendas: fatDinheiro,
-                    bonificacao: fatBonificacao,
-                    totalGaveta: valorFundoCaixa + fatDinheiro,
-                    qtdPedidos: validos.length,
-                    produtosVendidos: resumoProdutosVendidos,
-                    pedidosDetalhados: JSON.parse(JSON.stringify(pedidosGerais))
-                };
+            const registroFechamento = {
+                id: historicoCaixasDB.length + 1,
+                campanha: nomeCampanha.trim(),
+                dataAbertura: dataHoraAbertura,
+                dataFechamento: dataHoraFechamento,
+                fundoInicial: valorFundoCaixa,
+                totalVendas: totalVendas,
+                pix: fatPix,
+                pixDireto: fatPixDireto,
+                credito: fatCredito,
+                debito: fatDebito,
+                dinheiroVendas: fatDinheiro,
+                bonificacao: fatBonificacao,
+                totalGaveta: valorFundoCaixa + fatDinheiro,
+                qtdPedidos: validos.length,
+                produtosVendidos: resumoProdutosVendidos,
+                pedidosDetalhados: JSON.parse(JSON.stringify(pedidosGerais))
+            };
 
-                historicoCaixasDB.unshift(registroFechamento);
+            historicoCaixasDB.unshift(registroFechamento);
 
-                caixaAberto = false;
-                valorFundoCaixa = 0.00;
-                
-                pedidosGerais = [];
+            caixaAberto = false;
+            valorFundoCaixa = 0.00;
 
-                dataHoraAberturaCaixa = null;
-                salvarNoBancoLocal();
+            pedidosGerais = [];
 
-                document.getElementById('valor-fundo-caixa').value = '';
-                atualizarInterfaceCaixa();
-                atualizarTelas();
-                atualizarFiltrosGestao();
-                atualizarDashboard();
+            dataHoraAberturaCaixa = null;
+            salvarNoBancoLocal();
+            // Avisa (via Realtime) todo dispositivo logado nesta barraca, menos
+            // quem estiver como Master, pra deslogar sozinho — ver auth.js.
+            dispararLogoutForcado(barracaStateId);
 
-                exibirAviso("Caixa fechado com sucesso! Redirecionando para o Histórico de Caixas...");
-                
-                mudarAba('tela-fechamento-caixa', document.getElementById('btn-sub-fechamento'));
+            document.getElementById('valor-fundo-caixa').value = '';
+            atualizarInterfaceCaixa();
+            atualizarTelas();
+            atualizarFiltrosGestao();
+            atualizarDashboard();
 
-            } else if (senha !== null) {
-                exibirAviso("Senha incorreta!");
-            }
+            exibirAviso("Caixa fechado com sucesso! Redirecionando para o Histórico de Caixas...");
+
+            mudarAba('tela-fechamento-caixa', document.getElementById('btn-sub-fechamento'));
         }
 
         function excluirRegistroCaixa(idCaixa) {
-            const senha = prompt(`Digite a senha para EXCLUIR permanentemente o Fechamento de Caixa #${idCaixa}:`);
-            if (senha === "@Santaritatv2030") {
+            if (!usuarioAtual || !usuarioAtual.isMaster) {
+                return exibirAviso("Só o usuário Master pode excluir um fechamento de caixa.");
+            }
+            if (confirm(`Excluir permanentemente o Fechamento de Caixa #${idCaixa}?`)) {
                 historicoCaixasDB = historicoCaixasDB.filter(c => c.id !== idCaixa);
                 salvarNoBancoLocal();
                 renderizarHistoricoCaixas();
                 exibirAviso(`Registro de Caixa #${idCaixa} excluído com sucesso!`);
-            } else if (senha !== null) {
-                exibirAviso("Senha incorreta! O registro não foi excluído.");
             }
         }
 
@@ -3075,11 +3084,24 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
         }
 
         window.onload = async () => {
-            // Antes de qualquer coisa: descobre em qual barraca este dispositivo
-            // trabalha (mostra a tela de seleção e aguarda, se for a primeira vez).
-            // Só depois disso barracaStateId existe e é seguro ler/gravar estado.
+            // Antes de qualquer coisa: quem está usando este dispositivo? Mostra
+            // a tela de login (ou de criar a conta Master, na primeiríssima vez)
+            // e só segue depois disso resolver — ninguém vê nem a lista de
+            // barracas sem se identificar primeiro.
+            await resolverSessaoAtiva();
+            aplicarPermissoesNaUI();
+
+            // Só depois de saber quem está logado é que faz sentido perguntar em
+            // qual barraca este dispositivo trabalha (mostra a tela de seleção e
+            // aguarda, se for a primeira vez). Só depois disso barracaStateId
+            // existe e é seguro ler/gravar estado.
             const barraca = await resolverBarracaAtiva();
             barracaStateId = barraca.id;
+            // resolverBarracaAtiva() acabou de montar o trocador de barraca no
+            // menu (com seu próprio link "Gerenciar Barracas") — reaplica as
+            // permissões agora que esse pedaço da UI existe de verdade, senão
+            // esse link específico escaparia do primeiro aplicarPermissoesNaUI().
+            aplicarPermissoesNaUI();
 
             carregarCacheLocalDaBarraca();
             await carregarEstadoSupabase();
@@ -3094,6 +3116,7 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             iniciarRealtimeSupabase();
             iniciarRealtimeRegistroBarracas();
             iniciarRealtimeCatalogo();
+            iniciarRealtimeLogoutForcado(barracaStateId);
         };
 
 // --- Shim exigido pela conversão para módulo ES (não existe no arquivo-fonte) ---

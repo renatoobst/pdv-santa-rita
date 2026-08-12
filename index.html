@@ -153,6 +153,7 @@
                     <button onclick="mudarAba('tela-atalhos', this)">⌨️ Teclas de Atalho</button>
                     <button onclick="mudarAba('tela-configuracoes', this)">⚙️ Configurações & Parâmetros</button>
                     <button id="btn-nav-barracas" onclick="mudarAba('tela-barracas', this)">🏪 Barracas</button>
+                    <button onclick="mudarAba('tela-gestao-usuarios', this)">👤 Gerenciar Usuários</button>
                 </div>
             </div>
         </div>
@@ -176,8 +177,49 @@
             </div>
         </div>
 
+        <button class="nav-btn-icon" onclick="fazerLogout()" title="Sair">🚪 <span id="nome-usuario-atual-nav"></span></button>
         <button class="nav-btn-icon" onclick="toggleMenuGlobal()" title="Ocultar Menu">⬆</button>
     </nav>
+
+    <!-- TELA DE LOGIN (portão de entrada — vem antes até da seleção de barraca) -->
+    <div id="tela-login" class="modal-geral" style="display:none; z-index: 4000000; background: rgba(15,23,42,0.97);">
+        <div class="modal-content" style="width: 420px; max-width: 92%;">
+            <h2 style="margin-top: 0;">🔒 Entrar no Sistema</h2>
+            <label style="font-size: 0.85rem; font-weight: bold;">Usuário:</label>
+            <input type="text" id="input-login-nome" placeholder="Seu nome de usuário" spellcheck="false" onkeydown="if(event.key==='Enter') document.getElementById('input-login-senha').focus()">
+            <label style="font-size: 0.85rem; font-weight: bold;">Senha:</label>
+            <input type="password" id="input-login-senha" placeholder="Sua senha" onkeydown="if(event.key==='Enter') fazerLogin()">
+            <button id="btn-fazer-login" class="btn btn-primary" style="width:100%;" onclick="fazerLogin()">Entrar</button>
+        </div>
+    </div>
+
+    <!-- TELA DE CRIAÇÃO DA CONTA MASTER (aparece só uma vez, quando ainda não existe nenhum usuário) -->
+    <div id="tela-master-bootstrap" class="modal-geral" style="display:none; z-index: 4000000; background: rgba(15,23,42,0.97);">
+        <div class="modal-content" style="width: 420px; max-width: 92%;">
+            <h2 style="margin-top: 0;">👑 Criar Conta Master</h2>
+            <p style="color: #4b5563; font-size: 0.9rem;">Nenhum administrador foi criado ainda. Defina o nome e a senha da conta Master — ela terá acesso total ao sistema e poderá cadastrar os demais usuários.</p>
+            <label style="font-size: 0.85rem; font-weight: bold;">Nome:</label>
+            <input type="text" id="input-master-nome" placeholder="Seu nome" spellcheck="false">
+            <label style="font-size: 0.85rem; font-weight: bold;">Senha (mínimo 6 caracteres):</label>
+            <input type="password" id="input-master-senha" placeholder="Escolha uma senha">
+            <button id="btn-criar-master" class="btn btn-success" style="width:100%;" onclick="criarContaMaster()">Criar Conta Master</button>
+        </div>
+    </div>
+
+    <!-- MODAL: EDITAR PERMISSÕES DE UM USUÁRIO -->
+    <div id="modal-permissoes-usuario" class="modal-geral">
+        <div class="modal-content" style="width: 480px; max-width: 92%;">
+            <h3 id="titulo-modal-permissoes" style="margin-top:0; border-bottom: 2px solid #e5e7eb; padding-bottom:10px; color:var(--primary);">Editar Usuário</h3>
+            <label style="font-size: 0.85rem; font-weight: bold;">Nova senha (deixe em branco pra não alterar):</label>
+            <input type="password" id="input-nova-senha-usuario" placeholder="Mínimo 6 caracteres">
+            <label style="font-size: 0.85rem; font-weight: bold; display: block; margin-bottom: 4px;">Telas liberadas:</label>
+            <div class="grid-obs-ingredientes" id="grid-telas-editar-usuario" style="max-height:220px;"></div>
+            <div style="display:flex; gap:10px; margin-top:15px;">
+                <button class="btn btn-success" style="flex:1;" onclick="salvarPermissoesUsuario()">Salvar 💾</button>
+                <button class="btn btn-danger" style="flex:1;" onclick="fecharModalPermissoes()">Cancelar</button>
+            </div>
+        </div>
+    </div>
 
     <!-- TELA DE SELEÇÃO DE BARRACA (portão de entrada, antes de qualquer outra tela) -->
     <div id="tela-selecionar-barraca" class="modal-geral" style="display:none; z-index: 3000000; background: rgba(15,23,42,0.97);">
@@ -674,6 +716,38 @@
                         </tr>
                     </thead>
                     <tbody id="tabela-barracas"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TELA: GERENCIAR USUÁRIOS (exclusiva do Master) -->
+        <div id="tela-gestao-usuarios" class="tab-content">
+            <h2>👤 Gerenciar Usuários</h2>
+            <p style="color: gray; margin-bottom: 20px;">Cadastre quem pode usar o sistema e escolha quais telas cada um consegue acessar. Só o usuário Master vê esta tela.</p>
+
+            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px;">
+                <h3 style="margin-top: 0;">➕ Novo Usuário</h3>
+                <div class="row-inputs">
+                    <input type="text" id="input-novo-usuario-nome" placeholder="Nome" style="margin-bottom: 0;" spellcheck="true" lang="pt-BR">
+                    <input type="password" id="input-novo-usuario-senha" placeholder="Senha (mínimo 6 caracteres)" style="margin-bottom: 0;">
+                </div>
+                <label style="font-size: 0.85rem; font-weight: bold; display: block; margin: 12px 0 4px;">Telas liberadas para este usuário:</label>
+                <div class="grid-obs-ingredientes" id="grid-telas-novo-usuario" style="max-height:220px;"></div>
+                <button id="btn-criar-usuario" class="btn btn-success" style="width:100%; margin-top: 12px;" onclick="criarUsuarioForm()">Criar Usuário</button>
+            </div>
+
+            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); overflow-x: auto;">
+                <h3 style="margin-top: 0;">Usuários Cadastrados</h3>
+                <table style="width: 100%; min-width: 500px; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid #e5e7eb; text-align: left;">
+                            <th style="padding: 10px;">Nome</th>
+                            <th>Master?</th>
+                            <th>Telas liberadas</th>
+                            <th style="text-align: right; padding-right: 10px;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabela-usuarios"></tbody>
                 </table>
             </div>
         </div>
