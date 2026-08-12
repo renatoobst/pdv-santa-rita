@@ -118,6 +118,7 @@
         
         .card-produto { background: var(--card-bg); padding: 8px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); cursor: pointer; border: 2px solid transparent; transition: all 0.2s; position: relative; display: flex; flex-direction: column; justify-content: space-between; height: 100%; box-sizing: border-box; }
         .card-produto:hover { transform: translateY(-2px); border-color: var(--primary); box-shadow: 0 6px 12px rgba(0,0,0,0.1); }
+        .card-produto.card-focado-teclado { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.35); transform: translateY(-2px); }
         .img-produto-card { width: 100%; height: 75px; object-fit: contain; background-color: #f8fafc; border-radius: 6px; margin-bottom: 6px; padding: 2px; box-sizing: border-box; }
 
         .badge-estoque { position: absolute; top: -6px; right: -6px; background: var(--info); color: white; font-size: 0.65rem; font-weight: bold; padding: 2px 6px; border-radius: 8px; z-index: 2; }
@@ -183,6 +184,7 @@
         .cat-item:hover { background: #f9fafb; }
         .cat-item:active { cursor: grabbing; }
         .cat-item.arrastando { opacity: 0.4; background: #e2e8f0; border: 2px dashed #2563eb; }
+        #tabela-produtos tr.arrastando { opacity: 0.4; background: #e2e8f0; }
         .cat-acoes button { background: none; border: none; cursor: pointer; font-size: 1rem; opacity: 0.7; margin-left: 2px; }
         .cat-acoes button:hover { opacity: 1; transform: scale(1.1); }
 

@@ -24,6 +24,17 @@ const CHAVE_REGISTRO_CACHE = 'pdv_registro_barracas_cache';
 export let registroBarracas = [];
 export let barracaAtual = null; // { id, nome, criadoEm }
 
+// Lista de ids de barraca que o usuário logado pode usar (null = sem
+// restrição — Master, ou perfil sem essa informação ainda). Definida uma vez
+// por resolverBarracaAtiva(idsPermitidos), a partir de auth.js via app.js
+// (este módulo não importa auth.js, pra evitar import circular).
+let idsBarracasPermitidas = null;
+
+function barracasVisiveis() {
+    if (!idsBarracasPermitidas) return registroBarracas;
+    return registroBarracas.filter(b => idsBarracasPermitidas.includes(b.id));
+}
+
 export function chaveCacheEstado(id) { return `pdv_cache_${id}`; }
 export function chaveCacheAtalhos(id) { return `pdv_atalhos_${id}`; }
 
@@ -50,7 +61,7 @@ function salvarRegistroCacheLocal() {
     localStorage.setItem(CHAVE_REGISTRO_CACHE, JSON.stringify(registroBarracas));
 }
 
-async function carregarRegistroBarracas() {
+export async function carregarRegistroBarracas() {
     try {
         const { data, error } = await supabaseClient
             .from('pdv_state')
@@ -131,16 +142,20 @@ function migrarCacheLegadoParaMain() {
 // salva (e ela ainda existir no registro), retorna na hora. Caso contrário,
 // mostra a tela de seleção e só retorna quando o usuário escolher ou criar
 // uma — por isso é assíncrona.
-export async function resolverBarracaAtiva() {
+// idsPermitidos: lista de ids de barraca que o usuário logado pode acessar
+// (vem de usuarioAtual.barracasPermitidas em auth.js) — null/undefined pra
+// Master ou perfis sem restrição, o que mantém o comportamento de sempre.
+export async function resolverBarracaAtiva(idsPermitidos = null) {
+    idsBarracasPermitidas = (Array.isArray(idsPermitidos) && idsPermitidos.length > 0) ? idsPermitidos : null;
     await carregarRegistroBarracas();
 
     const idSalvo = localStorage.getItem(CHAVE_BARRACA_LOCAL);
-    let escolhida = idSalvo ? registroBarracas.find(b => b.id === idSalvo) : null;
+    let escolhida = idSalvo ? barracasVisiveis().find(b => b.id === idSalvo) : null;
 
     if (!escolhida && !idSalvo && localStorage.getItem('pdv_categorias')) {
         // Dispositivo já usava o PDV antes de "barracas" existir: assume
         // 'main' automaticamente, sem interromper quem já está em uso no evento.
-        escolhida = registroBarracas.find(b => b.id === 'main');
+        escolhida = barracasVisiveis().find(b => b.id === 'main');
         if (escolhida) localStorage.setItem(CHAVE_BARRACA_LOCAL, escolhida.id);
     }
 
@@ -166,9 +181,12 @@ function renderizarTelaSelecaoBarraca(aoEscolher) {
     const lista = document.getElementById('lista-barracas-selecao');
     tela.style.display = 'flex';
 
-    lista.innerHTML = registroBarracas.map(b => `
+    const mensagemVazia = idsBarracasPermitidas
+        ? 'Nenhuma barraca liberada pro seu usuário ainda. Peça pro Master te dar acesso.'
+        : 'Nenhuma barraca cadastrada ainda. Crie a primeira abaixo.';
+    lista.innerHTML = barracasVisiveis().map(b => `
         <button class="btn btn-primary" style="width:100%; text-align:left; padding:14px 16px;" data-barraca-id="${b.id}">🏪 ${b.nome}</button>
-    `).join('') || '<p style="color:gray;">Nenhuma barraca cadastrada ainda. Crie a primeira abaixo.</p>';
+    `).join('') || `<p style="color:gray;">${mensagemVazia}</p>`;
 
     lista.querySelectorAll('button[data-barraca-id]').forEach(btn => {
         btn.onclick = () => {
@@ -237,7 +255,7 @@ export function renderizarSeletorBarracaNav() {
     if (!nomeEl || !lista || !barracaAtual) return;
 
     nomeEl.innerText = barracaAtual.nome;
-    lista.innerHTML = registroBarracas
+    lista.innerHTML = barracasVisiveis()
         .filter(b => b.id !== barracaAtual.id)
         .map(b => `<button data-trocar-id="${b.id}">🏪 ${b.nome}</button>`)
         .join('') + `<button onclick="mudarAba('tela-barracas', document.getElementById('btn-nav-barracas'))">⚙️ Gerenciar Barracas</button>`;

@@ -204,6 +204,106 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             }
         }
 
+        // --- Navegação por teclado na tela de Pedido (setas + Enter) ---
+        // Só ativa quando a tela de Pedido está aberta e o foco não está
+        // dentro de um campo de texto (senão as setas atrapalhariam digitar
+        // na busca ou no nome do cliente).
+        let indiceProdutoFocadoTeclado = -1;
+
+        function cardsProdutoVisiveis() {
+            return Array.from(document.querySelectorAll('#menu-produtos .card-produto'));
+        }
+
+        function aplicarFocoVisualProduto() {
+            const cards = cardsProdutoVisiveis();
+            cards.forEach((c, i) => c.classList.toggle('card-focado-teclado', i === indiceProdutoFocadoTeclado));
+            if (indiceProdutoFocadoTeclado >= 0 && cards[indiceProdutoFocadoTeclado]) {
+                cards[indiceProdutoFocadoTeclado].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+        }
+
+        function navegacaoTecladoPedidoAtiva() {
+            const telaPedido = document.getElementById('tela-pedido');
+            if (!telaPedido || !telaPedido.classList.contains('active')) return false;
+            const ativo = document.activeElement;
+            const tag = ativo ? ativo.tagName : '';
+            return !(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT');
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (!navegacaoTecladoPedidoAtiva()) return;
+            const cards = cardsProdutoVisiveis();
+            if (cards.length === 0) return;
+
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                e.preventDefault();
+                indiceProdutoFocadoTeclado = Math.min(indiceProdutoFocadoTeclado + 1, cards.length - 1);
+                aplicarFocoVisualProduto();
+            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                indiceProdutoFocadoTeclado = Math.max(indiceProdutoFocadoTeclado - 1, 0);
+                aplicarFocoVisualProduto();
+            } else if (e.key === 'Enter') {
+                if (indiceProdutoFocadoTeclado >= 0 && cards[indiceProdutoFocadoTeclado]) {
+                    e.preventDefault();
+                    cards[indiceProdutoFocadoTeclado].click();
+                }
+            } else if (e.key === 'Delete' || e.key === 'Backspace') {
+                if (carrinho.length > 0) {
+                    e.preventDefault();
+                    removerItemCarrinho(carrinho[carrinho.length - 1].cartId);
+                }
+            }
+        });
+
+        // --- Teclado numérico próprio em tablet/celular (evita abrir o
+        // teclado nativo do sistema operacional por cima de campos de
+        // número) — só ativa em dispositivos de toque (pointer:coarse);
+        // desktop com mouse/teclado físico continua digitando normal. ---
+        let inputTecladoNumericoAtivo = null;
+
+        function ehDispositivoDeToque() {
+            return window.matchMedia('(pointer: coarse)').matches;
+        }
+
+        function configurarTecladoNumerico(input) {
+            if (input.dataset.tecladoConfigurado) return;
+            input.dataset.tecladoConfigurado = '1';
+            input.setAttribute('inputmode', 'none');
+            input.readOnly = true;
+            input.style.cursor = 'pointer';
+            input.addEventListener('focus', () => abrirTecladoNumerico(input));
+            input.addEventListener('click', () => abrirTecladoNumerico(input));
+        }
+
+        function ativarTecladoNumericoSeTablet() {
+            if (!ehDispositivoDeToque()) return;
+            document.querySelectorAll('input[type="number"]').forEach(configurarTecladoNumerico);
+        }
+
+        function abrirTecladoNumerico(input) {
+            inputTecladoNumericoAtivo = input;
+            document.getElementById('teclado-numerico-flutuante').style.display = 'block';
+        }
+
+        function fecharTecladoNumerico() {
+            document.getElementById('teclado-numerico-flutuante').style.display = 'none';
+            inputTecladoNumericoAtivo = null;
+        }
+
+        function digitarTecladoNumerico(tecla) {
+            const input = inputTecladoNumericoAtivo;
+            if (!input) return;
+            if (tecla === '⌫') {
+                input.value = input.value.slice(0, -1);
+            } else if (tecla === '.') {
+                if (!input.value.includes('.')) input.value += '.';
+            } else {
+                input.value += tecla;
+            }
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+
         // --- Substitutos de prompt()/confirm() nativos (janela própria em
         // HTML, dá pra mascarar senha e não fica com a cara do navegador) ---
 
@@ -482,6 +582,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
         let trocaItemPedidoId = null;
         let trocaItemCartId = null;
+        let trocaItemSubIndex = null; // != null quando é um sub-item de combo sendo trocado
         let obsCartIdAtual = null;
 
         function tocarBeep() {
@@ -867,6 +968,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if(!categoriasDB.includes('Combos')) categoriasDB.push('Combos');
             
             document.getElementById('novo-prod-categoria').innerHTML = categoriasDB.map(c => `<option value="${c}">${c}</option>`).join('');
+            atualizarListaSubcategoriasExistentes();
             
             const comboSelect = document.getElementById('combo-add-select');
             if(comboSelect) {
@@ -1128,12 +1230,12 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     : '<span style="color:var(--danger); font-size:0.75rem;">Nenhuma (invisível)</span>';
 
                 tbody.innerHTML += `
-                    <tr style="border-bottom: 1px solid #f3f4f6; ${p.ativo === false ? 'opacity: 0.6; background:#fef2f2;' : ''}">
-                        <td style="padding: 10px; font-weight: bold;">#${p.id}</td>
+                    <tr draggable="true" ondragstart="tratarDragStartProduto(event, ${p.id})" ondragover="tratarDragOverProduto(event)" ondrop="tratarDropProduto(event, ${p.id})" ondragend="tratarDragEndProduto(event)" style="border-bottom: 1px solid #f3f4f6; cursor: grab; ${p.ativo === false ? 'opacity: 0.6; background:#fef2f2;' : ''}">
+                        <td style="padding: 10px; font-weight: bold;"><span style="color:gray; cursor:grab;" title="Arraste para reordenar (dentro da mesma categoria)">☰</span> #${p.id}</td>
                         <td>${imgThumb}</td>
                         <td>${badgeStatus}</td>
                         <td>${p.nome} ${desc} <br><span style="font-size: 0.8rem; color: gray;">${p.cozinha ? '👨‍🍳 Cozinha' : '🛍️ Balcão'}</span></td>
-                        <td><span style="background:#e5e7eb; padding:2px 6px; border-radius:4px; font-size:0.8rem;">${p.categoria}</span></td>
+                        <td><span style="background:#e5e7eb; padding:2px 6px; border-radius:4px; font-size:0.8rem;">${p.categoria}</span>${p.subcategoria ? `<br><span style="color:gray; font-size:0.7rem;">↳ ${p.subcategoria}</span>` : ''}</td>
                         <td style="max-width:160px;">${badgesBarracas}</td>
                         <td style="font-weight: bold;">R$ ${p.preco.toFixed(2)}</td><td style="${corEstoque}">${txtEstoque}</td>
                         <td style="white-space: nowrap;">
@@ -1144,12 +1246,67 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     </tr>`;
             });
         }
-        
+
+        // Reordenar produtos arrastando — só dentro da mesma categoria (a
+        // ordem em produtosDB é a mesma ordem usada na tela de Pedido, ver
+        // renderizarMenu). Arrastar sobre um produto de outra categoria não
+        // faz nada, pra não misturar a ordem de categorias diferentes.
+        let idProdutoArrastado = null;
+
+        function tratarDragStartProduto(e, idProduto) {
+            idProdutoArrastado = idProduto;
+            e.currentTarget.classList.add('arrastando');
+            e.dataTransfer.effectAllowed = 'move';
+        }
+
+        function tratarDragOverProduto(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        }
+
+        function tratarDropProduto(e, idProdutoAlvo) {
+            e.preventDefault();
+            if (idProdutoArrastado === null || idProdutoArrastado === idProdutoAlvo) return;
+
+            const produtoArrastado = produtosDB.find(p => p.id === idProdutoArrastado);
+            const produtoAlvo = produtosDB.find(p => p.id === idProdutoAlvo);
+            if (!produtoArrastado || !produtoAlvo || produtoArrastado.categoria !== produtoAlvo.categoria) {
+                return exibirAviso('Só é possível reordenar produtos dentro da mesma categoria.');
+            }
+
+            const indexOrigem = produtosDB.findIndex(p => p.id === idProdutoArrastado);
+            const indexAlvo = produtosDB.findIndex(p => p.id === idProdutoAlvo);
+            const itemMovido = produtosDB.splice(indexOrigem, 1)[0];
+            produtosDB.splice(indexAlvo, 0, itemMovido);
+
+            salvarCatalogo();
+            renderizarTabelaProdutos();
+            renderizarMenu(categoriaFiltroAtual);
+        }
+
+        function tratarDragEndProduto(e) {
+            e.currentTarget.classList.remove('arrastando');
+            idProdutoArrastado = null;
+        }
+
+        // Sugestões de subcategoria (datalist) já usadas dentro da categoria
+        // selecionada no momento — ex: escolheu "Bebidas", sugere "Refrigerantes"
+        // e "Sucos" se algum produto de Bebidas já tiver essas subcategorias.
+        function atualizarListaSubcategoriasExistentes() {
+            const categoria = document.getElementById('novo-prod-categoria').value;
+            const lista = document.getElementById('lista-subcategorias-existentes');
+            if (!lista) return;
+            const subcats = [...new Set(produtosDB.filter(p => p.categoria === categoria && p.subcategoria).map(p => p.subcategoria))];
+            lista.innerHTML = subcats.map(s => `<option value="${s}">`).join('');
+        }
+
         function prepararEdicaoProduto(id) {
             const p = produtosDB.find(prod => prod.id === id);
             document.getElementById('novo-prod-nome').value = p.nome;
             document.getElementById('novo-prod-preco').value = p.preco;
             document.getElementById('novo-prod-categoria').value = p.categoria;
+            document.getElementById('novo-prod-subcategoria').value = p.subcategoria || '';
+            atualizarListaSubcategoriasExistentes();
             document.getElementById('novo-prod-foto').value = p.foto || '';
             document.getElementById('novo-prod-ativo').value = (p.ativo !== false).toString();
             document.getElementById('novo-prod-ingredientes').value = p.ingredientes || '';
@@ -1194,6 +1351,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             document.getElementById('file-prod-foto').value = '';
             document.getElementById('novo-prod-ativo').value = "true";
             document.getElementById('novo-prod-ingredientes').value = '';
+            document.getElementById('novo-prod-subcategoria').value = '';
             document.getElementById('preview-foto-container').style.display = 'none';
             renderizarChecklistBarracasProduto();
 
@@ -1208,6 +1366,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             let nome = document.getElementById('novo-prod-nome').value.trim();
             let preco = parseFloat(document.getElementById('novo-prod-preco').value);
             let categoria = document.getElementById('novo-prod-categoria').value;
+            let subcategoria = document.getElementById('novo-prod-subcategoria').value.trim();
             let foto = document.getElementById('novo-prod-foto').value.trim();
             let ativo = document.getElementById('novo-prod-ativo').value === 'true';
             let ingredientes = document.getElementById('novo-prod-ingredientes').value.trim();
@@ -1241,7 +1400,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             let idSalvo;
             if (produtoEmEdicaoId !== null) {
                 let p = produtosDB.find(prod => prod.id === produtoEmEdicaoId);
-                p.nome = nome; p.preco = preco; p.categoria = categoria; p.cozinha = cozinha;
+                p.nome = nome; p.preco = preco; p.categoria = categoria; p.subcategoria = subcategoria; p.cozinha = cozinha;
                 p.isCombo = isCombo; p.itensCombo = finalItensCombo; p.foto = foto; p.ativo = ativo; p.barracas = barracasMarcadas;
                 p.ingredientes = ingredientes;
                 idSalvo = p.id;
@@ -1250,7 +1409,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 idSalvo = produtosDB.length > 0 ? Math.max(...produtosDB.map(p => p.id)) + 1 : 1;
                 produtosDB.push({
                     id: idSalvo,
-                    nome, preco, categoria, cozinha, isCombo, itensCombo: finalItensCombo, foto, ativo, barracas: barracasMarcadas, ingredientes
+                    nome, preco, categoria, subcategoria, cozinha, isCombo, itensCombo: finalItensCombo, foto, ativo, barracas: barracasMarcadas, ingredientes
                 });
                 cancelarEdicaoProduto();
             }
@@ -1413,6 +1572,27 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     </div>`;
             };
 
+            // Dentro de uma categoria, produtos com subcategoria (ex: Bebidas
+            // > Refrigerantes, Sucos) ganham um mini-cabeçalho próprio; os
+            // sem subcategoria aparecem soltos, sem cabeçalho extra.
+            const renderGrupoProdutos = (itens) => {
+                const semSub = itens.filter(p => !p.subcategoria);
+                const comSub = itens.filter(p => p.subcategoria);
+                let html = '';
+                if (semSub.length > 0) html += `<div class="subgrupo-container">${semSub.map(renderCardHTML).join('')}</div>`;
+                if (comSub.length > 0) {
+                    let porSub = {};
+                    comSub.forEach(p => { (porSub[p.subcategoria] = porSub[p.subcategoria] || []).push(p); });
+                    for (let sub in porSub) {
+                        html += `
+                            <div class="subgrupo-header" style="font-size:0.8rem; border-bottom:none; border-left:3px solid var(--primary); padding-left:8px; margin-top:8px;">↳ ${sub}</div>
+                            <div class="subgrupo-container">${porSub[sub].map(renderCardHTML).join('')}</div>
+                        `;
+                    }
+                }
+                return html;
+            };
+
             let produtosFiltrados = produtosDisponiveisVenda;
             if (termoBusca) {
                 produtosFiltrados = produtosDisponiveisVenda.filter(p => p.nome.toLowerCase().includes(termoBusca));
@@ -1429,10 +1609,9 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 let htmlGeral = '';
                 for (let cat in agrupado) {
                     if (agrupado[cat].length > 0) {
-                        let cards = agrupado[cat].map(p => renderCardHTML(p)).join('');
                         htmlGeral += `
                             <div class="subgrupo-header">📁 ${cat}</div>
-                            <div class="subgrupo-container">${cards}</div>
+                            ${renderGrupoProdutos(agrupado[cat])}
                         `;
                     }
                 }
@@ -1442,8 +1621,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 if (itens.length === 0) {
                     menuDiv.innerHTML = '<p style="color: gray; text-align:center;">Nenhum produto ativo nesta categoria.</p>';
                 } else {
-                    let cards = itens.map(p => renderCardHTML(p)).join('');
-                    menuDiv.innerHTML = `<div class="subgrupo-container" style="margin-top:5px;">${cards}</div>`;
+                    menuDiv.innerHTML = renderGrupoProdutos(itens);
                 }
             }
         }
@@ -1493,6 +1671,17 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             comboAtualId = null;
         }
 
+        // No celular a tela empilha (produtos em cima, carrinho embaixo — ver
+        // @media max-width:900px em styles.css) e depois de tocar num produto
+        // não dava nenhum sinal visual de que o item entrou no pedido, sem
+        // rolar a tela manualmente pra conferir. Rola até o carrinho sozinho
+        // só nesse layout empilhado (no desktop os dois já ficam lado a lado).
+        function avisarItemAdicionadoMobile() {
+            if (window.innerWidth > 900) return;
+            const carrinhoEl = document.getElementById('box-carrinho-container');
+            if (carrinhoEl) carrinhoEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
         function confirmarCombo() {
             if (!caixaDoUsuarioAtual()) {
                 return exibirAviso("🔒 Abra o seu caixa antes de fazer vendas.", "Caixa Fechado");
@@ -1535,6 +1724,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             });
             fecharModalCombo();
             atualizarCarrinhoUI();
+            avisarItemAdicionadoMobile();
         }
 
         function abrirModalObs(cartId) {
@@ -1601,20 +1791,26 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             atualizarCarrinhoUI();
         }
 
-        function abrirModalTrocaItem(idPedido, cartId) {
+        function abrirModalTrocaItem(idPedido, cartId, subIndex = null) {
             trocaItemPedidoId = idPedido;
             trocaItemCartId = cartId;
+            trocaItemSubIndex = subIndex;
             const pedido = pedidosGerais.find(p => p.id === idPedido);
-            const item = pedido.itens.find(i => i.cartId === cartId);
-            
+            const itemPai = pedido.itens.find(i => i.cartId === cartId);
+            // Troca de um sub-item DENTRO de um combo (subIndex informado) usa
+            // os dados do sub-item escolhido, não do combo em si — um combo
+            // sempre tem item.cozinha=true (ver salvarProduto), então checar
+            // isso no item pai bloquearia toda troca de sub-item de combo.
+            const item = subIndex !== null ? itemPai.itensComboEscolhidos[subIndex] : itemPai;
+
             if (!item || item.cozinha) return exibirAviso("Apenas itens de balcão (sem cozinha) podem ser trocados aqui!");
 
             const prodOriginal = produtosDB.find(p => p.id === item.idProduto);
             const precoItem = item.preco || (prodOriginal ? prodOriginal.preco : 0);
 
-            document.getElementById('modal-troca-info').innerText = `Pedido #${pedido.id} (${pedido.cliente}) - Item atual: ${item.nome} (R$ ${precoItem.toFixed(2)})`;
-            
-            const produtosDisponiveis = produtosDB.filter(p => p.categoria === item.categoria && !p.isCombo && Math.abs(p.preco - precoItem) < 0.01 && p.ativo !== false && Array.isArray(p.barracas) && p.barracas.includes(barracaStateId));
+            document.getElementById('modal-troca-info').innerText = `Pedido #${pedido.id} (${pedido.cliente}) - Item atual: ${item.nome}${precoItem ? ` (R$ ${precoItem.toFixed(2)})` : ''}`;
+
+            const produtosDisponiveis = produtosDB.filter(p => p.categoria === item.categoria && !p.isCombo && (subIndex !== null || Math.abs(p.preco - precoItem) < 0.01) && p.ativo !== false && Array.isArray(p.barracas) && p.barracas.includes(barracaStateId));
             const select = document.getElementById('select-novo-item-troca');
 
             if (produtosDisponiveis.length === 0) {
@@ -1635,6 +1831,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             document.getElementById('modal-troca-item').style.display = 'none';
             trocaItemPedidoId = null;
             trocaItemCartId = null;
+            trocaItemSubIndex = null;
         }
 
         function confirmarTrocaItemBalcao() {
@@ -1646,7 +1843,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (!novoProduto) return;
 
             const pedido = pedidosGerais.find(p => p.id === trocaItemPedidoId);
-            const item = pedido.itens.find(i => i.cartId === trocaItemCartId);
+            const itemPai = pedido.itens.find(i => i.cartId === trocaItemCartId);
+            const item = trocaItemSubIndex !== null ? itemPai.itensComboEscolhidos[trocaItemSubIndex] : itemPai;
 
             let catalogoAlteradoPorEstoque = false;
 
@@ -1673,7 +1871,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             item.idProduto = novoProduto.id;
             item.nome = novoProduto.nome;
             item.categoria = novoProduto.categoria;
-            item.preco = novoProduto.preco;
+            // Sub-item de combo não tem preço próprio (o combo inteiro tem um
+            // preço fixo) — só produtos trocados fora de combo herdam o preço
+            // do novo produto.
+            if (trocaItemSubIndex === null) item.preco = novoProduto.preco;
 
             if (catalogoAlteradoPorEstoque) salvarCatalogo();
             salvarNoBancoLocal();
@@ -1809,9 +2010,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 cartId: Date.now().toString() + Math.floor(Math.random()*1000), 
                 idProduto: produto.id, nome: produto.nome, preco: produto.preco, 
                 categoria: produto.categoria, cozinha: produto.cozinha, 
-                isCombo: false, qtd: 1, obs: '', fase: fase 
+                isCombo: false, qtd: 1, obs: '', fase: fase
             });
             atualizarCarrinhoUI();
+            avisarItemAdicionadoMobile();
         }
 
         function removerItemCarrinho(cartId) {
@@ -2624,8 +2826,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                         resumoBalcaoCozinha[item.nome] = (resumoBalcaoCozinha[item.nome] || 0) + item.qtd;
 
                         if (item.isCombo) {
-                            return item.itensComboEscolhidos.map(sub => {
-                                let btnTrocaSub = (!sub.cozinha && (p.statusPainel === 'pronto' || p.statusPainel === 'preparando')) ? `<button class="btn btn-warning" style="padding:2px 6px; font-size:0.75rem; margin-left:5px;" onclick="abrirModalTrocaItem(${p.id}, '${item.cartId}')" title="Trocar Sabor/Produto">✏️ Trocar</button>` : '';
+                            return item.itensComboEscolhidos.map((sub, subIndex) => {
+                                let btnTrocaSub = (!sub.cozinha && (p.statusPainel === 'pronto' || p.statusPainel === 'preparando' || p.statusPainel === 'nenhum')) ? `<button class="btn btn-warning" style="padding:2px 6px; font-size:0.75rem; margin-left:5px;" onclick="abrirModalTrocaItem(${p.id}, '${item.cartId}', ${subIndex})" title="Trocar Sabor/Produto">✏️ Trocar</button>` : '';
                                 return `
                                     <div style="border-bottom:1px dashed #ccc; padding:6px 0; display:flex; justify-content:space-between; align-items:center;">
                                         <div><b>1x ${sub.nome}</b> <small style="color:gray;">(Do ${item.nome})</small>${item.obs ? `<br><i style="color:red;font-size:0.8rem;">Obs: ${item.obs}</i>`:''}</div>
@@ -2634,7 +2836,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                                 `;
                             }).join('');
                         } else {
-                            let btnTroca = (!item.cozinha && (p.statusPainel === 'pronto' || p.statusPainel === 'preparando')) ? `<button class="btn btn-warning" style="padding:2px 6px; font-size:0.75rem; margin-left:5px;" onclick="abrirModalTrocaItem(${p.id}, '${item.cartId}')" title="Trocar Sabor/Produto">✏️ Trocar</button>` : '';
+                            let btnTroca = (!item.cozinha && (p.statusPainel === 'pronto' || p.statusPainel === 'preparando' || p.statusPainel === 'nenhum')) ? `<button class="btn btn-warning" style="padding:2px 6px; font-size:0.75rem; margin-left:5px;" onclick="abrirModalTrocaItem(${p.id}, '${item.cartId}')" title="Trocar Sabor/Produto">✏️ Trocar</button>` : '';
                             return `
                                 <div style="border-bottom:1px dashed #ccc; padding:6px 0; display:flex; justify-content:space-between; align-items:center;">
                                     <div><b>1x ${item.nome}</b>${item.obs ? `<br><i style="color:red;font-size:0.8rem;">Obs: ${item.obs}</i>`:''}</div>
@@ -3537,7 +3739,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             // qual barraca este dispositivo trabalha (mostra a tela de seleção e
             // aguarda, se for a primeira vez). Só depois disso barracaStateId
             // existe e é seguro ler/gravar estado.
-            const barraca = await resolverBarracaAtiva();
+            const barraca = await resolverBarracaAtiva(usuarioAtual && !usuarioAtual.isMaster ? usuarioAtual.barracasPermitidas : null);
             barracaStateId = barraca.id;
             // resolverBarracaAtiva() acabou de montar o trocador de barraca no
             // menu (com seu próprio link "Gerenciar Barracas") — reaplica as
@@ -3557,6 +3759,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             renderizarHistoricoCaixas();
             atualizarBotoesVozAnuncio();
             aplicarTodosZoomsSalvos();
+            ativarTecladoNumericoSeTablet();
+            document.getElementById('grid-teclado-numerico').addEventListener('click', e => {
+                const btn = e.target.closest('.tecla-num');
+                if (btn) digitarTecladoNumerico(btn.dataset.tecla);
+            });
             iniciarRealtimeSupabase();
             iniciarRealtimeRegistroBarracas();
             iniciarRealtimeCatalogo();
@@ -3637,6 +3844,12 @@ window.verMeuRelatorioCaixa = verMeuRelatorioCaixa;
 window.limparCarrinhoComConfirmacao = limparCarrinhoComConfirmacao;
 window.alternarVozAnuncio = alternarVozAnuncio;
 window.ajustarZoomTela = ajustarZoomTela;
+window.fecharTecladoNumerico = fecharTecladoNumerico;
+window.tratarDragStartProduto = tratarDragStartProduto;
+window.tratarDragOverProduto = tratarDragOverProduto;
+window.tratarDropProduto = tratarDropProduto;
+window.tratarDragEndProduto = tratarDragEndProduto;
+window.atualizarListaSubcategoriasExistentes = atualizarListaSubcategoriasExistentes;
 window.abrirModalTvSenha = abrirModalTvSenha;
 window.fecharModalTvSenha = fecharModalTvSenha;
 window.abrirTvSenhaNoMonitorSelecionado = abrirTvSenhaNoMonitorSelecionado;

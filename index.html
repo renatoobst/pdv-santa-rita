@@ -251,6 +251,31 @@
         </div>
     </div>
 
+    <!-- TECLADO NUMÉRICO PRÓPRIO (só em tablet/celular — ver
+         ativarTecladoNumericoSeTablet em app.js): evita abrir o teclado
+         nativo do sistema operacional em cima de campos de número. -->
+    <div id="teclado-numerico-flutuante" style="display:none; position:fixed; left:0; right:0; bottom:0; z-index:2000000; background:white; border-top:2px solid #cbd5e1; box-shadow:0 -4px 12px rgba(0,0,0,0.15); padding:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; max-width:320px; margin-left:auto; margin-right:auto;">
+            <b style="font-size:0.85rem; color:#374151;">Digite o valor</b>
+            <button type="button" class="btn btn-neutro" style="padding:4px 10px;" onclick="fecharTecladoNumerico()">✖️</button>
+        </div>
+        <div id="grid-teclado-numerico" style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; max-width:320px; margin:0 auto;">
+            <button type="button" class="btn btn-neutro tecla-num" data-tecla="1">1</button>
+            <button type="button" class="btn btn-neutro tecla-num" data-tecla="2">2</button>
+            <button type="button" class="btn btn-neutro tecla-num" data-tecla="3">3</button>
+            <button type="button" class="btn btn-neutro tecla-num" data-tecla="4">4</button>
+            <button type="button" class="btn btn-neutro tecla-num" data-tecla="5">5</button>
+            <button type="button" class="btn btn-neutro tecla-num" data-tecla="6">6</button>
+            <button type="button" class="btn btn-neutro tecla-num" data-tecla="7">7</button>
+            <button type="button" class="btn btn-neutro tecla-num" data-tecla="8">8</button>
+            <button type="button" class="btn btn-neutro tecla-num" data-tecla="9">9</button>
+            <button type="button" class="btn btn-neutro tecla-num" data-tecla=".">.</button>
+            <button type="button" class="btn btn-neutro tecla-num" data-tecla="0">0</button>
+            <button type="button" class="btn btn-warning tecla-num" data-tecla="⌫">⌫</button>
+        </div>
+        <button type="button" class="btn btn-success" style="width:100%; max-width:320px; display:block; margin:12px auto 0;" onclick="fecharTecladoNumerico()">OK</button>
+    </div>
+
     <!-- MODAL: ABRIR TV SENHA EM OUTRO MONITOR -->
     <div id="modal-tv-senha" class="modal-geral">
         <div class="modal-content" style="width: 420px; max-width: 92%;">
@@ -283,6 +308,8 @@
             <label class="item-checkbox-ingrediente" id="box-chk-editar-usuario-caixa" style="margin-top:8px; display:none;">
                 <input type="checkbox" id="chk-editar-usuario-caixa"> 💰 Pode abrir/fechar caixa
             </label>
+            <label style="font-size: 0.85rem; font-weight: bold; display: block; margin: 12px 0 4px;">Barracas liberadas:</label>
+            <div class="grid-obs-ingredientes" id="grid-barracas-editar-usuario" style="max-height:150px;"></div>
             <div style="display:flex; gap:10px; margin-top:15px;">
                 <button class="btn btn-success" style="flex:1;" onclick="salvarPermissoesUsuario()">Salvar 💾</button>
                 <button class="btn btn-danger" style="flex:1;" onclick="fecharModalPermissoes()">Cancelar</button>
@@ -676,7 +703,11 @@
                         <div class="secao-form-produto">
                             <h4>📁 Categoria &amp; Cozinha</h4>
                             <label style="font-size: 0.85rem; font-weight: bold;">Categoria Vinculada:</label>
-                            <select id="novo-prod-categoria"></select>
+                            <select id="novo-prod-categoria" onchange="atualizarListaSubcategoriasExistentes()"></select>
+
+                            <label style="font-size: 0.85rem; font-weight: bold;">Subcategoria (opcional):</label>
+                            <input type="text" id="novo-prod-subcategoria" list="lista-subcategorias-existentes" placeholder="Ex: Refrigerantes, Sucos..." spellcheck="true" lang="pt-BR">
+                            <datalist id="lista-subcategorias-existentes"></datalist>
 
                             <div id="box-cozinha-simples">
                                 <label style="font-size: 0.85rem; font-weight: bold;">Direcionamento (Apenas P/ Produtos Simples):</label>
@@ -696,7 +727,7 @@
 
                 <div class="produtos-coluna-lista card-produtos">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
-                        <h3 style="margin: 0;">Lista de Produtos & Combos</h3>
+                        <h3 style="margin: 0;">Lista de Produtos & Combos <small style="font-size:0.7rem; color:gray; font-weight:normal;">✨ Arraste ☰ para reordenar (mesma categoria)</small></h3>
                         <div style="width: 280px; max-width: 100%;">
                             <input type="text" id="busca-tabela-produtos" placeholder="🔍 Pesquisar na lista..." oninput="renderizarTabelaProdutos()" style="margin-bottom: 0; padding: 8px; font-weight: bold; border: 2px solid #cbd5e1; background: #f8fafc;" spellcheck="true" lang="pt-BR">
                         </div>
@@ -861,6 +892,8 @@
                 <label class="item-checkbox-ingrediente" id="box-chk-novo-usuario-caixa" style="margin-top:8px; display:none;">
                     <input type="checkbox" id="chk-novo-usuario-caixa"> 💰 Pode abrir/fechar caixa
                 </label>
+                <label style="font-size: 0.85rem; font-weight: bold; display: block; margin: 12px 0 4px;">Barracas liberadas para este usuário:</label>
+                <div class="grid-obs-ingredientes" id="grid-barracas-novo-usuario" style="max-height:150px;"></div>
                 <button id="btn-criar-usuario" class="btn btn-success" style="width:100%; margin-top: 12px;" onclick="criarUsuarioForm()">Criar Usuário</button>
             </div>
 

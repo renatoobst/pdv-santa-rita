@@ -18,6 +18,7 @@
 // permissão).
 
 import { supabaseClient, PDV_CLIENT_ID } from './config.js';
+import { registroBarracas, carregarRegistroBarracas } from './barracas.js';
 
 const CHAVE_SESSAO_LOCAL = 'pdv_sessao_usuario_id';
 
@@ -56,7 +57,8 @@ function mapearPerfil(linha) {
         nome: linha.nome,
         isMaster: !!linha.is_master,
         telasPermitidas: linha.telas_permitidas || [],
-        podeAbrirFecharCaixa: !!linha.pode_abrir_fechar_caixa
+        podeAbrirFecharCaixa: !!linha.pode_abrir_fechar_caixa,
+        barracasPermitidas: linha.barracas_permitidas || []
     };
 }
 
@@ -272,6 +274,8 @@ async function carregarPerfis() {
 export async function renderizarTelaGestaoUsuarios() {
     if (!usuarioAtual || !usuarioAtual.isMaster) return;
 
+    await carregarRegistroBarracas();
+
     const gridNovo = document.getElementById('grid-telas-novo-usuario');
     if (gridNovo && !gridNovo.dataset.montado) {
         gridNovo.innerHTML = TELAS_DISPONIVEIS.map(t => `
@@ -282,6 +286,15 @@ export async function renderizarTelaGestaoUsuarios() {
         gridNovo.dataset.montado = '1';
     }
     atualizarVisibilidadeChkCaixa();
+
+    const gridBarracasNovo = document.getElementById('grid-barracas-novo-usuario');
+    if (gridBarracasNovo) {
+        gridBarracasNovo.innerHTML = registroBarracas.map(b => `
+            <label class="item-checkbox-ingrediente">
+                <input type="checkbox" class="chk-barraca-novo-usuario" value="${b.id}"> 🏪 ${b.nome}
+            </label>
+        `).join('') || '<span style="color:gray; font-size:0.8rem;">Nenhuma barraca cadastrada ainda.</span>';
+    }
 
     try {
         await carregarPerfis();
@@ -346,6 +359,7 @@ export async function criarUsuarioForm() {
     const senha = document.getElementById('input-novo-usuario-senha').value;
     const telas = Array.from(document.querySelectorAll('.chk-tela-novo-usuario:checked')).map(chk => chk.value);
     const podeAbrirFecharCaixa = telas.includes('tela-pedido') && !!document.getElementById('chk-novo-usuario-caixa').checked;
+    const barracas = Array.from(document.querySelectorAll('.chk-barraca-novo-usuario:checked')).map(chk => chk.value);
 
     if (!nome) return avisar('Digite o nome do usuário.');
     if (!senha || senha.length < 6) return avisar('A senha precisa ter pelo menos 6 caracteres.');
@@ -355,13 +369,14 @@ export async function criarUsuarioForm() {
     try {
         const senha_hash = await hashSenha(senha);
         const { error } = await supabaseClient.from('pdv_perfis').insert({
-            nome, senha_hash, is_master: false, telas_permitidas: telas, pode_abrir_fechar_caixa: podeAbrirFecharCaixa
+            nome, senha_hash, is_master: false, telas_permitidas: telas, pode_abrir_fechar_caixa: podeAbrirFecharCaixa, barracas_permitidas: barracas
         });
         if (error) throw error;
 
         document.getElementById('input-novo-usuario-nome').value = '';
         document.getElementById('input-novo-usuario-senha').value = '';
         document.querySelectorAll('.chk-tela-novo-usuario').forEach(chk => chk.checked = false);
+        document.querySelectorAll('.chk-barraca-novo-usuario').forEach(chk => chk.checked = false);
         document.getElementById('chk-novo-usuario-caixa').checked = false;
         atualizarVisibilidadeChkCaixa();
         avisar(`Usuário "${nome}" criado com sucesso!`);
@@ -392,6 +407,15 @@ function abrirModalPermissoes(id) {
     document.getElementById('chk-editar-usuario-caixa').checked = !!perfil.pode_abrir_fechar_caixa;
     atualizarVisibilidadeChkCaixa();
 
+    const gridBarracas = document.getElementById('grid-barracas-editar-usuario');
+    if (gridBarracas) {
+        gridBarracas.innerHTML = registroBarracas.map(b => `
+            <label class="item-checkbox-ingrediente">
+                <input type="checkbox" class="chk-barraca-editar-usuario" value="${b.id}" ${(perfil.barracas_permitidas || []).includes(b.id) ? 'checked' : ''}> 🏪 ${b.nome}
+            </label>
+        `).join('') || '<span style="color:gray; font-size:0.8rem;">Nenhuma barraca cadastrada ainda.</span>';
+    }
+
     modal.dataset.usuarioId = id;
     modal.style.display = 'flex';
 }
@@ -405,6 +429,7 @@ export async function salvarPermissoesUsuario() {
     const id = modal.dataset.usuarioId;
     const telas = Array.from(document.querySelectorAll('.chk-tela-editar-usuario:checked')).map(chk => chk.value);
     const podeAbrirFecharCaixa = telas.includes('tela-pedido') && !!document.getElementById('chk-editar-usuario-caixa').checked;
+    const barracas = Array.from(document.querySelectorAll('.chk-barraca-editar-usuario:checked')).map(chk => chk.value);
     const novaSenha = document.getElementById('input-nova-senha-usuario').value;
 
     if (novaSenha && novaSenha.length < 6) {
@@ -412,7 +437,7 @@ export async function salvarPermissoesUsuario() {
     }
 
     try {
-        const atualizacao = { telas_permitidas: telas, pode_abrir_fechar_caixa: podeAbrirFecharCaixa };
+        const atualizacao = { telas_permitidas: telas, pode_abrir_fechar_caixa: podeAbrirFecharCaixa, barracas_permitidas: barracas };
         if (novaSenha) atualizacao.senha_hash = await hashSenha(novaSenha);
 
         const { error } = await supabaseClient.from('pdv_perfis').update(atualizacao).eq('id', id);
