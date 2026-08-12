@@ -246,12 +246,12 @@
     <!-- TECLADO NUMÉRICO PRÓPRIO (só em tablet/celular — ver
          ativarTecladoNumericoSeTablet em app.js): evita abrir o teclado
          nativo do sistema operacional em cima de campos de número. -->
-    <div id="teclado-numerico-flutuante" style="display:none; position:fixed; left:0; right:0; bottom:0; z-index:2000000; background:white; border-top:2px solid #cbd5e1; box-shadow:0 -4px 12px rgba(0,0,0,0.15); padding:12px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; max-width:320px; margin-left:auto; margin-right:auto;">
+    <div id="teclado-numerico-flutuante" style="display:none; position:fixed; left:50%; transform:translateX(-50%); bottom:0; width:260px; z-index:2000000; background:white; border:2px solid #cbd5e1; border-bottom:none; border-radius:12px 12px 0 0; box-shadow:0 -4px 12px rgba(0,0,0,0.15); padding:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
             <b style="font-size:0.85rem; color:#374151;">Digite o valor</b>
             <button type="button" class="btn btn-neutro" style="padding:4px 10px;" onclick="fecharTecladoNumerico()">✖️</button>
         </div>
-        <div id="grid-teclado-numerico" style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; max-width:320px; margin:0 auto;">
+        <div id="grid-teclado-numerico" style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px;">
             <button type="button" class="btn btn-neutro tecla-num" data-tecla="1">1</button>
             <button type="button" class="btn btn-neutro tecla-num" data-tecla="2">2</button>
             <button type="button" class="btn btn-neutro tecla-num" data-tecla="3">3</button>
@@ -265,7 +265,7 @@
             <button type="button" class="btn btn-neutro tecla-num" data-tecla="0">0</button>
             <button type="button" class="btn btn-warning tecla-num" data-tecla="⌫">⌫</button>
         </div>
-        <button type="button" class="btn btn-success" style="width:100%; max-width:320px; display:block; margin:12px auto 0;" onclick="fecharTecladoNumerico()">OK</button>
+        <button type="button" class="btn btn-success" style="width:100%; display:block; margin:12px auto 0;" onclick="fecharTecladoNumerico()">OK</button>
     </div>
 
     <!-- TECLADO DE TEXTO PRÓPRIO (só em tablet/celular — ver
