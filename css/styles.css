@@ -87,6 +87,16 @@
         .tag-categoria:hover { background: #d1d5db; }
         .tag-categoria.ativa { background: var(--primary); color: white; }
 
+        .badge-caixa { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 8px 10px; border-radius: 8px; font-size: 0.85rem; font-weight: bold; }
+        .badge-caixa-aberto { background: #dcfce7; color: #166534; border: 1px solid #16a34a; }
+        .badge-caixa-fechado { background: #fef2f2; color: #991b1b; border: 1px solid #ef4444; }
+        .lista-outros-caixas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+        .chip-outro-caixa { display: inline-flex; align-items: center; gap: 4px; background: #f3f4f6; border-radius: 14px; padding: 3px 8px; font-size: 0.75rem; font-weight: 600; color: #374151; }
+
+        .controle-zoom-tela { display: flex; align-items: center; gap: 6px; background: #f3f4f6; border-radius: 8px; padding: 4px 8px; }
+        .controle-zoom-tela button { border: none; background: white; border-radius: 6px; width: 26px; height: 26px; cursor: pointer; font-size: 0.85rem; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .controle-zoom-tela span { font-size: 0.75rem; font-weight: bold; color: #374151; min-width: 34px; text-align: center; }
+
         .menu-grid { display: flex; flex-direction: column; gap: 12px; max-height: 75vh; overflow-y: auto; padding-right: 8px; }
         .subgrupo-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
         .subgrupo-header { grid-column: 1 / -1; font-size: 0.95rem; font-weight: 800; color: #1f2937; border-bottom: 2px solid #e5e7eb; padding-bottom: 3px; margin-top: 5px; text-transform: uppercase; letter-spacing: 0.5px; }

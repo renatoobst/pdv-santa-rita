@@ -21,7 +21,7 @@ import { supabaseClient, PDV_CLIENT_ID } from './config.js';
 
 const CHAVE_SESSAO_LOCAL = 'pdv_sessao_usuario_id';
 
-export let usuarioAtual = null; // { id, nome, isMaster, telasPermitidas }
+export let usuarioAtual = null; // { id, nome, isMaster, telasPermitidas, podeAbrirFecharCaixa }
 let perfisCache = [];
 
 // Lista de telas que podem ser liberadas por usuário. "tela-gestao-usuarios"
@@ -29,10 +29,10 @@ let perfisCache = [];
 // usuarioTemAcesso), nunca algo que se marca na grade de permissões.
 const TELAS_DISPONIVEIS = [
     { id: 'tela-pedido', label: '🛒 Pedido' },
-    { id: 'tela-agendados', label: '🎫 Pedido Ficha' },
+    { id: 'tela-agendados', label: '🎫 Pedidos em Pausa' },
     { id: 'tela-preparo', label: '🍳 Cozinha' },
     { id: 'tela-entrega', label: '🛍️ Balcão/Entrega' },
-    { id: 'tela-tv', label: '📺 TV Aberta' },
+    { id: 'tela-tv', label: '📺 TV Senha' },
     { id: 'tela-videowall', label: '🎛️ Multiview 4x4' },
     { id: 'tela-produtos', label: '📦 Produtos & Estoque' },
     { id: 'tela-atalhos', label: '⌨️ Teclas de Atalho' },
@@ -51,8 +51,54 @@ async function hashSenha(senha) {
 }
 
 function mapearPerfil(linha) {
-    return { id: linha.id, nome: linha.nome, isMaster: !!linha.is_master, telasPermitidas: linha.telas_permitidas || [] };
+    return {
+        id: linha.id,
+        nome: linha.nome,
+        isMaster: !!linha.is_master,
+        telasPermitidas: linha.telas_permitidas || [],
+        podeAbrirFecharCaixa: !!linha.pode_abrir_fechar_caixa
+    };
 }
+
+// Re-confirmação de senha do usuário logado (não é um novo login, é só uma
+// checagem pontual antes de uma ação sensível — abrir/fechar caixa). Busca o
+// hash salvo agora mesmo em vez de guardar em memória, então funciona mesmo
+// que o Master tenha trocado a senha do usuário em outra aba nesse meio tempo.
+export async function confirmarSenhaUsuarioAtual(senhaDigitada) {
+    if (!usuarioAtual) return false;
+    try {
+        const hash = await hashSenha(senhaDigitada);
+        const { data, error } = await supabaseClient.from('pdv_perfis').select('senha_hash').eq('id', usuarioAtual.id).maybeSingle();
+        if (error || !data) return false;
+        return data.senha_hash === hash;
+    } catch (erro) {
+        console.error('Falha ao confirmar senha:', erro);
+        return false;
+    }
+}
+
+// "Pode abrir/fechar caixa" só faz sentido pra quem também tem acesso à tela
+// de Pedido (é de lá que a ação é feita) — esconde a caixinha e desmarca se
+// "🛒 Pedido" for desmarcado, tanto no formulário de novo usuário quanto no
+// modal de editar permissões.
+function atualizarVisibilidadeChkCaixa() {
+    const pedidoNovo = document.querySelector('.chk-tela-novo-usuario[value="tela-pedido"]');
+    const boxNovo = document.getElementById('box-chk-novo-usuario-caixa');
+    if (boxNovo) {
+        const mostrar = !!(pedidoNovo && pedidoNovo.checked);
+        boxNovo.style.display = mostrar ? 'flex' : 'none';
+        if (!mostrar) document.getElementById('chk-novo-usuario-caixa').checked = false;
+    }
+
+    const pedidoEditar = document.querySelector('.chk-tela-editar-usuario[value="tela-pedido"]');
+    const boxEditar = document.getElementById('box-chk-editar-usuario-caixa');
+    if (boxEditar) {
+        const mostrar = !!(pedidoEditar && pedidoEditar.checked);
+        boxEditar.style.display = mostrar ? 'flex' : 'none';
+        if (!mostrar) document.getElementById('chk-editar-usuario-caixa').checked = false;
+    }
+}
+window.atualizarVisibilidadeChkCaixa = atualizarVisibilidadeChkCaixa;
 
 function avisar(mensagem, titulo) {
     if (window.exibirAviso) window.exibirAviso(mensagem, titulo);
@@ -80,6 +126,16 @@ export function aplicarPermissoesNaUI() {
         const m = el.getAttribute('onclick').match(/mudarAba\('([^']+)'/);
         if (!m) return;
         el.style.display = usuarioTemAcesso(m[1]) ? '' : 'none';
+    });
+    // Os botões individuais já ficam escondidos acima, mas o dropdown que os
+    // envolve (".dropdown", ex: "⚙️ Gestão ▾") não tem onclick de mudarAba
+    // nele mesmo — sem isso ele continuava aparecendo vazio (só o título,
+    // sem nenhuma opção dentro) pra quem não tinha acesso a nada daquele
+    // grupo. Esconde o dropdown inteiro quando nenhum item dentro dele
+    // sobrou visível.
+    document.querySelectorAll('.dropdown').forEach(drop => {
+        const algumVisivel = Array.from(drop.querySelectorAll('[onclick*="mudarAba("]')).some(el => el.style.display !== 'none');
+        drop.style.display = algumVisivel ? '' : 'none';
     });
     const nomeEl = document.getElementById('nome-usuario-atual-nav');
     if (nomeEl) nomeEl.innerText = usuarioAtual.nome + (usuarioAtual.isMaster ? ' (Master)' : '');
@@ -220,11 +276,12 @@ export async function renderizarTelaGestaoUsuarios() {
     if (gridNovo && !gridNovo.dataset.montado) {
         gridNovo.innerHTML = TELAS_DISPONIVEIS.map(t => `
             <label class="item-checkbox-ingrediente">
-                <input type="checkbox" class="chk-tela-novo-usuario" value="${t.id}"> ${t.label}
+                <input type="checkbox" class="chk-tela-novo-usuario" value="${t.id}" ${t.id === 'tela-pedido' ? 'onchange="window.atualizarVisibilidadeChkCaixa && window.atualizarVisibilidadeChkCaixa()"' : ''}> ${t.label}
             </label>
         `).join('');
         gridNovo.dataset.montado = '1';
     }
+    atualizarVisibilidadeChkCaixa();
 
     try {
         await carregarPerfis();
@@ -246,12 +303,13 @@ export async function renderizarTelaGestaoUsuarios() {
         const resumoTelas = p.is_master
             ? 'Todas (Master)'
             : ((p.telas_permitidas || []).length ? `${p.telas_permitidas.length} tela(s)` : '<span style="color:var(--danger);">Nenhuma</span>');
+        const chipCaixa = (p.is_master || p.pode_abrir_fechar_caixa) ? ' <span title="Pode abrir/fechar caixa">💰</span>' : '';
         const voceMesmo = usuarioAtual.id === p.id;
         return `
             <tr style="border-bottom: 1px solid #e5e7eb;">
                 <td style="padding:10px; font-weight:bold;">${p.nome} ${voceMesmo ? '<span style="color:var(--success); font-size:0.75rem;">(você)</span>' : ''}</td>
                 <td>${p.is_master ? '🟢 Sim' : '—'}</td>
-                <td>${resumoTelas}</td>
+                <td>${resumoTelas}${chipCaixa}</td>
                 <td style="text-align:right; white-space:nowrap;">
                     ${p.is_master ? '<span style="color:gray; font-size:0.8rem;">—</span>' : `
                         <button class="btn btn-warning" style="padding:6px 10px;" data-editar-perm-id="${p.id}">✏️ Editar</button>
@@ -284,6 +342,7 @@ export async function criarUsuarioForm() {
     const nome = document.getElementById('input-novo-usuario-nome').value.trim();
     const senha = document.getElementById('input-novo-usuario-senha').value;
     const telas = Array.from(document.querySelectorAll('.chk-tela-novo-usuario:checked')).map(chk => chk.value);
+    const podeAbrirFecharCaixa = telas.includes('tela-pedido') && !!document.getElementById('chk-novo-usuario-caixa').checked;
 
     if (!nome) return avisar('Digite o nome do usuário.');
     if (!senha || senha.length < 6) return avisar('A senha precisa ter pelo menos 6 caracteres.');
@@ -293,13 +352,15 @@ export async function criarUsuarioForm() {
     try {
         const senha_hash = await hashSenha(senha);
         const { error } = await supabaseClient.from('pdv_perfis').insert({
-            nome, senha_hash, is_master: false, telas_permitidas: telas
+            nome, senha_hash, is_master: false, telas_permitidas: telas, pode_abrir_fechar_caixa: podeAbrirFecharCaixa
         });
         if (error) throw error;
 
         document.getElementById('input-novo-usuario-nome').value = '';
         document.getElementById('input-novo-usuario-senha').value = '';
         document.querySelectorAll('.chk-tela-novo-usuario').forEach(chk => chk.checked = false);
+        document.getElementById('chk-novo-usuario-caixa').checked = false;
+        atualizarVisibilidadeChkCaixa();
         avisar(`Usuário "${nome}" criado com sucesso!`);
         renderizarTelaGestaoUsuarios();
     } catch (erro) {
@@ -322,9 +383,11 @@ function abrirModalPermissoes(id) {
     const grid = document.getElementById('grid-telas-editar-usuario');
     grid.innerHTML = TELAS_DISPONIVEIS.map(t => `
         <label class="item-checkbox-ingrediente">
-            <input type="checkbox" class="chk-tela-editar-usuario" value="${t.id}" ${(perfil.telas_permitidas || []).includes(t.id) ? 'checked' : ''}> ${t.label}
+            <input type="checkbox" class="chk-tela-editar-usuario" value="${t.id}" ${(perfil.telas_permitidas || []).includes(t.id) ? 'checked' : ''} ${t.id === 'tela-pedido' ? 'onchange="window.atualizarVisibilidadeChkCaixa()"' : ''}> ${t.label}
         </label>
     `).join('');
+    document.getElementById('chk-editar-usuario-caixa').checked = !!perfil.pode_abrir_fechar_caixa;
+    atualizarVisibilidadeChkCaixa();
 
     modal.dataset.usuarioId = id;
     modal.style.display = 'flex';
@@ -338,6 +401,7 @@ export async function salvarPermissoesUsuario() {
     const modal = document.getElementById('modal-permissoes-usuario');
     const id = modal.dataset.usuarioId;
     const telas = Array.from(document.querySelectorAll('.chk-tela-editar-usuario:checked')).map(chk => chk.value);
+    const podeAbrirFecharCaixa = telas.includes('tela-pedido') && !!document.getElementById('chk-editar-usuario-caixa').checked;
     const novaSenha = document.getElementById('input-nova-senha-usuario').value;
 
     if (novaSenha && novaSenha.length < 6) {
@@ -345,7 +409,7 @@ export async function salvarPermissoesUsuario() {
     }
 
     try {
-        const atualizacao = { telas_permitidas: telas };
+        const atualizacao = { telas_permitidas: telas, pode_abrir_fechar_caixa: podeAbrirFecharCaixa };
         if (novaSenha) atualizacao.senha_hash = await hashSenha(novaSenha);
 
         const { error } = await supabaseClient.from('pdv_perfis').update(atualizacao).eq('id', id);
@@ -356,50 +420,6 @@ export async function salvarPermissoesUsuario() {
         console.error('Falha ao salvar alterações do usuário:', erro);
         avisar('Não foi possível salvar as alterações.');
     }
-}
-
-// --- Deslogar todo mundo ao fechar o caixa (exceto o Master) ---
-//
-// Segue a mesma convenção dos outros canais de Realtime (pdv-state-sync,
-// pdv-catalogo-sync, pdv-registry-sync): observa uma linha reservada de
-// `pdv_state`, ignora o próprio eco via PDV_CLIENT_ID. É um AVISO em tempo
-// real pra quem está com o app aberto e online — um dispositivo offline no
-// momento do aviso só perde a sessão local na próxima vez que carregar a
-// página (não há token remoto pra revogar, já que o login aqui não usa JWT).
-export function chaveLogoutForcado(barracaId) {
-    return `__logout_${barracaId}__`;
-}
-
-export async function dispararLogoutForcado(barracaId) {
-    try {
-        const { error } = await supabaseClient.from('pdv_state').upsert({
-            id: chaveLogoutForcado(barracaId),
-            data: { forcarLogoutEm: new Date().toISOString(), origem: PDV_CLIENT_ID },
-            updated_at: new Date().toISOString()
-        }, { onConflict: 'id' });
-        if (error) throw error;
-    } catch (erro) {
-        console.error('Falha ao avisar os outros dispositivos pra deslogar:', erro);
-    }
-}
-
-export function iniciarRealtimeLogoutForcado(barracaId) {
-    supabaseClient
-        .channel('pdv-logout-forcado')
-        .on('postgres_changes', {
-            event: '*',
-            schema: 'public',
-            table: 'pdv_state',
-            filter: `id=eq.${chaveLogoutForcado(barracaId)}`
-        }, payload => {
-            const dados = payload.new && payload.new.data;
-            if (!dados || dados.origem === PDV_CLIENT_ID) return;
-            if (usuarioAtual && usuarioAtual.isMaster) return; // Master é poupado
-            fazerLogout();
-        })
-        .subscribe(status => {
-            console.log('Supabase Realtime (logout forçado):', status);
-        });
 }
 
 window.fazerLogout = fazerLogout;

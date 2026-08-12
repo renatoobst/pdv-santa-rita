@@ -129,7 +129,7 @@
         <button id="btn-nav-hamburguer" class="nav-hamburguer" onclick="toggleMenuMobile()" title="Menu" aria-label="Abrir menu">☰</button>
 
         <button class="active" onclick="mudarAba('tela-pedido', this)">🛒 Pedido</button>
-        <button onclick="mudarAba('tela-agendados', this)">🎫 Pedido Ficha <span id="badge-agendados" class="badge">0</span></button>
+        <button onclick="mudarAba('tela-agendados', this)">🎫 Pedidos em Pausa <span id="badge-agendados" class="badge">0</span></button>
         <button onclick="mudarAba('tela-preparo', this)">🍳 Cozinha <span id="badge-cozinha" class="badge">0</span></button>
         <button onclick="mudarAba('tela-entrega', this)">🛍️ Balcão/Entrega <span id="badge-entrega" class="badge">0</span></button>
 
@@ -139,7 +139,7 @@
             <button class="dropbtn">🖥️ Painéis ▾</button>
             <div class="dropdown-content">
                 <div class="dropdown-inner">
-                    <button onclick="mudarAba('tela-tv', this)">📺 TV Aberta</button>
+                    <button onclick="mudarAba('tela-tv', this)">📺 TV Senha</button>
                     <button onclick="mudarAba('tela-videowall', this)">🎛️ Multiview 4x4</button>
                 </div>
             </div>
@@ -150,9 +150,15 @@
             <div class="dropdown-content">
                 <div class="dropdown-inner">
                     <button onclick="mudarAba('tela-produtos', this)">📦 Produtos & Estoque</button>
-                    <button onclick="mudarAba('tela-atalhos', this)">⌨️ Teclas de Atalho</button>
-                    <button onclick="mudarAba('tela-configuracoes', this)">⚙️ Configurações & Parâmetros</button>
                     <button id="btn-nav-barracas" onclick="mudarAba('tela-barracas', this)">🏪 Barracas</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="dropdown">
+            <button class="dropbtn">👥 Usuários ▾</button>
+            <div class="dropdown-content">
+                <div class="dropdown-inner">
                     <button onclick="mudarAba('tela-gestao-usuarios', this)">👤 Gerenciar Usuários</button>
                 </div>
             </div>
@@ -206,6 +212,18 @@
         </div>
     </div>
 
+    <!-- MODAL: ABRIR TV SENHA EM OUTRO MONITOR -->
+    <div id="modal-tv-senha" class="modal-geral">
+        <div class="modal-content" style="width: 420px; max-width: 92%;">
+            <h3 style="margin-top:0; border-bottom: 2px solid #e5e7eb; padding-bottom:10px; color:var(--primary);">📺 Abrir TV Senha</h3>
+            <p style="font-size: 0.85rem; color: #4b5563;">Escolha em qual tela/monitor conectado a este computador a TV Senha deve abrir em tela cheia (útil com divisores HDMI).</p>
+            <label style="font-size: 0.85rem; font-weight: bold; display:block; margin-bottom:4px;">Monitor:</label>
+            <select id="select-monitor-tv-senha" style="margin-bottom: 15px;"></select>
+            <button class="btn btn-success" style="width:100%;" onclick="abrirTvSenhaNoMonitorSelecionado()">Abrir TV Senha</button>
+            <button class="btn" style="width:100%; margin-top:8px;" onclick="fecharModalTvSenha()">Cancelar</button>
+        </div>
+    </div>
+
     <!-- MODAL: EDITAR PERMISSÕES DE UM USUÁRIO -->
     <div id="modal-permissoes-usuario" class="modal-geral">
         <div class="modal-content" style="width: 480px; max-width: 92%;">
@@ -214,6 +232,9 @@
             <input type="password" id="input-nova-senha-usuario" placeholder="Mínimo 6 caracteres">
             <label style="font-size: 0.85rem; font-weight: bold; display: block; margin-bottom: 4px;">Telas liberadas:</label>
             <div class="grid-obs-ingredientes" id="grid-telas-editar-usuario" style="max-height:220px;"></div>
+            <label class="item-checkbox-ingrediente" id="box-chk-editar-usuario-caixa" style="margin-top:8px; display:none;">
+                <input type="checkbox" id="chk-editar-usuario-caixa"> 💰 Pode abrir/fechar caixa
+            </label>
             <div style="display:flex; gap:10px; margin-top:15px;">
                 <button class="btn btn-success" style="flex:1;" onclick="salvarPermissoesUsuario()">Salvar 💾</button>
                 <button class="btn btn-danger" style="flex:1;" onclick="fecharModalPermissoes()">Cancelar</button>
@@ -238,11 +259,17 @@
         
         <!-- TELA 1: PEDIDO -->
         <div id="tela-pedido" class="tab-content active">
-            <div class="layout-pedido">
+            <div class="layout-pedido" id="conteudo-zoom-pedido">
                 <div>
                     <!-- BARRA DE BUSCA DE PRODUTOS -->
-                    <div style="margin-bottom: 12px;">
-                        <input type="text" id="busca-produto-menu" placeholder="🔍 Pesquisar produto ou combo por nome..." oninput="filtrarMenuBusca()" style="margin-bottom: 0; padding: 10px; font-weight: bold; background: white; border: 2px solid #cbd5e1;" spellcheck="true" lang="pt-BR">
+                    <div style="margin-bottom: 12px; display:flex; gap:8px;">
+                        <input type="text" id="busca-produto-menu" placeholder="🔍 Pesquisar produto ou combo por nome..." oninput="filtrarMenuBusca()" style="margin-bottom: 0; padding: 10px; font-weight: bold; background: white; border: 2px solid #cbd5e1; flex:1;" spellcheck="true" lang="pt-BR">
+                        <div class="controle-zoom-tela">
+                            <button onclick="ajustarZoomTela('conteudo-zoom-pedido', -10)">➖</button>
+                            <span id="txt-zoom-conteudo-zoom-pedido">100%</span>
+                            <button onclick="ajustarZoomTela('conteudo-zoom-pedido', 10)">➕</button>
+                        </div>
+                        <button class="btn" style="padding: 10px 14px; background:#475569; color:white;" onclick="abrirModalConfigPedido()" title="Parâmetros padrão da tela de Pedido">⚙️</button>
                     </div>
 
                     <div class="menu-categorias" id="menu-categorias-container"></div>
@@ -257,9 +284,14 @@
                         <button class="btn btn-danger" style="padding: 4px 10px; font-size: 0.8rem; margin-top: 5px;" onclick="limparCarrinho()">❌ Cancelar Alteração</button>
                     </div>
 
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <div id="painel-caixa-pedido" style="margin-bottom:10px;"></div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 6px;">
                         <h2 style="font-size: 1.2rem; margin: 0; border: none; padding: 0;" id="titulo-painel-carrinho">Pedido Atual</h2>
-                        <button class="btn btn-info" style="font-size: 0.8rem; padding: 6px 12px;" onclick="abrirModalTodosPedidos()">📋 Ver Todos os Pedidos</button>
+                        <div style="display:flex; gap:6px; flex-wrap: wrap;">
+                            <button class="btn btn-info" style="font-size: 0.8rem; padding: 6px 12px;" onclick="abrirModalTodosPedidos()">📋 Ver Todos os Pedidos</button>
+                            <button class="btn" style="font-size: 0.8rem; padding: 6px 12px; background:#7c3aed; color:white;" onclick="imprimirMeuCaixa()" title="Imprimir relatório do seu caixa">🖨️ Relatório</button>
+                        </div>
                     </div>
 
                     <!-- CAMPO DINÂMICO PARA ALTERAR STATUS DO PEDIDO DURANTE A EDIÇÃO -->
@@ -284,6 +316,9 @@
 
                     <div class="painel-pagamento-compacto">
 
+                        <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #6b7280; font-weight: bold; margin-bottom: 2px;">
+                            <span id="qtd-itens-carrinho">0 itens</span>
+                        </div>
                         <div style="display: flex; justify-content: space-between; font-size: 1.25rem; font-weight: bold; margin-bottom: 8px;">
                             <span>Total:</span>
                             <span>R$ <span id="total-carrinho">0.00</span></span>
@@ -383,16 +418,16 @@
                         </div>
 
                         <button id="btn-finalizar-pedido" class="btn btn-primary" style="width: 100%; margin-bottom: 6px; font-size: 1rem; padding: 8px;" onclick="finalizarPedido()">Cobrar, Imprimir e Enviar 🖨️</button>
-                        <button class="btn-danger" style="width: 100%; padding: 6px; font-size: 0.85rem;" onclick="limparCarrinho()">Limpar Pedido</button>
+                        <button class="btn-danger" style="width: 100%; padding: 6px; font-size: 0.85rem;" onclick="limparCarrinhoComConfirmacao()">Limpar Pedido</button>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- TELA 2: PEDIDO FICHA -->
+        <!-- TELA 2: PEDIDOS EM PAUSA -->
         <div id="tela-agendados" class="tab-content">
             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 20px;">
-                <h2 style="border: none; padding: 0; margin: 0;">Pedidos p/ Mais Tarde (Ficha)</h2>
+                <h2 style="border: none; padding: 0; margin: 0;">Pedidos em Pausa</h2>
                 <input type="text" id="busca-agendados" placeholder="🔍 Pesquisar nº ou nome..." oninput="atualizarTelas()" style="width: 300px; margin: 0;" spellcheck="true" lang="pt-BR">
             </div>
             <div class="grid-pedidos" id="fila-agendados"></div>
@@ -400,8 +435,18 @@
 
         <!-- TELA 3: COZINHA COM SIDEBAR RESUMO -->
         <div id="tela-preparo" class="tab-content">
-            <h2>Fila da Cozinha (Apenas Leitura)</h2>
-            <div class="layout-balcao-container">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
+                <h2 style="margin:0;">Fila da Cozinha (Apenas Leitura)</h2>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <button class="btn btn-success btn-toggle-voz" onclick="alternarVozAnuncio()">🗣️ Voz Ligada</button>
+                    <div class="controle-zoom-tela">
+                        <button onclick="ajustarZoomTela('conteudo-zoom-preparo', -10)">➖</button>
+                        <span id="txt-zoom-conteudo-zoom-preparo">100%</span>
+                        <button onclick="ajustarZoomTela('conteudo-zoom-preparo', 10)">➕</button>
+                    </div>
+                </div>
+            </div>
+            <div class="layout-balcao-container" id="conteudo-zoom-preparo">
                 <div class="balcao-principal">
                     <div class="grid-pedidos" id="fila-cozinha"></div>
                 </div>
@@ -417,8 +462,19 @@
 
         <!-- TELA 4: BALCÃO / ENTREGA COM SIDEBAR EM TABELA NO CANTO -->
         <div id="tela-entrega" class="tab-content">
-            <h2>Painel de Entrega (Balcão/Entrega)</h2>
-            <div class="layout-balcao-container">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
+                <h2 style="margin:0;">Painel de Entrega (Balcão/Entrega)</h2>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <button class="btn btn-success btn-toggle-voz" onclick="alternarVozAnuncio()">🗣️ Voz Ligada</button>
+                    <button class="btn" style="background:#0891b2; color:white;" onclick="abrirModalTvSenha()" title="Abrir TV Senha em outro monitor">📺 TV Senha</button>
+                    <div class="controle-zoom-tela">
+                        <button onclick="ajustarZoomTela('conteudo-zoom-entrega', -10)">➖</button>
+                        <span id="txt-zoom-conteudo-zoom-entrega">100%</span>
+                        <button onclick="ajustarZoomTela('conteudo-zoom-entrega', 10)">➕</button>
+                    </div>
+                </div>
+            </div>
+            <div class="layout-balcao-container" id="conteudo-zoom-entrega">
                 <div class="balcao-principal">
                     <div class="grid-pedidos" id="fila-entrega"></div>
                 </div>
@@ -480,6 +536,7 @@
                 <div style="display:flex; gap:10px; flex-wrap: wrap;">
                     <button class="btn btn-primary" onclick="imprimirEstoquePorCategoria()">🖨️ Imprimir Estoque por Categoria</button>
                     <button class="btn btn-success" onclick="gerarPDFEstoquePorCategoria()" style="background:#0d9488;">📄 Baixar PDF Estoque</button>
+                    <button class="btn btn-success" onclick="gerarJPGEstoque()" style="background:#7c3aed;">🖼️ JPG</button>
                 </div>
             </div>
             
@@ -640,15 +697,10 @@
             </div>
         </div>
 
-        <!-- TELA: CONFIGURAÇÕES E PARÂMETROS DO SISTEMA -->
-        <div id="tela-configuracoes" class="tab-content">
-            <h2>⚙️ Configurações e Parâmetros do Sistema</h2>
-            <p style="color: gray; margin-bottom: 20px;">Personalize o comportamento padrão da tela de Pedido desta barraca.</p>
-
-            <div class="box-config-secao">
-                <h3 style="margin-top: 0; color: var(--primary); display: flex; align-items: center; gap: 8px;">
-                    🛒 Parâmetros Padrão da Tela de Pedido
-                </h3>
+        <!-- MODAL: CONFIGURAÇÕES E PARÂMETROS PADRÃO DA TELA DE PEDIDO -->
+        <div id="modal-config-pedido" class="modal-geral">
+            <div class="modal-content" style="width: 560px; max-width: 92%;">
+                <h3 style="margin-top:0; border-bottom: 2px solid #e5e7eb; padding-bottom:10px; color:var(--primary);">⚙️ Parâmetros Padrão da Tela de Pedido</h3>
                 <p style="font-size: 0.85rem; color: #4b5563; margin-top: -5px;">
                     Escolha quais opções devem vir pré-selecionadas ou se os campos devem resetar para o estado <b>"-- Selecione --"</b> sempre que um pedido for finalizado ou limpo.
                 </p>
@@ -688,6 +740,7 @@
                         </select>
                     </div>
                 </div>
+                <button class="btn" style="width:100%; margin-top:15px;" onclick="fecharModalConfigPedido()">Fechar</button>
             </div>
         </div>
 
@@ -733,6 +786,9 @@
                 </div>
                 <label style="font-size: 0.85rem; font-weight: bold; display: block; margin: 12px 0 4px;">Telas liberadas para este usuário:</label>
                 <div class="grid-obs-ingredientes" id="grid-telas-novo-usuario" style="max-height:220px;"></div>
+                <label class="item-checkbox-ingrediente" id="box-chk-novo-usuario-caixa" style="margin-top:8px; display:none;">
+                    <input type="checkbox" id="chk-novo-usuario-caixa"> 💰 Pode abrir/fechar caixa
+                </label>
                 <button id="btn-criar-usuario" class="btn btn-success" style="width:100%; margin-top: 12px;" onclick="criarUsuarioForm()">Criar Usuário</button>
             </div>
 
@@ -754,7 +810,13 @@
 
         <!-- TELA: DASHBOARD GERAL (TODAS AS BARRACAS) -->
         <div id="tela-dashboard-geral" class="tab-content">
-            <h2>🏬 Dashboard Geral — Todas as Barracas</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <h2>🏬 Dashboard Geral — Todas as Barracas</h2>
+                <div style="display:flex; gap:10px; flex-wrap: wrap;">
+                    <button class="btn btn-success" onclick="gerarPDFDashboardGeral()" style="background: #2563eb;">📄 PDF</button>
+                    <button class="btn btn-success" onclick="gerarJPGDashboardGeral()" style="background: #7c3aed;">🖼️ JPG</button>
+                </div>
+            </div>
             <p style="color: gray; margin-bottom: 20px;">Visão somada de todas as barracas cadastradas, direto do Supabase. Não interfere no que está sendo usado em nenhuma barraca.</p>
             <div id="corpo-dashboard-geral"><p style="color:gray;">Carregando…</p></div>
         </div>
@@ -819,25 +881,15 @@
             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
                 <h2 style="border: none; padding: 0; margin: 0;">Dashboard Analytics & Gestão de Caixa</h2>
                 <div style="display:flex; gap:10px; flex-wrap: wrap;">
-                    <button class="btn btn-primary" onclick="imprimirRelatorioCaixaAtual()" style="background: #0d9488;">🖨️ Imprimir Caixa Atual</button>
-                    <button class="btn btn-success" onclick="gerarPDFCaixaAtual()" style="background: #2563eb;">📄 Baixar PDF Caixa Atual (A4)</button>
+                    <button class="btn btn-primary" onclick="imprimirRelatorioCaixaAtual()" style="background: #0d9488;">🖨️ Imprimir</button>
+                    <button class="btn btn-success" onclick="gerarPDFCaixaAtual()" style="background: #2563eb;">📄 PDF (A4)</button>
+                    <button class="btn btn-success" onclick="gerarJPGRelatorioCaixa()" style="background: #7c3aed;">🖼️ JPG</button>
                 </div>
             </div>
 
-            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; border-left: 5px solid var(--info);">
-                <h3 style="margin-top: 0; color: var(--info);">💵 Abertura de Caixa (Fundo Inicial)</h3>
-                <div style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
-                    <div style="flex: 1; min-width: 180px;">
-                        <label style="font-size: 0.85rem; font-weight: bold;">Valor Inicial em Dinheiro (R$):</label>
-                        <input type="number" id="valor-fundo-caixa" placeholder="0.00" step="0.01" style="margin-bottom: 0;">
-                    </div>
-                    <button id="btn-acao-caixa" class="btn btn-success" onclick="abrirCaixa()">🟢 Abrir Caixa</button>
-                    <button class="btn btn-danger" onclick="fecharCaixaPrompt()">🔒 Fechar Caixa</button>
-                </div>
-                <p id="status-caixa-texto" style="margin-top: 10px; font-weight: bold; font-size: 0.9rem; color: var(--danger);">Status do Caixa: Fechado</p>
-            </div>
+            <div id="abas-caixas-relatorio" style="display:flex; gap:8px; flex-wrap: wrap; margin-bottom: 20px;"></div>
 
-            <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+            <div id="area-relatorio-caixa" style="display: flex; gap: 20px; flex-wrap: wrap;">
                 <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; min-width: 150px; text-align: center; border-bottom: 4px solid var(--success);">
                     <h3 style="margin-top: 0; color: gray;">Faturamento Vendas</h3>
                     <p style="color: var(--success); font-size: 1.8rem; font-weight: 900; margin:0;">R$ <span id="rel-total">0.00</span></p>
@@ -909,6 +961,7 @@
                     <thead>
                         <tr style="border-bottom: 2px solid #e5e7eb; background: #f8fafc;">
                             <th style="padding: 12px;"># Ref</th>
+                            <th>Operador</th>
                             <th>Campanha / Evento</th>
                             <th>Abertura</th>
                             <th>Fechamento</th>

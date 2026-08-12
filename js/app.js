@@ -9,7 +9,7 @@
 import { supabaseClient, PDV_CLIENT_ID } from './config.js';
 import { categoriasPadrao, produtosPadrao } from './data.js';
 import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCacheAtalhos, renderizarPainelBarracas, carregarDashboardGeral, iniciarRealtimeRegistroBarracas, registroBarracas } from './barracas.js';
-import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderizarTelaGestaoUsuarios, dispararLogoutForcado, iniciarRealtimeLogoutForcado, usuarioAtual } from './auth.js';
+import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderizarTelaGestaoUsuarios, confirmarSenhaUsuarioAtual, usuarioAtual } from './auth.js';
 
         // Id da barraca ativa neste dispositivo (linha correspondente na tabela
         // `pdv_state` do Supabase). Só é conhecido depois que resolverBarracaAtiva()
@@ -41,9 +41,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         let contadorPedidos = 1;
         let historicoCaixasDB = [];
 
-        let caixaAberto = false;
-        let valorFundoCaixa = 0.00;
-        let dataHoraAberturaCaixa = null;
+        // Vários caixas podem estar abertos ao mesmo tempo nesta barraca — um
+        // por usuário (ver caixaDoUsuarioAtual()). Cada item:
+        // { id, usuarioId, usuarioNome, valorFundoCaixa, dataHoraAbertura }.
+        let caixasAbertos = [];
+        let caixaRelatorioSelecionado = null; // null = aba "Todos" no Dashboard Analytics
 
         let supabaseDisponivel = true;
         let carregandoEstadoRemoto = false;
@@ -106,9 +108,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 pedidosGerais,
                 contadorPedidos,
                 historicoCaixasDB,
-                caixaAberto,
-                valorFundoCaixa,
-                dataHoraAberturaCaixa,
+                caixasAbertos,
                 estoquePorProduto,
                 configPadroes,
                 origem: PDV_CLIENT_ID,
@@ -150,9 +150,23 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             pedidosGerais = Array.isArray(estado.pedidosGerais) ? estado.pedidosGerais : pedidosGerais;
             contadorPedidos = Number.isFinite(Number(estado.contadorPedidos)) ? Number(estado.contadorPedidos) : contadorPedidos;
             historicoCaixasDB = Array.isArray(estado.historicoCaixasDB) ? estado.historicoCaixasDB : historicoCaixasDB;
-            caixaAberto = typeof estado.caixaAberto === 'boolean' ? estado.caixaAberto : caixaAberto;
-            valorFundoCaixa = Number.isFinite(Number(estado.valorFundoCaixa)) ? Number(estado.valorFundoCaixa) : valorFundoCaixa;
-            dataHoraAberturaCaixa = estado.dataHoraAberturaCaixa || null;
+
+            if (Array.isArray(estado.caixasAbertos)) {
+                caixasAbertos = estado.caixasAbertos;
+            } else if (estado.caixaAberto === true) {
+                // Migração: estado salvo no formato antigo (1 caixa único pra
+                // barraca inteira) com um caixa aberto na hora da atualização —
+                // preserva como um caixa "legado" em vez de simplesmente perder
+                // o fundo e os pedidos em aberto.
+                caixasAbertos = [{
+                    id: 'legado',
+                    usuarioId: null,
+                    usuarioNome: 'Caixa (antes da atualização)',
+                    valorFundoCaixa: Number(estado.valorFundoCaixa) || 0,
+                    dataHoraAbertura: estado.dataHoraAberturaCaixa || null
+                }];
+                pedidosGerais.forEach(p => { if (!p.caixaId) p.caixaId = 'legado'; });
+            }
 
             if (estado.estoquePorProduto && typeof estado.estoquePorProduto === 'object') {
                 estoquePorProduto = estado.estoquePorProduto;
@@ -183,11 +197,22 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 atualizarFiltrosGestao();
                 renderizarHistoricoCaixas();
                 renderizarPainelAtalhos();
-                const telaConfig = document.getElementById('tela-configuracoes');
-                if (telaConfig && telaConfig.classList.contains('active')) carregarFormularioConfiguracoes();
+                const modalConfig = document.getElementById('modal-config-pedido');
+                if (modalConfig && modalConfig.style.display === 'flex') carregarFormularioConfiguracoes();
                 const relatorio = document.getElementById('tela-relatorio');
                 if (relatorio && relatorio.classList.contains('active')) atualizarDashboard();
             }
+        }
+
+        // --- Multi-caixa: cada usuário abre/fecha o próprio caixa ---
+
+        function caixaDoUsuarioAtual() {
+            if (!usuarioAtual) return null;
+            return caixasAbertos.find(c => c.usuarioId === usuarioAtual.id) || null;
+        }
+
+        function usuarioPodeAbrirFecharCaixa() {
+            return !!(usuarioAtual && (usuarioAtual.isMaster || usuarioAtual.podeAbrirFecharCaixa));
         }
 
         async function salvarNoBancoLocal() {
@@ -501,8 +526,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 if (carrinho.length === 0 && pedidoEmEdicaoId === null) aplicarConfigPadroesNoFormulario();
             }
             if(idAba === 'tela-atalhos') renderizarPainelAtalhos();
-            if(idAba === 'tela-configuracoes') carregarFormularioConfiguracoes();
-            if(idAba === 'tela-videowall') atualizarTelas(); 
+            if(idAba === 'tela-videowall') atualizarTelas();
             if(idAba === 'tela-entrega') atualizarTelas();
             if(idAba === 'tela-preparo') atualizarTelas();
             if(idAba === 'tela-barracas') renderizarPainelBarracas();
@@ -539,6 +563,15 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             document.getElementById('cfg-padrao-forma-pagto').value = configPadroes.formaPagto || '';
             document.getElementById('cfg-padrao-tipo-atendimento').value = configPadroes.tipoAtendimento || '';
             document.getElementById('cfg-padrao-tipo-retirada-global').value = configPadroes.tipoRetiradaGlobal || '';
+        }
+
+        function abrirModalConfigPedido() {
+            carregarFormularioConfiguracoes();
+            document.getElementById('modal-config-pedido').style.display = 'flex';
+        }
+
+        function fecharModalConfigPedido() {
+            document.getElementById('modal-config-pedido').style.display = 'none';
         }
 
         function salvarConfiguracoesPadrao() {
@@ -1355,8 +1388,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         }
 
         function confirmarCombo() {
-            if (!caixaAberto) {
-                return exibirAviso("🔒 O Caixa está fechado! Abra o caixa antes de fazer vendas.", "Caixa Fechado");
+            if (!caixaDoUsuarioAtual()) {
+                return exibirAviso("🔒 Abra o seu caixa antes de fazer vendas.", "Caixa Fechado");
             }
 
             const produto = produtosDB.find(p => p.id === comboAtualId);
@@ -1646,8 +1679,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         }
 
         function addCarrinho(idProduto) {
-            if (!caixaAberto) {
-                return exibirAviso("🔒 O Caixa está fechado! Abra o caixa no Dashboard antes de adicionar pedidos.", "Caixa Fechado");
+            if (!caixaDoUsuarioAtual()) {
+                return exibirAviso("🔒 Abra o seu caixa (ícone 💰 ao lado do carrinho) antes de adicionar pedidos.", "Caixa Fechado");
             }
 
             const produto = produtosDB.find(p => p.id === idProduto);
@@ -1727,6 +1760,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             }
 
             document.getElementById('total-carrinho').innerText = total.toFixed(2);
+            const qtdItens = carrinho.reduce((a, i) => a + i.qtd, 0);
+            document.getElementById('qtd-itens-carrinho').innerText = `${qtdItens} ${qtdItens === 1 ? 'item' : 'itens'}`;
             atualizarValoresMisto();
         }
 
@@ -1740,6 +1775,15 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             document.getElementById('tipo-retirada-global').value = configPadroes.tipoRetiradaGlobal || '';
             document.getElementById('tipo-atendimento').value = configPadroes.tipoAtendimento || '';
             toggleCampoDinheiro();
+        }
+
+        // limparCarrinho() também é chamada automaticamente depois de uma
+        // venda concluída (finalizarPedido) — não pode pedir confirmação ali,
+        // senão travaria o fluxo normal de checkout. Só o botão "Limpar
+        // Pedido" (clique manual) passa por este wrapper com o confirm().
+        function limparCarrinhoComConfirmacao() {
+            if (carrinho.length > 0 && !confirm('Deseja limpar o pedido?')) return;
+            limparCarrinho();
         }
 
         function limparCarrinho() {
@@ -1761,8 +1805,9 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         }
 
         function finalizarPedido() {
-            if (!caixaAberto) {
-                return exibirAviso("🔒 O Caixa está fechado! Abra o caixa antes de finalizar pedidos.", "Caixa Fechado");
+            const meuCaixaAtual = caixaDoUsuarioAtual();
+            if (!meuCaixaAtual) {
+                return exibirAviso("🔒 Abra o seu caixa antes de finalizar pedidos.", "Caixa Fechado");
             }
 
             const cliente = document.getElementById('nome-cliente').value.trim();
@@ -1834,6 +1879,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             let statusPainelCalculado = 'nenhum';
             let horaEntradaCozinhaCalculada = null;
             let horaEntregaCalculada = null;
+            let caixaIdPedido = meuCaixaAtual.id;
 
             if (pedidoEmEdicaoId !== null) {
                 statusPainelCalculado = document.getElementById('status-pedido-edicao').value;
@@ -1841,6 +1887,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 if (pedidoExistente) {
                     horaEntradaCozinhaCalculada = pedidoExistente.horaEntradaCozinha;
                     horaEntregaCalculada = statusPainelCalculado === 'entregue' ? (pedidoExistente.horaEntrega || horaAtual) : pedidoExistente.horaEntrega;
+                    // Editar um pedido não muda de quem é o caixa dono dele —
+                    // qualquer usuário com acesso a caixa pode alterar o pedido
+                    // de outro operador sem "roubar" a venda pro próprio caixa.
+                    caixaIdPedido = pedidoExistente.caixaId || meuCaixaAtual.id;
                 }
             } else {
                 const vaiParaCozinha = tipoGlobalRetirada !== 'agora_sem_cozinha' && carrinho.some(i => i.fase === 'agora' && (i.cozinha || (i.isCombo && i.itensComboEscolhidos && i.itensComboEscolhidos.some(sub=>sub.cozinha))));
@@ -1857,7 +1907,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 horaEntradaCozinha: horaEntradaCozinhaCalculada,
                 horaEntrega: horaEntregaCalculada,
                 statusPainel: statusPainelCalculado,
-                itens: JSON.parse(JSON.stringify(carrinho)) 
+                caixaId: caixaIdPedido,
+                itens: JSON.parse(JSON.stringify(carrinho))
             };
 
             let catalogoAlteradoPorEstoque = false;
@@ -1965,12 +2016,21 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         // O cálculo em si mora em barracas.js (calcularResumoPedidos), como uma
         // função pura, para poder ser reaproveitado pelo Dashboard Geral com os
         // dados de QUALQUER barraca — aqui só repassamos o estado ao vivo desta.
-        function obterDadosRelatorioCaixa() {
-            return calcularResumoPedidos(pedidosGerais, caixaAberto, valorFundoCaixa);
+        function obterDadosRelatorioCaixa(caixaId = caixaRelatorioSelecionado) {
+            if (caixaId) {
+                const caixa = caixasAbertos.find(c => c.id === caixaId);
+                const pedidosDoCaixa = pedidosGerais.filter(p => p.caixaId === caixaId);
+                return calcularResumoPedidos(pedidosDoCaixa, !!caixa, caixa ? caixa.valorFundoCaixa : 0);
+            }
+            // "Todos": soma de todos os caixas abertos agora nesta barraca.
+            const fundoTotal = caixasAbertos.reduce((a, c) => a + c.valorFundoCaixa, 0);
+            return calcularResumoPedidos(pedidosGerais, caixasAbertos.length > 0, fundoTotal);
         }
 
         function imprimirRelatorioCaixaAtual() {
             const dados = obterDadosRelatorioCaixa();
+            const caixaSelecionado = caixaRelatorioSelecionado ? caixasAbertos.find(c => c.id === caixaRelatorioSelecionado) : null;
+            const fundoInicial = dados.totalGaveta - dados.fatDinheiro;
             let htmlProdsPrint = '';
             for (let prod in dados.resumoProdutosVendidos) {
                 htmlProdsPrint += `<div class="print-row"><span>${prod}</span><span class="print-bold">${dados.resumoProdutosVendidos[prod]} un</span></div>`;
@@ -1992,15 +2052,15 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 <div class="print-center print-bold" style="font-size: 13px; margin-top: 4px;">RELATÓRIO DO CAIXA ATUAL</div>
                 <div class="print-center print-bold" style="font-size:10px; margin-bottom: 5px;">Emitido em: ${dataHora}</div>
                 <div class="print-divider"></div>
-                <div class="print-row"><span>Status do Caixa:</span><span class="print-bold">${caixaAberto ? 'ABERTO' : 'FECHADO'}</span></div>
-                <div class="print-row"><span>Abertura:</span><span class="print-bold">${dataHoraAberturaCaixa || '-'}</span></div>
+                <div class="print-row"><span>Caixa:</span><span class="print-bold">${caixaSelecionado ? caixaSelecionado.usuarioNome : 'Todos os caixas'}</span></div>
+                <div class="print-row"><span>Abertura:</span><span class="print-bold">${caixaSelecionado ? (caixaSelecionado.dataHoraAbertura || '-') : '-'}</span></div>
                 <div class="print-divider"></div>
                 
                 <div class="print-center print-bold" style="font-size: 13px; margin-bottom:2px;">FATURAMENTO TOTAL VENDAS</div>
                 <div class="print-center print-bold" style="font-size: 28px; margin-bottom:5px;">R$ ${dados.totalVendas.toFixed(2)}</div>
                 
                 <div class="print-divider"></div>
-                <div class="print-row"><span>Fundo Inicial:</span><span class="print-bold">R$ ${valorFundoCaixa.toFixed(2)}</span></div>
+                <div class="print-row"><span>Fundo Inicial:</span><span class="print-bold">R$ ${fundoInicial.toFixed(2)}</span></div>
                 <div class="print-row"><span>Qtd Vendas Pagas:</span><span class="print-bold">${dados.validosVendas.length}</span></div>
                 <div class="print-row"><span>Qtd Bonificações:</span><span class="print-bold">${dados.qtdBonificacoes}</span></div>
                 <div class="print-divider"></div>
@@ -2025,6 +2085,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
         function gerarPDFCaixaAtual() {
             const dados = obterDadosRelatorioCaixa();
+            const caixaSelecionado = caixaRelatorioSelecionado ? caixasAbertos.find(c => c.id === caixaRelatorioSelecionado) : null;
+            const fundoInicial = dados.totalGaveta - dados.fatDinheiro;
             const dataHora = new Date().toLocaleString('pt-BR');
 
             let htmlTabelaProdutos = '';
@@ -2061,7 +2123,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 <div style="border-bottom: 3px solid #2563eb; padding-bottom: 15px; margin-bottom: 20px; text-align: center;">
                     <h1 style="margin: 0; color: #1e3a8a; font-size: 24px; text-transform: uppercase;">Santuário Santa Rita</h1>
                     <h2 style="margin: 5px 0 0 0; color: #4b5563; font-size: 16px; border: none; padding: 0;">RELATÓRIO DE FECHAMENTO / CONFERÊNCIA DE CAIXA</h2>
-                    <p style="margin: 5px 0 0 0; font-size: 12px; color: #6b7280;">Emitido em: ${dataHora} | Status: <b>${caixaAberto ? 'ABERTO' : 'FECHADO'}</b> | Abertura: <b>${dataHoraAberturaCaixa || '-'}</b></p>
+                    <p style="margin: 5px 0 0 0; font-size: 12px; color: #6b7280;">Emitido em: ${dataHora} | Caixa: <b>${caixaSelecionado ? caixaSelecionado.usuarioNome : 'Todos os caixas'}</b> | Abertura: <b>${caixaSelecionado ? (caixaSelecionado.dataHoraAbertura || '-') : '-'}</b></p>
                 </div>
 
                 <div style="display: flex; gap: 15px; margin-bottom: 25px;">
@@ -2078,7 +2140,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 <div style="margin-bottom: 25px;">
                     <h3 style="font-size: 14px; text-transform: uppercase; border-bottom: 2px solid #e5e7eb; padding-bottom: 5px; color: #111827; margin-top: 0;">Resumo do Atendimento</h3>
                     <div style="display: flex; justify-content: space-between; background: #f8fafc; padding: 12px; border-radius: 6px; font-size: 13px; font-weight: bold;">
-                        <span>Fundo Inicial de Caixa: R$ ${valorFundoCaixa.toFixed(2)}</span>
+                        <span>Fundo Inicial de Caixa: R$ ${fundoInicial.toFixed(2)}</span>
                         <span>Qtd. Vendas Pagas: ${dados.validosVendas.length}</span>
                         <span>Qtd. Bonificações: ${dados.qtdBonificacoes}</span>
                     </div>
@@ -2189,11 +2251,115 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             }
         }
 
+        // Liga/desliga o anúncio por voz (nome + número falado) neste
+        // dispositivo — é uma preferência de hardware físico (a caixinha de
+        // som fica numa máquina específica do evento), por isso fica só no
+        // localStorage, não sincroniza pelo Supabase. O beep sempre toca,
+        // independente disso.
+        const CHAVE_VOZ_ANUNCIO = 'pdv_voz_anuncio_ativa';
+        function vozAnuncioEstaAtiva() {
+            return localStorage.getItem(CHAVE_VOZ_ANUNCIO) !== '0';
+        }
+        function alternarVozAnuncio() {
+            localStorage.setItem(CHAVE_VOZ_ANUNCIO, vozAnuncioEstaAtiva() ? '0' : '1');
+            atualizarBotoesVozAnuncio();
+        }
+        // Zoom por tela (Pedido/Cozinha/Balcão) — preferência do dispositivo
+        // físico (uma máquina pode precisar de letras maiores que outra),
+        // por isso fica no localStorage, não sincroniza pelo Supabase.
+        function chaveZoomTela(idConteudo) { return `pdv_zoom_${idConteudo}`; }
+
+        function aplicarZoomSalvo(idConteudo) {
+            const el = document.getElementById(idConteudo);
+            const txt = document.getElementById(`txt-zoom-${idConteudo}`);
+            if (!el) return;
+            const zoom = parseInt(localStorage.getItem(chaveZoomTela(idConteudo))) || 100;
+            el.style.zoom = `${zoom}%`;
+            if (txt) txt.innerText = `${zoom}%`;
+        }
+
+        function ajustarZoomTela(idConteudo, delta) {
+            const atual = parseInt(localStorage.getItem(chaveZoomTela(idConteudo))) || 100;
+            const novo = Math.min(150, Math.max(50, atual + delta));
+            localStorage.setItem(chaveZoomTela(idConteudo), novo);
+            aplicarZoomSalvo(idConteudo);
+        }
+
+        function aplicarTodosZoomsSalvos() {
+            ['conteudo-zoom-pedido', 'conteudo-zoom-preparo', 'conteudo-zoom-entrega'].forEach(aplicarZoomSalvo);
+        }
+
+        // TV Senha em outro monitor: usa a Window Management API do Chromium
+        // (getScreenDetails) pra listar as telas conectadas neste computador e
+        // abrir uma nova janela posicionada nos limites daquele monitor —
+        // pensado pro esquema de divisor HDMI (1 PC, várias saídas). Em
+        // navegadores sem suporte à API, cai num window.open() simples sem
+        // escolha de monitor (ainda funciona, só não posiciona sozinho).
+        async function abrirModalTvSenha() {
+            const modal = document.getElementById('modal-tv-senha');
+            const select = document.getElementById('select-monitor-tv-senha');
+            select.innerHTML = '';
+
+            if ('getScreenDetails' in window) {
+                try {
+                    const detalhes = await window.getScreenDetails();
+                    detalhes.screens.forEach((tela, i) => {
+                        const opt = document.createElement('option');
+                        opt.value = i;
+                        opt.innerText = `Tela ${i + 1} (${tela.width}x${tela.height}${tela.isPrimary ? ' - principal' : ''})`;
+                        select.appendChild(opt);
+                    });
+                } catch (erro) {
+                    console.log('Permissão de monitores negada ou indisponível:', erro);
+                    select.innerHTML = '<option value="">Padrão (sem escolha de monitor)</option>';
+                }
+            } else {
+                select.innerHTML = '<option value="">Padrão (navegador não suporta escolha de monitor)</option>';
+            }
+
+            modal.style.display = 'flex';
+        }
+
+        function fecharModalTvSenha() {
+            document.getElementById('modal-tv-senha').style.display = 'none';
+        }
+
+        async function abrirTvSenhaNoMonitorSelecionado() {
+            const select = document.getElementById('select-monitor-tv-senha');
+            const idx = select.value;
+            const url = `${location.origin}${location.pathname}?abrirTela=tela-tv`;
+
+            if (idx !== '' && 'getScreenDetails' in window) {
+                try {
+                    const detalhes = await window.getScreenDetails();
+                    const tela = detalhes.screens[Number(idx)];
+                    if (tela) {
+                        window.open(url, '_blank', `left=${tela.left},top=${tela.top},width=${tela.width},height=${tela.height}`);
+                        fecharModalTvSenha();
+                        return;
+                    }
+                } catch (erro) {
+                    console.log('Não foi possível posicionar na tela escolhida:', erro);
+                }
+            }
+            window.open(url, '_blank');
+            fecharModalTvSenha();
+        }
+
+        function atualizarBotoesVozAnuncio() {
+            const ativa = vozAnuncioEstaAtiva();
+            document.querySelectorAll('.btn-toggle-voz').forEach(btn => {
+                btn.innerText = ativa ? '🗣️ Voz Ligada' : '🔇 Só Bip';
+                btn.classList.toggle('btn-success', ativa);
+                btn.classList.toggle('btn-warning', !ativa);
+            });
+        }
+
         function chamarNoPainel(id) {
             const p = pedidosGerais.find(x => x.id === id);
             p.statusPainel = 'pronto';
             tocarBeep();
-            setTimeout(() => falarChamadaPedido(p.id, p.cliente), 1700);
+            if (vozAnuncioEstaAtiva()) setTimeout(() => falarChamadaPedido(p.id, p.cliente), 1700);
             salvarNoBancoLocal();
             atualizarTelas();
         }
@@ -2619,35 +2785,62 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             });
         }
 
-        function abrirCaixa() {
-            const val = parseFloat(document.getElementById('valor-fundo-caixa').value);
-            if (isNaN(val) || val < 0) return exibirAviso("Insira um valor de fundo de caixa válido.");
-            
-            valorFundoCaixa = val;
-            caixaAberto = true;
-            
+        async function abrirCaixaPrompt() {
+            if (!usuarioAtual) return;
+            if (!usuarioPodeAbrirFecharCaixa()) return exibirAviso("Você não tem permissão para abrir caixa.");
+            if (caixaDoUsuarioAtual()) return exibirAviso("Você já tem um caixa aberto.");
+
+            const valStr = prompt("Valor inicial em dinheiro (fundo de caixa):");
+            if (valStr === null) return;
+            const val = parseFloat(valStr.replace(',', '.'));
+            if (isNaN(val) || val < 0) return exibirAviso("Valor de fundo de caixa inválido.");
+
+            const senha = prompt(`Confirme sua senha (${usuarioAtual.nome}) para abrir o caixa:`);
+            if (senha === null) return;
+            const senhaOk = await confirmarSenhaUsuarioAtual(senha);
+            if (!senhaOk) return exibirAviso("Senha incorreta.");
+
             const dataObjeto = new Date();
             const dataHoraAbertura = `${dataObjeto.toLocaleDateString('pt-BR')} ${dataObjeto.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
-            dataHoraAberturaCaixa = dataHoraAbertura;
+
+            caixasAbertos.push({
+                id: `${usuarioAtual.id}_${Date.now()}`,
+                usuarioId: usuarioAtual.id,
+                usuarioNome: usuarioAtual.nome,
+                valorFundoCaixa: val,
+                dataHoraAbertura
+            });
+
             salvarNoBancoLocal();
-            
             atualizarInterfaceCaixa();
-            exibirAviso(`Caixa aberto com sucesso! Fundo inicial: R$ ${valorFundoCaixa.toFixed(2)}`);
+            exibirAviso(`Caixa aberto com sucesso! Fundo inicial: R$ ${val.toFixed(2)}`);
             atualizarDashboard();
         }
 
-        function fecharCaixaPrompt() {
-            if (!caixaAberto) return exibirAviso("O caixa já está fechado.");
-            if (!usuarioAtual || !usuarioAtual.isMaster) {
-                return exibirAviso("Só o usuário Master pode fechar o caixa.");
+        // Fecha um caixa específico (idCaixa) — qualquer usuário com permissão
+        // de abrir/fechar caixa pode fechar o de outro operador (ex: alguém
+        // esqueceu aberto), não só o próprio. Só os pedidos DAQUELE caixa
+        // entram no fechamento e saem de pedidosGerais — os outros caixas
+        // abertos na barraca continuam intactos.
+        async function fecharCaixaPrompt(idCaixa) {
+            const caixa = caixasAbertos.find(c => c.id === idCaixa);
+            if (!caixa) return exibirAviso("Este caixa já está fechado.");
+            if (!usuarioPodeAbrirFecharCaixa()) {
+                return exibirAviso("Você não tem permissão para fechar caixa.");
             }
+
+            const senha = prompt(`Confirme sua senha (${usuarioAtual.nome}) para fechar o caixa de ${caixa.usuarioNome}:`);
+            if (senha === null) return;
+            const senhaOk = await confirmarSenhaUsuarioAtual(senha);
+            if (!senhaOk) return exibirAviso("Senha incorreta.");
 
             const nomeCampanha = prompt("Digite o NOME DA CAMPANHA / EVENTO para fechar o caixa (Obrigatório):");
             if (!nomeCampanha || nomeCampanha.trim() === "") {
                 return exibirAviso("O Nome da Campanha é obrigatório para fechar o caixa!");
             }
 
-            const validos = pedidosGerais.filter(p => p.statusPainel !== 'cancelado');
+            const pedidosDoCaixa = pedidosGerais.filter(p => p.caixaId === idCaixa);
+            const validos = pedidosDoCaixa.filter(p => p.statusPainel !== 'cancelado');
             const validosFinanceiros = validos.filter(p => p.pagamento && !p.pagamento.startsWith('Bonificação'));
 
             const totalVendas = validosFinanceiros.reduce((a, p) => a + p.total, 0);
@@ -2682,14 +2875,15 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
             const dataObjeto = new Date();
             const dataHoraFechamento = `${dataObjeto.toLocaleDateString('pt-BR')} ${dataObjeto.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
-            const dataHoraAbertura = dataHoraAberturaCaixa || dataHoraFechamento;
+            const dataHoraAbertura = caixa.dataHoraAbertura || dataHoraFechamento;
 
             const registroFechamento = {
                 id: historicoCaixasDB.length + 1,
+                usuarioNome: caixa.usuarioNome,
                 campanha: nomeCampanha.trim(),
                 dataAbertura: dataHoraAbertura,
                 dataFechamento: dataHoraFechamento,
-                fundoInicial: valorFundoCaixa,
+                fundoInicial: caixa.valorFundoCaixa,
                 totalVendas: totalVendas,
                 pix: fatPix,
                 pixDireto: fatPixDireto,
@@ -2697,26 +2891,19 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 debito: fatDebito,
                 dinheiroVendas: fatDinheiro,
                 bonificacao: fatBonificacao,
-                totalGaveta: valorFundoCaixa + fatDinheiro,
+                totalGaveta: caixa.valorFundoCaixa + fatDinheiro,
                 qtdPedidos: validos.length,
                 produtosVendidos: resumoProdutosVendidos,
-                pedidosDetalhados: JSON.parse(JSON.stringify(pedidosGerais))
+                pedidosDetalhados: JSON.parse(JSON.stringify(pedidosDoCaixa))
             };
 
             historicoCaixasDB.unshift(registroFechamento);
 
-            caixaAberto = false;
-            valorFundoCaixa = 0.00;
+            caixasAbertos = caixasAbertos.filter(c => c.id !== idCaixa);
+            pedidosGerais = pedidosGerais.filter(p => p.caixaId !== idCaixa);
+            if (caixaRelatorioSelecionado === idCaixa) caixaRelatorioSelecionado = null;
 
-            pedidosGerais = [];
-
-            dataHoraAberturaCaixa = null;
             salvarNoBancoLocal();
-            // Avisa (via Realtime) todo dispositivo logado nesta barraca, menos
-            // quem estiver como Master, pra deslogar sozinho — ver auth.js.
-            dispararLogoutForcado(barracaStateId);
-
-            document.getElementById('valor-fundo-caixa').value = '';
             atualizarInterfaceCaixa();
             atualizarTelas();
             atualizarFiltrosGestao();
@@ -2744,13 +2931,14 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             tbody.innerHTML = '';
 
             if (historicoCaixasDB.length === 0) {
-                return tbody.innerHTML = '<tr><td colspan="9" style="padding: 20px; text-align: center; color: gray;">Nenhum caixa foi fechado ainda.</td></tr>';
+                return tbody.innerHTML = '<tr><td colspan="10" style="padding: 20px; text-align: center; color: gray;">Nenhum caixa foi fechado ainda.</td></tr>';
             }
 
             historicoCaixasDB.forEach(c => {
                 tbody.innerHTML += `
                     <tr style="border-bottom: 1px solid #e5e7eb;">
                         <td style="padding: 12px; font-weight: bold;">#${c.id}</td>
+                        <td style="font-size: 0.85rem; font-weight: bold; color: #4b5563;">${c.usuarioNome || '-'}</td>
                         <td style="font-weight: bold; color: var(--primary); text-transform: uppercase;">${c.campanha || 'Padrão'}</td>
                         <td style="font-size: 0.85rem; color: #4b5563;">${c.dataAbertura}</td>
                         <td style="font-size: 0.85rem; color: #4b5563;">${c.dataFechamento}</td>
@@ -2761,6 +2949,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                         <td>
                             <button onclick="verDetalhesCaixa(${c.id})" class="btn btn-info" style="padding: 6px 10px; font-size: 0.8rem; margin-right:2px;" title="Ver Detalhes">👁️</button>
                             <button onclick="imprimirRelatorioFechamento(${c.id})" class="btn" style="background:#047857; color:white; padding: 6px 10px; font-size: 0.8rem; margin-right:2px;" title="Imprimir Comprovante">🖨️</button>
+                            <button onclick="gerarJPGFechamento(${c.id})" class="btn" style="background:#7c3aed; color:white; padding: 6px 10px; font-size: 0.8rem; margin-right:2px;" title="Baixar JPG">🖼️</button>
                             <button onclick="excluirRegistroCaixa(${c.id})" class="btn btn-danger" style="padding: 6px 10px; font-size: 0.8rem;" title="Excluir Caixa">🗑️</button>
                         </td>
                     </tr>
@@ -2935,6 +3124,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 <div class="print-center print-bold" style="font-size: 12px; margin-top: 2px; text-transform:uppercase;">EVENTO: ${c.campanha || 'GERAL'}</div>
                 <div class="print-divider"></div>
                 <div style="font-size: 11px; font-weight:bold;">
+                    <div><b>Operador:</b> ${c.usuarioNome || '-'}</div>
                     <div><b>Abertura:</b> ${c.dataAbertura}</div>
                     <div><b>Fechamento:</b> ${c.dataFechamento}</div>
                 </div>
@@ -2965,23 +3155,132 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             window.print();
         }
 
+        // Widget de caixa na tela de Pedido (substitui o antigo bloco fixo de
+        // "Abertura de Caixa" que ficava no Dashboard — agora cada usuário
+        // abre/fecha o próprio caixa por aqui, sem precisar sair da tela de
+        // venda). Mostra o caixa do usuário logado e, pra quem tem permissão,
+        // uma lista dos demais caixas abertos na barraca (útil se alguém
+        // esqueceu de fechar o dele).
         function atualizarInterfaceCaixa() {
-            const statusTxt = document.getElementById('status-caixa-texto');
-            const inputCaixa = document.getElementById('valor-fundo-caixa');
-            if (caixaAberto) {
-                statusTxt.innerText = `Status do Caixa: Aberto (Fundo Inicial: R$ ${valorFundoCaixa.toFixed(2)})`;
-                statusTxt.style.color = "var(--success)";
-                inputCaixa.value = valorFundoCaixa;
-                inputCaixa.disabled = true;
+            const painel = document.getElementById('painel-caixa-pedido');
+            if (!painel) return;
+
+            const meuCaixa = caixaDoUsuarioAtual();
+            let html = '';
+
+            if (meuCaixa) {
+                html += `
+                    <div class="badge-caixa badge-caixa-aberto">
+                        💰 Seu caixa: R$ ${meuCaixa.valorFundoCaixa.toFixed(2)} (${meuCaixa.dataHoraAbertura})
+                        <button class="btn btn-danger" style="padding:4px 8px; font-size:0.75rem; margin-left:6px;" onclick="fecharCaixaPrompt('${meuCaixa.id}')">🔒 Fechar</button>
+                    </div>`;
+            } else if (usuarioPodeAbrirFecharCaixa()) {
+                html += `
+                    <div class="badge-caixa badge-caixa-fechado">
+                        🔒 Você não tem caixa aberto
+                        <button class="btn btn-success" style="padding:4px 8px; font-size:0.75rem; margin-left:6px;" onclick="abrirCaixaPrompt()">🟢 Abrir Caixa</button>
+                    </div>`;
             } else {
-                statusTxt.innerText = "Status do Caixa: Fechado";
-                statusTxt.style.color = "var(--danger)";
-                inputCaixa.value = "";
-                inputCaixa.disabled = false;
+                html += `<div class="badge-caixa badge-caixa-fechado">🔒 Peça pra alguém com acesso abrir o caixa</div>`;
             }
+
+            const outrosCaixas = caixasAbertos.filter(c => !meuCaixa || c.id !== meuCaixa.id);
+            if (usuarioPodeAbrirFecharCaixa() && outrosCaixas.length > 0) {
+                html += `<div class="lista-outros-caixas">` + outrosCaixas.map(c => `
+                    <span class="chip-outro-caixa">${c.usuarioNome}: R$ ${c.valorFundoCaixa.toFixed(2)}
+                        <button class="btn btn-warning" style="padding:2px 6px; font-size:0.7rem;" onclick="fecharCaixaPrompt('${c.id}')" title="Fechar caixa de ${c.usuarioNome}">🔒</button>
+                    </span>`).join('') + `</div>`;
+            }
+
+            painel.innerHTML = html;
+        }
+
+        // Abas "Todos" + 1 por caixa aberto agora, no topo do Dashboard
+        // Analytics — clicar troca caixaRelatorioSelecionado e re-renderiza os
+        // números (obterDadosRelatorioCaixa já sabe filtrar por essa variável).
+        function renderizarAbasCaixasRelatorio() {
+            const container = document.getElementById('abas-caixas-relatorio');
+            if (!container) return;
+
+            const abas = [{ id: null, label: 'Todos' }, ...caixasAbertos.map(c => ({ id: c.id, label: c.usuarioNome }))];
+            container.innerHTML = abas.map(a => `
+                <button class="tag-categoria ${caixaRelatorioSelecionado === a.id ? 'ativa' : ''}" onclick="selecionarCaixaRelatorio(${a.id ? `'${a.id}'` : 'null'})">${a.id ? '💰 ' + a.label : '🗂️ Todos'}</button>
+            `).join('');
+        }
+
+        function selecionarCaixaRelatorio(idCaixa) {
+            caixaRelatorioSelecionado = idCaixa;
+            renderizarAbasCaixasRelatorio();
+            atualizarDashboard();
+        }
+
+        function gerarJPG(elementoId, nomeArquivo) {
+            const el = document.getElementById(elementoId);
+            if (!el || typeof html2canvas !== 'function') return;
+            html2canvas(el, { scale: 2 }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = nomeArquivo;
+                link.href = canvas.toDataURL('image/jpeg', 0.92);
+                link.click();
+            });
+        }
+
+        function gerarJPGRelatorioCaixa() {
+            gerarJPG('tela-relatorio', `Relatorio_Caixa_${new Date().toISOString().slice(0,10)}.jpg`);
+        }
+
+        function gerarJPGEstoque() {
+            gerarJPG('tela-produtos', `Estoque_${new Date().toISOString().slice(0,10)}.jpg`);
+        }
+
+        function gerarJPGDashboardGeral() {
+            gerarJPG('tela-dashboard-geral', `Dashboard_Geral_${new Date().toISOString().slice(0,10)}.jpg`);
+        }
+
+        function gerarPDFDashboardGeral() {
+            const el = document.getElementById('tela-dashboard-geral');
+            if (!el || typeof html2pdf !== 'function') return;
+            html2pdf().set({
+                margin: 10,
+                filename: `Dashboard_Geral_${new Date().toISOString().slice(0,10)}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2 },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+            }).from(el).save();
+        }
+
+        // JPG de um fechamento já histórico — reaproveita o mesmo modal de
+        // "Ver Detalhes" (verDetalhesCaixa) já existente: popula, mostra,
+        // tira o print e fecha de novo, sem duplicar nenhum template.
+        function gerarJPGFechamento(idCaixa) {
+            verDetalhesCaixa(idCaixa);
+            setTimeout(() => {
+                const el = document.querySelector('#modal-detalhes-caixa .modal-content');
+                if (!el || typeof html2canvas !== 'function') return;
+                html2canvas(el, { scale: 2 }).then(canvas => {
+                    const link = document.createElement('a');
+                    link.download = `Fechamento_Caixa_${idCaixa}.jpg`;
+                    link.href = canvas.toDataURL('image/jpeg', 0.92);
+                    link.click();
+                    fecharModalDetalhesCaixa();
+                });
+            }, 150);
+        }
+
+        // Botão de atalho na própria tela de Pedido — imprime o relatório do
+        // caixa do usuário logado sem precisar ir até o Dashboard Analytics
+        // nem mudar a aba selecionada lá.
+        function imprimirMeuCaixa() {
+            const meuCaixa = caixaDoUsuarioAtual();
+            if (!meuCaixa) return exibirAviso("Você não tem caixa aberto.");
+            const selecaoAnterior = caixaRelatorioSelecionado;
+            caixaRelatorioSelecionado = meuCaixa.id;
+            imprimirRelatorioCaixaAtual();
+            caixaRelatorioSelecionado = selecaoAnterior;
         }
 
         function atualizarDashboard() {
+            renderizarAbasCaixasRelatorio();
             const dados = obterDadosRelatorioCaixa();
 
             document.getElementById('rel-total').innerText = dados.totalVendas.toFixed(2);
@@ -3113,10 +3412,20 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             atualizarTelas();
             atualizarFiltrosGestao();
             renderizarHistoricoCaixas();
+            atualizarBotoesVozAnuncio();
+            aplicarTodosZoomsSalvos();
             iniciarRealtimeSupabase();
             iniciarRealtimeRegistroBarracas();
             iniciarRealtimeCatalogo();
-            iniciarRealtimeLogoutForcado(barracaStateId);
+
+            // Suporte a abrir direto numa tela específica em tela cheia — usado
+            // pelo "📺 Abrir TV Senha em outro monitor" (ver abrirModalTvSenha),
+            // que abre uma nova janela desta mesma URL com ?abrirTela=tela-tv.
+            const telaAutoAbrir = new URLSearchParams(location.search).get('abrirTela');
+            if (telaAutoAbrir && usuarioTemAcesso(telaAutoAbrir)) {
+                mudarAba(telaAutoAbrir, null);
+                document.documentElement.requestFullscreen().catch(() => {});
+            }
         };
 
 // --- Shim exigido pela conversão para módulo ES (não existe no arquivo-fonte) ---
@@ -3131,7 +3440,7 @@ function filtrarMenuBusca() {
 // --- Exposição global das funções chamadas via onclick="..." no HTML ---
 // (necessário porque este arquivo é um módulo ES; markup estático e
 // innerHTML gerado dinamicamente resolvem onclick por nome em 'window')
-window.abrirCaixa = abrirCaixa;
+window.abrirCaixaPrompt = abrirCaixaPrompt;
 window.abrirModalObs = abrirModalObs;
 window.abrirModalTodosPedidos = abrirModalTodosPedidos;
 window.abrirModalTrocaItem = abrirModalTrocaItem;
@@ -3157,6 +3466,21 @@ window.excluirCategoria = excluirCategoria;
 window.excluirRegistroCaixa = excluirRegistroCaixa;
 window.fecharAviso = fecharAviso;
 window.fecharCaixaPrompt = fecharCaixaPrompt;
+window.selecionarCaixaRelatorio = selecionarCaixaRelatorio;
+window.gerarJPGRelatorioCaixa = gerarJPGRelatorioCaixa;
+window.gerarJPGEstoque = gerarJPGEstoque;
+window.gerarJPGDashboardGeral = gerarJPGDashboardGeral;
+window.gerarPDFDashboardGeral = gerarPDFDashboardGeral;
+window.gerarJPGFechamento = gerarJPGFechamento;
+window.imprimirMeuCaixa = imprimirMeuCaixa;
+window.limparCarrinhoComConfirmacao = limparCarrinhoComConfirmacao;
+window.alternarVozAnuncio = alternarVozAnuncio;
+window.ajustarZoomTela = ajustarZoomTela;
+window.abrirModalTvSenha = abrirModalTvSenha;
+window.fecharModalTvSenha = fecharModalTvSenha;
+window.abrirTvSenhaNoMonitorSelecionado = abrirTvSenhaNoMonitorSelecionado;
+window.abrirModalConfigPedido = abrirModalConfigPedido;
+window.fecharModalConfigPedido = fecharModalConfigPedido;
 window.fecharModalCombo = fecharModalCombo;
 window.fecharModalDetalhesCaixa = fecharModalDetalhesCaixa;
 window.fecharModalObs = fecharModalObs;
