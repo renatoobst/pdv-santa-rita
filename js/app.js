@@ -8,7 +8,7 @@
 
 import { supabaseClient, PDV_CLIENT_ID } from './config.js';
 import { categoriasPadrao, produtosPadrao } from './data.js';
-import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCacheAtalhos, chaveCacheConfigPadroes, renderizarPainelBarracas, carregarDashboardGeral, iniciarRealtimeRegistroBarracas, registroBarracas } from './barracas.js';
+import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCacheAtalhos, renderizarPainelBarracas, carregarDashboardGeral, iniciarRealtimeRegistroBarracas, registroBarracas } from './barracas.js';
 
         // Id da barraca ativa neste dispositivo (linha correspondente na tabela
         // `pdv_state` do Supabase). Só é conhecido depois que resolverBarracaAtiva()
@@ -109,6 +109,7 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                 valorFundoCaixa,
                 dataHoraAberturaCaixa,
                 estoquePorProduto,
+                configPadroes,
                 origem: PDV_CLIENT_ID,
                 salvoEm: new Date().toISOString()
             };
@@ -121,7 +122,6 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             // e mesmo assim cada barraca tem sua própria linha lá.
             localStorage.setItem(chaveCacheEstado(barracaStateId), JSON.stringify(montarEstadoAtual()));
             localStorage.setItem(chaveCacheAtalhos(barracaStateId), JSON.stringify(atalhosConfig));
-            localStorage.setItem(chaveCacheConfigPadroes(barracaStateId), JSON.stringify(configPadroes));
         }
 
         // Pinta a tela imediatamente com o que já está em cache local desta
@@ -139,12 +139,6 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                 if (rawAtalhos) atalhosConfig = JSON.parse(rawAtalhos);
             } catch (erro) {
                 console.error('Cache local de atalhos corrompido, ignorando:', erro);
-            }
-            try {
-                const rawConfigPadroes = localStorage.getItem(chaveCacheConfigPadroes(barracaStateId));
-                if (rawConfigPadroes) configPadroes = { ...configPadroes, ...JSON.parse(rawConfigPadroes) };
-            } catch (erro) {
-                console.error('Cache local de configurações padrão corrompido, ignorando:', erro);
             }
         }
 
@@ -172,6 +166,10 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                 estado.produtosDB.forEach(p => { estoquePorProduto[p.id] = (p.estoque === undefined ? null : p.estoque); });
             }
 
+            if (estado.configPadroes && typeof estado.configPadroes === 'object') {
+                configPadroes = { ...configPadroes, ...estado.configPadroes };
+            }
+
             ultimaAtualizacaoRemota = estado.salvoEm || null;
             salvarCacheLocal();
             carregandoEstadoRemoto = false;
@@ -184,6 +182,8 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                 atualizarFiltrosGestao();
                 renderizarHistoricoCaixas();
                 renderizarPainelAtalhos();
+                const telaConfig = document.getElementById('tela-configuracoes');
+                if (telaConfig && telaConfig.classList.contains('active')) carregarFormularioConfiguracoes();
                 const relatorio = document.getElementById('tela-relatorio');
                 if (relatorio && relatorio.classList.contains('active')) atualizarDashboard();
             }
@@ -537,7 +537,10 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                 tipoAtendimento: document.getElementById('cfg-padrao-tipo-atendimento').value,
                 tipoRetiradaGlobal: document.getElementById('cfg-padrao-tipo-retirada-global').value
             };
-            salvarCacheLocal();
+            // Precisa ir pro Supabase (não só no cache local deste navegador) —
+            // senão some ao abrir em outra aba/dispositivo ou depois de limpar
+            // dados do navegador.
+            salvarNoBancoLocal();
         }
 
         function iniciarGravaçãoAtalho(acao) {
@@ -2159,6 +2162,10 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
         // sobrepor. Se o navegador/dispositivo não suportar (raro, mas
         // acontece em alguns tablets), falha em silêncio — o beep já cumpriu
         // o papel de avisar.
+        //
+        // tocarBeep() tem duas notas: a segunda só termina de tocar/apagar
+        // em ~1.5s depois de disparada — por isso o atraso da fala precisa
+        // ser maior que isso, senão a voz começa em cima do fim do bipe.
         function falarChamadaPedido(numeroPedido, nomeCliente) {
             try {
                 if (!('speechSynthesis' in window)) return;
@@ -2176,7 +2183,7 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             const p = pedidosGerais.find(x => x.id === id);
             p.statusPainel = 'pronto';
             tocarBeep();
-            setTimeout(() => falarChamadaPedido(p.id, p.cliente), 700);
+            setTimeout(() => falarChamadaPedido(p.id, p.cliente), 1700);
             salvarNoBancoLocal();
             atualizarTelas();
         }

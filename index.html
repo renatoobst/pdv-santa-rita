@@ -75,7 +75,7 @@
             </div>
 
             <label style="font-size: 0.8rem; font-weight: bold; color: #374151;">Outras Observações (Texto Livre):</label>
-            <textarea id="input-obs-texto" rows="3" placeholder="Ex: Bem passado, sem maionese..." style="resize: vertical;"></textarea>
+            <textarea id="input-obs-texto" rows="3" placeholder="Ex: Bem passado, sem maionese..." style="resize: vertical;" spellcheck="true" lang="pt-BR"></textarea>
             <div style="display:flex; gap:10px; margin-top: 10px;">
                 <button class="btn btn-success" style="flex:1;" onclick="salvarObsModal()">Salvar Observação 💾</button>
                 <button class="btn btn-danger" style="flex:1;" onclick="fecharModalObs()">Cancelar</button>
@@ -187,7 +187,7 @@
             <div id="lista-barracas-selecao" style="display:flex; flex-direction:column; gap:8px; margin: 15px 0;"></div>
             <hr>
             <h3 style="font-size: 1rem;">➕ Criar Nova Barraca</h3>
-            <input type="text" id="input-nova-barraca-selecao" placeholder="Ex: Barraca de Doces">
+            <input type="text" id="input-nova-barraca-selecao" placeholder="Ex: Barraca de Doces" spellcheck="true" lang="pt-BR">
             <button class="btn btn-success" style="width:100%;" onclick="criarBarracaNaSelecao()">Criar e Entrar</button>
         </div>
     </div>
@@ -200,7 +200,7 @@
                 <div>
                     <!-- BARRA DE BUSCA DE PRODUTOS -->
                     <div style="margin-bottom: 12px;">
-                        <input type="text" id="busca-produto-menu" placeholder="🔍 Pesquisar produto ou combo por nome..." oninput="filtrarMenuBusca()" style="margin-bottom: 0; padding: 10px; font-weight: bold; background: white; border: 2px solid #cbd5e1;">
+                        <input type="text" id="busca-produto-menu" placeholder="🔍 Pesquisar produto ou combo por nome..." oninput="filtrarMenuBusca()" style="margin-bottom: 0; padding: 10px; font-weight: bold; background: white; border: 2px solid #cbd5e1;" spellcheck="true" lang="pt-BR">
                     </div>
 
                     <div class="menu-categorias" id="menu-categorias-container"></div>
@@ -233,7 +233,7 @@
                     
                     <div style="margin-bottom: 10px;">
                         <label style="font-size: 0.85rem; font-weight: bold;">Cliente / Mesa:</label>
-                        <input type="text" id="nome-cliente" placeholder="Ex: João (Mesa 4)">
+                        <input type="text" id="nome-cliente" placeholder="Ex: João (Mesa 4)" spellcheck="true" lang="pt-BR">
                     </div>
 
                     <div class="itens-carrinho" id="itens-carrinho">
@@ -337,7 +337,7 @@
 
                         <div id="box-bonificacao" style="display: none; background: #fef3c7; padding: 8px; border-radius: 6px; border: 1px solid #f59e0b; margin-bottom: 6px;">
                             <label style="font-size: 0.72rem; font-weight: bold; color: #b45309; margin-bottom:2px;">Motivo Bonificação (Obrigatório):</label>
-                            <input type="text" id="obs-bonificacao" placeholder="Ex: Doação, Autoridade, Cortesia..." style="margin-bottom: 0; background: white; padding: 4px;">
+                            <input type="text" id="obs-bonificacao" placeholder="Ex: Doação, Autoridade, Cortesia..." style="margin-bottom: 0; background: white; padding: 4px;" spellcheck="true" lang="pt-BR">
                         </div>
 
                         <button id="btn-finalizar-pedido" class="btn btn-primary" style="width: 100%; margin-bottom: 6px; font-size: 1rem; padding: 8px;" onclick="finalizarPedido()">Cobrar, Imprimir e Enviar 🖨️</button>
@@ -351,7 +351,7 @@
         <div id="tela-agendados" class="tab-content">
             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 20px;">
                 <h2 style="border: none; padding: 0; margin: 0;">Pedidos p/ Mais Tarde (Ficha)</h2>
-                <input type="text" id="busca-agendados" placeholder="🔍 Pesquisar nº ou nome..." oninput="atualizarTelas()" style="width: 300px; margin: 0;">
+                <input type="text" id="busca-agendados" placeholder="🔍 Pesquisar nº ou nome..." oninput="atualizarTelas()" style="width: 300px; margin: 0;" spellcheck="true" lang="pt-BR">
             </div>
             <div class="grid-pedidos" id="fila-agendados"></div>
         </div>
@@ -449,7 +449,7 @@
                         <small style="font-size:0.7rem; color:gray; font-weight:normal;">✨ Arraste para reordenar</small>
                     </h3>
                     <div style="display: flex; gap: 8px; margin-bottom: 15px;">
-                        <input type="text" id="nova-cat-nome" placeholder="Nova Categoria..." style="margin-bottom: 0; flex: 1;">
+                        <input type="text" id="nova-cat-nome" placeholder="Nova Categoria..." style="margin-bottom: 0; flex: 1;" spellcheck="true" lang="pt-BR">
                         <button class="btn btn-success" style="padding: 10px; width: 45px;" onclick="adicionarCategoria()">➕</button>
                     </div>
                     <ul id="lista-gestao-categorias" style="list-style: none; padding: 0; margin: 0; max-height: 250px; overflow-y: auto;"></ul>
@@ -465,10 +465,10 @@
                     <h3 id="titulo-form-produto" style="margin-top: 0;">Cadastrar Produto</h3>
                     
                     <label style="font-size: 0.85rem; font-weight: bold;">Nome (Produto ou Combo):</label>
-                    <input type="text" id="novo-prod-nome" placeholder="Ex: X-Bacon" required>
+                    <input type="text" id="novo-prod-nome" placeholder="Ex: X-Bacon" required spellcheck="true" lang="pt-BR">
 
                     <label style="font-size: 0.85rem; font-weight: bold; color:#0284c7;">Ingredientes / Itens Inclusos (Separados por vírgula):</label>
-                    <input type="text" id="novo-prod-ingredientes" placeholder="Ex: Pão, Hamburguer, Queijo, Tomate, Alface">
+                    <input type="text" id="novo-prod-ingredientes" placeholder="Ex: Pão, Hamburguer, Queijo, Tomate, Alface" spellcheck="true" lang="pt-BR">
 
                     <label style="font-size: 0.85rem; font-weight: bold;">Status do Produto (Visibilidade no PDV):</label>
                     <select id="novo-prod-ativo" style="margin-bottom: 15px; font-weight: bold;">
@@ -530,7 +530,7 @@
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
                         <h3 style="margin: 0;">Lista de Produtos & Combos</h3>
                         <div style="width: 280px; max-width: 100%;">
-                            <input type="text" id="busca-tabela-produtos" placeholder="🔍 Pesquisar na lista..." oninput="renderizarTabelaProdutos()" style="margin-bottom: 0; padding: 8px; font-weight: bold; border: 2px solid #cbd5e1; background: #f8fafc;">
+                            <input type="text" id="busca-tabela-produtos" placeholder="🔍 Pesquisar na lista..." oninput="renderizarTabelaProdutos()" style="margin-bottom: 0; padding: 8px; font-weight: bold; border: 2px solid #cbd5e1; background: #f8fafc;" spellcheck="true" lang="pt-BR">
                         </div>
                     </div>
 
@@ -657,7 +657,7 @@
             <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px;">
                 <h3 style="margin-top: 0;">➕ Nova Barraca</h3>
                 <div class="row-inputs">
-                    <input type="text" id="input-nova-barraca-painel" placeholder="Ex: Barraca de Bebidas" style="margin-bottom: 0;">
+                    <input type="text" id="input-nova-barraca-painel" placeholder="Ex: Barraca de Bebidas" style="margin-bottom: 0;" spellcheck="true" lang="pt-BR">
                     <button class="btn btn-success" onclick="criarBarracaNoPainel()" style="white-space: nowrap;">Criar Barraca</button>
                 </div>
             </div>
@@ -691,7 +691,7 @@
             <div style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; flex-wrap: wrap;">
                 <div style="flex: 1; min-width: 200px;">
                     <label style="font-size: 0.85rem; font-weight: bold;">🔍 Pesquisar Pedido ou Cliente:</label>
-                    <input type="text" id="filtro-texto-gestao" placeholder="Ex: João, #15..." oninput="atualizarFiltrosGestao()" style="margin-bottom: 0;">
+                    <input type="text" id="filtro-texto-gestao" placeholder="Ex: João, #15..." oninput="atualizarFiltrosGestao()" style="margin-bottom: 0;" spellcheck="true" lang="pt-BR">
                 </div>
                 <div style="width: 180px;">
                     <label style="font-size: 0.85rem; font-weight: bold;">📅 Filtrar por Data:</label>
