@@ -1442,7 +1442,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             } else {
                 const estoqueAqui = estoquePorProduto[p.id];
                 document.getElementById('novo-prod-estoque').value = (estoqueAqui !== undefined && estoqueAqui !== null) ? estoqueAqui : '';
-                document.getElementById('novo-prod-cozinha').value = p.cozinha ? 'true' : 'false';
+                document.getElementById('novo-prod-cozinha').value = p.cozinha ? 'cozinha' : (p.entregaInstantanea ? 'instantaneo' : 'balcao');
             }
 
             produtoEmEdicaoId = p.id;
@@ -1486,6 +1486,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
             let isCombo = (modoCadastroAtivo === 'combo');
             let cozinha = false;
+            let entregaInstantanea = false;
             let estoqueFinal = null;
             let finalItensCombo = [];
 
@@ -1494,7 +1495,9 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 finalItensCombo = JSON.parse(JSON.stringify(comboTemporario));
                 cozinha = true;
             } else {
-                cozinha = document.getElementById('novo-prod-cozinha').value === 'true';
+                const direcionamento = document.getElementById('novo-prod-cozinha').value;
+                cozinha = direcionamento === 'cozinha';
+                entregaInstantanea = direcionamento === 'instantaneo';
                 let estoqueInput = document.getElementById('novo-prod-estoque').value.trim();
                 estoqueFinal = estoqueInput === '' ? null : parseInt(estoqueInput);
                 // Estoque é só desta barraca (estoquePorProduto), não mais um campo
@@ -1511,6 +1514,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (produtoEmEdicaoId !== null) {
                 let p = produtosDB.find(prod => prod.id === produtoEmEdicaoId);
                 p.nome = nome; p.preco = preco; p.categoria = categoria; p.subcategoria = subcategoria; p.cozinha = cozinha;
+                p.entregaInstantanea = entregaInstantanea;
                 p.isCombo = isCombo; p.itensCombo = finalItensCombo; p.foto = foto; p.ativo = ativo; p.barracas = barracasMarcadas;
                 p.ingredientes = ingredientes;
                 idSalvo = p.id;
@@ -1519,7 +1523,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 idSalvo = produtosDB.length > 0 ? Math.max(...produtosDB.map(p => p.id)) + 1 : 1;
                 produtosDB.push({
                     id: idSalvo,
-                    nome, preco, categoria, subcategoria, cozinha, isCombo, itensCombo: finalItensCombo, foto, ativo, barracas: barracasMarcadas, ingredientes
+                    nome, preco, categoria, subcategoria, cozinha, entregaInstantanea, isCombo, itensCombo: finalItensCombo, foto, ativo, barracas: barracasMarcadas, ingredientes
                 });
                 cancelarEdicaoProduto();
             }
@@ -2120,10 +2124,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             let tipoGlobal = document.getElementById('tipo-retirada-global').value;
             let fase = tipoGlobal === 'mais_tarde' ? 'mais_tarde' : 'agora';
             
-            carrinho.push({ 
-                cartId: Date.now().toString() + Math.floor(Math.random()*1000), 
-                idProduto: produto.id, nome: produto.nome, preco: produto.preco, 
-                categoria: produto.categoria, cozinha: produto.cozinha, 
+            carrinho.push({
+                cartId: Date.now().toString() + Math.floor(Math.random()*1000),
+                idProduto: produto.id, nome: produto.nome, preco: produto.preco,
+                categoria: produto.categoria, cozinha: produto.cozinha, entregaInstantanea: !!produto.entregaInstantanea,
                 isCombo: false, qtd: 1, obs: '', fase: fase
             });
             atualizarCarrinhoUI();
@@ -2315,10 +2319,16 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     caixaIdPedido = pedidoExistente.caixaId || meuCaixaAtual.id;
                 }
             } else {
-                const vaiParaCozinha = tipoGlobalRetirada !== 'agora_sem_cozinha' && carrinho.some(i => i.fase === 'agora' && (i.cozinha || (i.isCombo && i.itensComboEscolhidos && i.itensComboEscolhidos.some(sub=>sub.cozinha))));
-                statusPainelCalculado = vaiParaCozinha ? 'preparando' : (tipoGlobalRetirada === 'agora_sem_cozinha' ? 'entregue' : 'nenhum');
+                const itensAgora = carrinho.filter(i => i.fase === 'agora');
+                const vaiParaCozinha = tipoGlobalRetirada !== 'agora_sem_cozinha' && itensAgora.some(i => i.cozinha || (i.isCombo && i.itensComboEscolhidos && i.itensComboEscolhidos.some(sub=>sub.cozinha)));
+                // Se TODOS os itens "agora" do carrinho são de entrega
+                // instantânea (rifa, ingresso — nunca vão pra Cozinha nem
+                // ficam esperando no Balcão), o pedido já nasce entregue,
+                // independente do Modo de Retirada escolhido.
+                const todosInstantaneos = itensAgora.length > 0 && itensAgora.every(i => !i.isCombo && i.entregaInstantanea);
+                statusPainelCalculado = vaiParaCozinha ? 'preparando' : ((tipoGlobalRetirada === 'agora_sem_cozinha' || todosInstantaneos) ? 'entregue' : 'nenhum');
                 horaEntradaCozinhaCalculada = vaiParaCozinha ? horaAtual : null;
-                horaEntregaCalculada = (!vaiParaCozinha && tipoGlobalRetirada === 'agora_sem_cozinha') ? horaAtual : null;
+                horaEntregaCalculada = (!vaiParaCozinha && (tipoGlobalRetirada === 'agora_sem_cozinha' || todosInstantaneos)) ? horaAtual : null;
             }
 
             const novoPedido = {
