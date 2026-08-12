@@ -3777,6 +3777,16 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             const telaAutoAbrir = new URLSearchParams(location.search).get('abrirTela');
             if (telaAutoAbrir && usuarioTemAcesso(telaAutoAbrir)) {
                 mudarAba(telaAutoAbrir, null);
+                // Modo "só a tela" — usado tanto pela TV Senha em janela
+                // própria quanto por cada quadrante do Multiview (iframe):
+                // esconde o menu/nav inteiro, senão cada quadradinho mostra
+                // o cabeçalho do app inteiro de novo, sem sentido no espaço
+                // minúsculo de um quadrante 4x4.
+                const nav = document.getElementById('nav-principal');
+                const btnMostrarMenu = document.getElementById('btn-show-global-menu');
+                if (nav) nav.style.display = 'none';
+                if (btnMostrarMenu) btnMostrarMenu.style.display = 'none';
+
                 // Dentro de um <iframe> (quadrante do Multiview) não faz
                 // sentido nem funciona pedir tela cheia — só mostra o botão
                 // quando é mesmo uma janela própria (aberta via TV Senha).
