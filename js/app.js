@@ -1540,44 +1540,25 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             const boxDinheiro = document.getElementById('box-dinheiro-troco');
             const boxBonificacao = document.getElementById('box-bonificacao');
             const boxMisto = document.getElementById('box-pagamento-misto');
-            const boxPedidoOnline = document.getElementById('box-pedido-online');
-
+            
             boxDinheiro.style.display = 'none';
             boxBonificacao.style.display = 'none';
             boxMisto.style.display = 'none';
-            boxPedidoOnline.style.display = 'none';
 
-            if(forma === 'Dinheiro') {
-                boxDinheiro.style.display = 'block';
-                calcularTroco();
+            if(forma === 'Dinheiro') { 
+                boxDinheiro.style.display = 'block'; 
+                calcularTroco(); 
             } else if (forma === 'Bonificação') {
                 boxBonificacao.style.display = 'block';
             } else if (forma === 'Misto') {
                 boxMisto.style.display = 'block';
                 atualizarValoresMisto();
-
+                
                 const forma1 = document.getElementById('misto-forma-1').value;
                 const forma2 = document.getElementById('misto-forma-2').value;
                 if(forma1 === 'Dinheiro' || forma2 === 'Dinheiro') {
                     boxDinheiro.style.display = 'block';
                     calcularTroco();
-                }
-            } else if (forma === 'Pendente') {
-                boxPedidoOnline.style.display = 'block';
-                // Pedido Online: sempre "Levar" e sempre fica na Pedido Ficha
-                // (mais_tarde) até a hora combinada — o operador não precisa
-                // escolher isso à mão toda vez. Só faz esse auto-set num pedido
-                // NOVO: se estiver editando um pedido que já existe (inclusive
-                // um que já foi enviado à cozinha), forçar mais_tarde de novo
-                // desfaria isso — reabrir só pra ajustar o horário/pagamento
-                // não pode mandar os itens de volta pra fila.
-                if (pedidoEmEdicaoId === null) {
-                    document.getElementById('tipo-atendimento').value = 'Levar (Viagem)';
-                    const selectRetiradaGlobal = document.getElementById('tipo-retirada-global');
-                    if (selectRetiradaGlobal.value !== 'mais_tarde') {
-                        selectRetiradaGlobal.value = 'mais_tarde';
-                        mudarTipoRetiradaGlobal();
-                    }
                 }
             }
         }
@@ -1780,7 +1761,6 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
 
             let formaPagto = document.getElementById('forma-pagto').value;
             const pagamentoPendente = formaPagto === 'Pendente';
-            const horarioRetiradaOnline = pagamentoPendente ? document.getElementById('horario-retirada-online').value : null;
             const tipoAtendimento = document.getElementById('tipo-atendimento').value;
             const tipoGlobalRetirada = document.getElementById('tipo-retirada-global').value;
 
@@ -1839,11 +1819,7 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             } else if (formaPagto === 'Pendente') {
                 // Pedido Online: a forma de pagamento de verdade só é escolhida
                 // quando a pessoa vier retirar (ver 🌐 Pedido Retirada). Nada de
-                // valor recebido/troco pra validar agora — só o horário, que é
-                // o que dispara o envio automático pra cozinha.
-                if (!horarioRetiradaOnline) {
-                    return exibirAviso("Informe o horário em que a pessoa vai vir retirar o Pedido Online!");
-                }
+                // valor recebido/troco pra validar agora.
                 formaPagto = 'Pedido Online (Pagar na Retirada)';
             }
 
@@ -1854,7 +1830,6 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             let statusPainelCalculado = 'nenhum';
             let horaEntradaCozinhaCalculada = null;
             let horaEntregaCalculada = null;
-            let horarioRetiradaExistente = null;
 
             if (pedidoEmEdicaoId !== null) {
                 statusPainelCalculado = document.getElementById('status-pedido-edicao').value;
@@ -1862,7 +1837,6 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                 if (pedidoExistente) {
                     horaEntradaCozinhaCalculada = pedidoExistente.horaEntradaCozinha;
                     horaEntregaCalculada = statusPainelCalculado === 'entregue' ? (pedidoExistente.horaEntrega || horaAtual) : pedidoExistente.horaEntrega;
-                    horarioRetiradaExistente = pedidoExistente.horarioRetirada || null;
                 }
             } else {
                 const vaiParaCozinha = tipoGlobalRetirada !== 'agora_sem_cozinha' && carrinho.some(i => i.fase === 'agora' && (i.cozinha || (i.isCombo && i.itensComboEscolhidos && i.itensComboEscolhidos.some(sub=>sub.cozinha))));
@@ -1880,7 +1854,6 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                 horaEntrega: horaEntregaCalculada,
                 statusPainel: statusPainelCalculado,
                 pagamentoPendente: pagamentoPendente,
-                horarioRetirada: pagamentoPendente ? horarioRetiradaOnline : horarioRetiradaExistente,
                 itens: JSON.parse(JSON.stringify(carrinho))
             };
 
@@ -2179,41 +2152,16 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             if (pedido) { gerarHTMLImpressao(pedido); window.print(); }
         }
 
-        function moverParaAgora(id) {
-            const p = pedidosGerais.find(x => x.id === id);
+        function moverParaAgora(id) { 
+            const p = pedidosGerais.find(x => x.id === id); 
             const horaAtual = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-
-            p.itens.forEach(i => { if(i.fase==='mais_tarde') i.fase='agora'; });
-            p.statusPainel = 'preparando';
+            
+            p.itens.forEach(i => { if(i.fase==='mais_tarde') i.fase='agora'; }); 
+            p.statusPainel = 'preparando'; 
             if (!p.horaEntradaCozinha) p.horaEntradaCozinha = horaAtual;
 
             salvarNoBancoLocal();
-            atualizarTelas();
-        }
-
-        // Pedido Online (Pagar na Retirada) tem um horário combinado com o
-        // cliente pra vir buscar. Fica parado na Pedido Ficha até faltar 5
-        // minutos pra esse horário, e então vai pra cozinha sozinho — sem
-        // precisar de ninguém clicando em "📤 Enviar p/ Cozinha" na hora certa.
-        // Só funciona enquanto o app estiver aberto no navegador (não existe
-        // um servidor/cron rodando isso por fora).
-        function verificarPedidosOnlineParaCozinha() {
-            if (!Array.isArray(pedidosGerais) || pedidosGerais.length === 0) return;
-
-            const agora = new Date();
-            const minutosAgora = agora.getHours() * 60 + agora.getMinutes();
-
-            pedidosGerais.forEach(p => {
-                if (p.statusPainel === 'cancelado' || !p.horarioRetirada) return;
-                if (!p.itens.some(i => i.fase === 'mais_tarde')) return;
-
-                const [h, m] = p.horarioRetirada.split(':').map(Number);
-                if (Number.isNaN(h) || Number.isNaN(m)) return;
-
-                if (minutosAgora >= (h * 60 + m) - 5) {
-                    moverParaAgora(p.id);
-                }
-            });
+            atualizarTelas(); 
         }
 
         function chamarNoPainel(id) { 
@@ -2401,10 +2349,6 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                         return `<div style="border-bottom:1px dashed #ccc; padding:4px 0;"><b>1x ${i.nome}</b>${comboDet}${obsDet}</div>`;
                     }).join('');
 
-                    const tagPedidoOnline = p.horarioRetirada
-                        ? `<div style="font-size:0.8rem; font-weight:bold; color:#0284c7; background:#e0f2fe; padding:3px 6px; border-radius:4px; display:inline-block; margin-top:4px;">🌐 Pedido Online — Retirar às ${p.horarioRetirada} (vai à cozinha 5min antes)</div>`
-                        : '';
-
                     htmlAgenda += `
                         <div class="card-pedido" style="border:1px solid var(--info);">
                             <div class="status-bar bg-info"></div>
@@ -2413,7 +2357,6 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
                                 <b style="color:var(--info); font-size:0.85rem;">🕒 ${p.hora}</b>
                             </div>
                             <div style="font-size: 0.85rem; font-weight: bold; color: var(--primary); margin-top:2px;">[ ${p.tipoAtendimento || 'Levar (Viagem)'} ]</div>
-                            ${tagPedidoOnline}
                             <div class="lista-itens" style="margin-top:8px;">${itensDetalhadosFicha}</div>
                             <button class="btn btn-info" onclick="moverParaAgora(${p.id})">📤 Enviar p/ Cozinha</button>
                         </div>`;
@@ -3118,13 +3061,7 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             carrinho = JSON.parse(JSON.stringify(p.itens));
             document.getElementById('nome-cliente').value = p.cliente; 
             
-            if (p.pagamentoPendente) {
-                // Continua "Pedido Online" por padrão — o operador pode só
-                // ajustar o horário e salvar (sem resolver o pagamento ainda),
-                // ou trocar a Forma de Pagamento pra uma de verdade e cobrar.
-                document.getElementById('forma-pagto').value = 'Pendente';
-                document.getElementById('horario-retirada-online').value = p.horarioRetirada || '';
-            } else if (p.pagamento.startsWith('Bonificação')) {
+            if (p.pagamento.startsWith('Bonificação')) {
                 document.getElementById('forma-pagto').value = 'Bonificação';
                 const partes = p.pagamento.match(/\((.*?)\)/);
                 document.getElementById('obs-bonificacao').value = partes ? partes[1] : '';
@@ -3139,13 +3076,9 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             }
 
             if(p.tipoAtendimento) document.getElementById('tipo-atendimento').value = p.tipoAtendimento;
-
-            // Precisa vir antes de toggleCampoDinheiro(): é o que diferencia
-            // "usuário acabou de escolher Pendente num pedido novo" (aplica os
-            // padrões automáticos) de "estamos só restaurando um pedido
-            // existente na tela" (não pode mexer no que já foi decidido).
+            
+            toggleCampoDinheiro(); 
             pedidoEmEdicaoId = id;
-            toggleCampoDinheiro();
 
             document.getElementById('lbl-id-pedido-edicao').innerText = `#${id}`;
             document.getElementById('banner-alerta-edicao').style.display = 'block';
@@ -3184,9 +3117,6 @@ import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCac
             iniciarRealtimeSupabase();
             iniciarRealtimeRegistroBarracas();
             iniciarRealtimeCatalogo();
-
-            verificarPedidosOnlineParaCozinha();
-            setInterval(verificarPedidosOnlineParaCozinha, 30000);
         };
 
 // --- Shim exigido pela conversão para módulo ES (não existe no arquivo-fonte) ---
