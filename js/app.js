@@ -651,20 +651,40 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         let trocaItemSubIndex = null; // != null quando é um sub-item de combo sendo trocado
         let obsCartIdAtual = null;
 
+        // Volume do aviso sonoro (0 a 500%), por dispositivo — ver o slider ao
+        // lado do "Voz Ligada" no Balcão. O bipe é gerado por osciladores do
+        // Web Audio API, então o ganho PODE passar de 100% de verdade (fica
+        // mais alto que o volume "normal", com distorção em valores altos —
+        // é esperado, é isso que faz soar mais alto). A fala (SpeechSynthesis)
+        // NÃO tem essa flexibilidade: o navegador limita o volume dela em no
+        // máximo 100%, então acima disso o slider só afeta o bipe.
+        const CHAVE_VOLUME_ANUNCIO = 'pdv_volume_anuncio';
+        function fatorVolumeAnuncio() {
+            const salvo = parseInt(localStorage.getItem(CHAVE_VOLUME_ANUNCIO));
+            return (isNaN(salvo) ? 100 : salvo) / 100;
+        }
+
         function tocarBeep() {
             try {
+                const fator = fatorVolumeAnuncio();
                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 if (audioCtx.state === 'suspended') { audioCtx.resume(); }
                 const osc1 = audioCtx.createOscillator(); const gain1 = audioCtx.createGain();
-                osc1.type = 'triangle'; osc1.frequency.setValueAtTime(987.77, audioCtx.currentTime); 
-                gain1.gain.setValueAtTime(0, audioCtx.currentTime); gain1.gain.linearRampToValueAtTime(1, audioCtx.currentTime + 0.05); gain1.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.6); 
+                osc1.type = 'triangle'; osc1.frequency.setValueAtTime(987.77, audioCtx.currentTime);
+                gain1.gain.setValueAtTime(0, audioCtx.currentTime); gain1.gain.linearRampToValueAtTime(1 * fator, audioCtx.currentTime + 0.05); gain1.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.6);
                 osc1.connect(gain1); gain1.connect(audioCtx.destination); osc1.start(audioCtx.currentTime); osc1.stop(audioCtx.currentTime + 0.6);
 
                 const osc2 = audioCtx.createOscillator(); const gain2 = audioCtx.createGain();
-                osc2.type = 'triangle'; osc2.frequency.setValueAtTime(783.99, audioCtx.currentTime + 0.25); 
-                gain2.gain.setValueAtTime(0, audioCtx.currentTime + 0.25); gain2.gain.linearRampToValueAtTime(1, audioCtx.currentTime + 0.3); gain2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.5);
+                osc2.type = 'triangle'; osc2.frequency.setValueAtTime(783.99, audioCtx.currentTime + 0.25);
+                gain2.gain.setValueAtTime(0, audioCtx.currentTime + 0.25); gain2.gain.linearRampToValueAtTime(1 * fator, audioCtx.currentTime + 0.3); gain2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.5);
                 osc2.connect(gain2); gain2.connect(audioCtx.destination); osc2.start(audioCtx.currentTime + 0.25); osc2.stop(audioCtx.currentTime + 1.5);
             } catch(e) { console.log("Áudio não suportado"); }
+        }
+
+        function ajustarVolumeAnuncio(valor) {
+            localStorage.setItem(CHAVE_VOLUME_ANUNCIO, valor);
+            const label = document.getElementById('txt-volume-anuncio');
+            if (label) label.innerText = `${valor}%`;
         }
 
         function toggleMenuGlobal() {
@@ -2676,6 +2696,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 const utter = new SpeechSynthesisUtterance(`Pedido número ${numeroPedido}, ${nomeCliente}`);
                 utter.lang = 'pt-BR';
                 utter.rate = 0.95;
+                // O navegador só aceita volume entre 0 e 1 (100%) pra fala
+                // sintetizada — valores do slider acima de 100% não têm
+                // efeito aqui (só no bipe, que é gerado por osciladores e
+                // pode ser amplificado de verdade).
+                utter.volume = Math.min(fatorVolumeAnuncio(), 1);
                 speechSynthesis.cancel();
                 speechSynthesis.speak(utter);
             } catch (e) {
@@ -2817,6 +2842,13 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 btn.classList.toggle('btn-success', ativa);
                 btn.classList.toggle('btn-warning', !ativa);
             });
+
+            const valorSalvo = parseInt(localStorage.getItem(CHAVE_VOLUME_ANUNCIO));
+            const volume = isNaN(valorSalvo) ? 100 : valorSalvo;
+            const slider = document.getElementById('slider-volume-anuncio');
+            const label = document.getElementById('txt-volume-anuncio');
+            if (slider) slider.value = volume;
+            if (label) label.innerText = `${volume}%`;
         }
 
         function chamarNoPainel(id) {
@@ -4091,6 +4123,7 @@ window.pedirConfirmacao = pedirConfirmacao;
 window.verMeuRelatorioCaixa = verMeuRelatorioCaixa;
 window.limparCarrinhoComConfirmacao = limparCarrinhoComConfirmacao;
 window.alternarVozAnuncio = alternarVozAnuncio;
+window.ajustarVolumeAnuncio = ajustarVolumeAnuncio;
 window.ajustarZoomTela = ajustarZoomTela;
 window.fecharTecladoNumerico = fecharTecladoNumerico;
 window.fecharTecladoTexto = fecharTecladoTexto;

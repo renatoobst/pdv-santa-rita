@@ -635,6 +635,11 @@
                 <h2 style="margin:0;">Painel de Entrega (Balcão/Entrega)</h2>
                 <div style="display:flex; gap:8px; align-items:center;">
                     <button class="btn btn-success btn-toggle-voz" onclick="alternarVozAnuncio()">🗣️ Voz Ligada</button>
+                    <div class="controle-zoom-tela" title="Volume do aviso (bipe fica realmente mais alto acima de 100%; a voz é limitada a 100% pelo navegador)">
+                        🔊
+                        <input type="range" id="slider-volume-anuncio" min="0" max="500" step="10" value="100" oninput="ajustarVolumeAnuncio(this.value)" style="width:100px;">
+                        <span id="txt-volume-anuncio">100%</span>
+                    </div>
                     <button class="btn" style="background:#16a34a; color:white;" onclick="abrirModalPedidosEntregues()" title="Ver todos os pedidos já entregues">✅ Pedidos Já Entregues</button>
                     <button class="btn" style="background:#0891b2; color:white;" onclick="abrirModalTvSenha()" title="Abrir TV Senha em outro monitor">📺 TV Senha</button>
                     <div class="controle-zoom-tela">
