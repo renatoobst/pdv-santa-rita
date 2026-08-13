@@ -54,6 +54,15 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         let carregandoEstadoRemoto = false;
         let ultimaAtualizacaoRemota = null;
 
+        // Mostra/esconde a faixa vermelha fixa no topo — único lugar que
+        // escreve em supabaseDisponivel, pra garantir que o indicador visual
+        // nunca fique dessincronizado do valor real.
+        function definirSupabaseDisponivel(valor) {
+            supabaseDisponivel = valor;
+            const indicador = document.getElementById('indicador-offline');
+            if (indicador) indicador.style.display = valor ? 'none' : 'block';
+        }
+
         // TECLAS DE ATALHO PADRÃO
         let atalhosConfig = {
             direita: '1',
@@ -449,9 +458,9 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     .from('pdv_state')
                     .upsert({ id: barracaStateId, data: estado, updated_at: new Date().toISOString() }, { onConflict: 'id' });
                 if (error) throw error;
-                supabaseDisponivel = true;
+                definirSupabaseDisponivel(true);
             } catch (erro) {
-                supabaseDisponivel = false;
+                definirSupabaseDisponivel(false);
                 console.error('Falha ao sincronizar com Supabase. Dados mantidos no cache local:', erro);
             }
         }
@@ -465,7 +474,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     .maybeSingle();
 
                 if (error) throw error;
-                supabaseDisponivel = true;
+                definirSupabaseDisponivel(true);
 
                 if (data && data.data) {
                     aplicarEstado(data.data, false);
@@ -474,7 +483,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 }
                 return true;
             } catch (erro) {
-                supabaseDisponivel = false;
+                definirSupabaseDisponivel(false);
                 console.error('Não foi possível carregar o Supabase. Usando cache local:', erro);
                 exibirAviso('Supabase não disponível. O PDV abriu usando apenas o cache local.');
                 return false;
@@ -1057,7 +1066,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             } else {
                 lista.forEach(p => {
                     let statusTag = '';
-                    if (p.statusPainel === 'cancelado') statusTag = '<span style="background:var(--danger); color:white; padding:3px 6px; border-radius:4px; font-weight:bold;">CANCELADO</span>';
+                    if (p.statusPainel === 'cancelado') statusTag = `<span style="background:var(--danger); color:white; padding:3px 6px; border-radius:4px; font-weight:bold;" title="${p.motivoCancelamento ? 'Motivo: ' + p.motivoCancelamento : 'Motivo não registrado'}">CANCELADO</span>`;
                     else if (p.itens.some(i => i.fase === 'mais_tarde')) statusTag = '<span style="background:var(--info); color:white; padding:3px 6px; border-radius:4px; font-weight:bold;">📦 P. MAIS TARDE</span>';
                     else if (p.statusPainel === 'entregue') statusTag = '<span style="background:var(--success); color:white; padding:3px 6px; border-radius:4px; font-weight:bold;">FINALIZADO</span>';
                     else statusTag = '<span style="background:var(--warning); color:black; padding:3px 6px; border-radius:4px; font-weight:bold;">EM PREPARO</span>';
@@ -2590,6 +2599,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     .pdf-recibo .print-pagto-box { font-size: 16px; font-weight: 900; margin: 8px 0; text-transform: uppercase; background: #111; color: #fff; padding: 6px 2px; text-align: center; border-radius: 4px; }
                 </style>
                 <div class="pdf-recibo">${montarHTMLReciboPedido(pedido)}</div>
+                ${pedido.statusPainel === 'cancelado' && pedido.motivoCancelamento ? `<div style="margin-top:10px; background:#fef2f2; border:1px solid #fca5a5; border-radius:6px; padding:8px; font-size:13px; color:#991b1b;"><b>Motivo do cancelamento:</b> ${pedido.motivoCancelamento}</div>` : ''}
             `;
             document.getElementById('modal-detalhes-pedido').style.display = 'flex';
         }
@@ -2649,13 +2659,6 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             baixarPDFRecibo(montarHTMLReciboPedido(pedido), `Pedido_${idPedido}.pdf`);
         }
 
-        function baixarPDFPedidosEmPausa() {
-            const pausados = pedidosGerais.filter(p => p.statusPainel !== 'cancelado' && p.itens.some(i => i.fase === 'mais_tarde'));
-            if (pausados.length === 0) return exibirAviso("Não há pedidos em pausa pra baixar.");
-            const html = pausados.map(p => montarHTMLReciboPedido(p)).join('<div class="print-divider"></div>');
-            baixarPDFRecibo(html, `Pedidos_Pausa_${new Date().toISOString().slice(0,10)}.pdf`);
-        }
-
         // O cálculo em si mora em barracas.js (calcularResumoPedidos), como uma
         // função pura, para poder ser reaproveitado pelo Dashboard Geral com os
         // dados de QUALQUER barraca — aqui só repassamos o estado ao vivo desta.
@@ -2675,9 +2678,9 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             const caixaSelecionado = caixaRelatorioSelecionado ? caixasAbertos.find(c => c.id === caixaRelatorioSelecionado) : null;
             const fundoInicial = dados.totalGaveta - dados.fatDinheiro;
             let htmlProdsPrint = '';
-            for (let prod in dados.resumoProdutosVendidos) {
-                htmlProdsPrint += `<div class="print-row"><span>${prod}</span><span class="print-bold">${dados.resumoProdutosVendidos[prod]} un</span></div>`;
-            }
+            Object.entries(dados.resumoProdutosVendidos).sort((a, b) => b[1] - a[1]).forEach(([prod, qtd]) => {
+                htmlProdsPrint += `<div class="print-row"><span>${prod}</span><span class="print-bold">${qtd} un</span></div>`;
+            });
 
             let htmlBonoPrint = '';
             if (dados.bonificacoesLista.length > 0) {
@@ -2733,14 +2736,14 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             const dataHora = new Date().toLocaleString('pt-BR');
 
             let htmlTabelaProdutos = '';
-            for (let prod in dados.resumoProdutosVendidos) {
+            Object.entries(dados.resumoProdutosVendidos).sort((a, b) => b[1] - a[1]).forEach(([prod, qtd]) => {
                 htmlTabelaProdutos += `
                     <tr>
                         <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-weight: 600;">${prod}</td>
-                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: 800; color: #2563eb;">${dados.resumoProdutosVendidos[prod]} un.</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: 800; color: #2563eb;">${qtd} un.</td>
                     </tr>
                 `;
-            }
+            });
 
             let htmlTabelaBonificacoes = '';
             if (dados.bonificacoesLista.length > 0) {
@@ -2911,6 +2914,27 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         // som fica numa máquina específica do evento), por isso fica só no
         // localStorage, não sincroniza pelo Supabase. O beep sempre toca,
         // independente disso.
+        // Modo escuro — preferência opt-in por dispositivo (localStorage, não
+        // sincroniza pelo Supabase, cada tela pode preferir diferente).
+        const CHAVE_MODO_ESCURO = 'pdv_modo_escuro';
+        function modoEscuroEstaAtivo() {
+            return localStorage.getItem(CHAVE_MODO_ESCURO) === '1';
+        }
+        function aplicarModoEscuroSalvo() {
+            const ativo = modoEscuroEstaAtivo();
+            document.documentElement.setAttribute('data-theme', ativo ? 'dark' : 'light');
+            const btn = document.getElementById('btn-modo-escuro');
+            if (btn) btn.innerText = ativo ? '☀️' : '🌙';
+        }
+        function alternarModoEscuro() {
+            localStorage.setItem(CHAVE_MODO_ESCURO, modoEscuroEstaAtivo() ? '0' : '1');
+            aplicarModoEscuroSalvo();
+        }
+        // Aplica assim que o script carrega (módulo é deferred, DOM já existe
+        // nesse ponto) — tema já correto na tela de login, sem esperar o
+        // onload inteiro do app rodar.
+        aplicarModoEscuroSalvo();
+
         const CHAVE_VOZ_ANUNCIO = 'pdv_voz_anuncio_ativa';
         function vozAnuncioEstaAtiva() {
             return localStorage.getItem(CHAVE_VOZ_ANUNCIO) !== '0';
@@ -2983,40 +3007,48 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
         async function cancelarPedido(id) {
             if (!usuarioAtual || !usuarioAtual.isMaster) return exibirAviso("Só o usuário Master pode cancelar/apagar pedidos.");
-            if(await pedirConfirmacao(`Tem certeza que deseja CANCELAR o Pedido #${id}?`, { titulo: '🗑️ Cancelar Pedido' })) {
-                const p = pedidosGerais.find(x => x.id === id);
-                if (p && p.statusPainel !== 'cancelado') {
-                    let catalogoAlteradoPorEstoque = false;
-                    p.itens.forEach(item => {
-                        if(item.isCombo) {
-                            item.itensComboEscolhidos.forEach(sub => {
-                                const est = estoquePorProduto[sub.idProduto];
-                                if(est !== undefined && est !== null) {
-                                    const novoEst = est + 1;
-                                    estoquePorProduto[sub.idProduto] = novoEst;
-                                    const subProd = produtosDB.find(x => x.id === sub.idProduto);
-                                    if (sincronizarAtivoPorEstoque(subProd, novoEst)) catalogoAlteradoPorEstoque = true;
-                                }
-                            });
-                        } else {
-                            const est = estoquePorProduto[item.idProduto];
+
+            // Pede o motivo em vez de só confirmar sim/não — ajuda a entender
+            // depois se o cancelamento foi erro de operador, desistência de
+            // cliente, etc. O próprio preenchimento já serve como confirmação,
+            // por isso não pede mais um segundo "tem certeza?" separado.
+            const motivo = await pedirTexto(`Por que está cancelando o Pedido #${id}? (obrigatório)`, { titulo: '🗑️ Cancelar Pedido' });
+            if (motivo === null) return;
+            if (!motivo.trim()) return exibirAviso("É obrigatório informar o motivo do cancelamento.");
+
+            const p = pedidosGerais.find(x => x.id === id);
+            if (p && p.statusPainel !== 'cancelado') {
+                let catalogoAlteradoPorEstoque = false;
+                p.itens.forEach(item => {
+                    if(item.isCombo) {
+                        item.itensComboEscolhidos.forEach(sub => {
+                            const est = estoquePorProduto[sub.idProduto];
                             if(est !== undefined && est !== null) {
                                 const novoEst = est + 1;
-                                estoquePorProduto[item.idProduto] = novoEst;
-                                const prod = produtosDB.find(x => x.id === item.idProduto);
-                                if (sincronizarAtivoPorEstoque(prod, novoEst)) catalogoAlteradoPorEstoque = true;
+                                estoquePorProduto[sub.idProduto] = novoEst;
+                                const subProd = produtosDB.find(x => x.id === sub.idProduto);
+                                if (sincronizarAtivoPorEstoque(subProd, novoEst)) catalogoAlteradoPorEstoque = true;
                             }
+                        });
+                    } else {
+                        const est = estoquePorProduto[item.idProduto];
+                        if(est !== undefined && est !== null) {
+                            const novoEst = est + 1;
+                            estoquePorProduto[item.idProduto] = novoEst;
+                            const prod = produtosDB.find(x => x.id === item.idProduto);
+                            if (sincronizarAtivoPorEstoque(prod, novoEst)) catalogoAlteradoPorEstoque = true;
                         }
-                    });
-                    p.statusPainel = 'cancelado';
-                    if (catalogoAlteradoPorEstoque) salvarCatalogo();
-                    salvarNoBancoLocal();
-                    renderizarMenu(categoriaFiltroAtual); 
-                    renderizarTabelaProdutos(); 
-                    atualizarTelas(); 
-                    atualizarFiltrosGestao();
-                    exibirAviso(`Pedido #${id} cancelado com sucesso e estoque devolvido!`);
-                }
+                    }
+                });
+                p.statusPainel = 'cancelado';
+                p.motivoCancelamento = motivo.trim();
+                if (catalogoAlteradoPorEstoque) salvarCatalogo();
+                salvarNoBancoLocal();
+                renderizarMenu(categoriaFiltroAtual);
+                renderizarTabelaProdutos();
+                atualizarTelas();
+                atualizarFiltrosGestao();
+                exibirAviso(`Pedido #${id} cancelado com sucesso e estoque devolvido!`);
             }
         }
 
@@ -3102,7 +3134,17 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                         </div>`;
                     
                     const itensDetalhadosBalcao = iAgoraPendentes.map(item => {
-                        resumoBalcaoCozinha[item.nome] = (resumoBalcaoCozinha[item.nome] || 0) + item.qtd;
+                        // Combo soma por item ESCOLHIDO dentro dele (sub.nome),
+                        // igual o resumo da Cozinha faz — senão o combo conta
+                        // sob o próprio nome ("COMBO 01") em vez do produto
+                        // real (ex: Hamburguer), e os dois resumos não batem.
+                        if (item.isCombo) {
+                            item.itensComboEscolhidos.forEach(sub => {
+                                resumoBalcaoCozinha[sub.nome] = (resumoBalcaoCozinha[sub.nome] || 0) + 1;
+                            });
+                        } else {
+                            resumoBalcaoCozinha[item.nome] = (resumoBalcaoCozinha[item.nome] || 0) + item.qtd;
+                        }
 
                         if (item.isCombo) {
                             return item.itensComboEscolhidos.map((sub, subIndex) => {
@@ -3139,7 +3181,13 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     countAgend++;
                     
                     const itensDetalhadosFicha = iDepois.map(i => {
-                        resumoBalcaoFicha[i.nome] = (resumoBalcaoFicha[i.nome] || 0) + i.qtd;
+                        if (i.isCombo) {
+                            i.itensComboEscolhidos.forEach(sub => {
+                                resumoBalcaoFicha[sub.nome] = (resumoBalcaoFicha[sub.nome] || 0) + 1;
+                            });
+                        } else {
+                            resumoBalcaoFicha[i.nome] = (resumoBalcaoFicha[i.nome] || 0) + i.qtd;
+                        }
 
                         let comboDet = i.isCombo ? `<br><small style="color:gray;">↳ ${i.itensComboEscolhidos.map(sub=>`1x ${sub.nome}`).join(', ')}</small>` : '';
                         let obsDet = i.obs ? `<br><i style="color:red; font-size:0.8rem; font-weight:bold;">Observação: ${i.obs}</i>` : '';
@@ -3156,10 +3204,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                             <div style="font-size: 0.85rem; font-weight: bold; color: var(--primary); margin-top:2px;">[ ${p.tipoAtendimento || 'Levar (Viagem)'} ]</div>
                             <div class="lista-itens" style="margin-top:8px;">${itensDetalhadosFicha}</div>
                             <button class="btn btn-info" onclick="moverParaAgora(${p.id})">📤 Enviar p/ Cozinha</button>
-                            <div style="display:flex; gap:5px; margin-top:5px;">
-                                <button class="btn" style="flex:1; background:#475569; color:white; padding:6px; font-size:0.8rem;" onclick="reimprimirPedido(${p.id})" title="Imprimir só este pedido">🖨️ Imprimir</button>
-                                <button class="btn" style="flex:1; background:#b91c1c; color:white; padding:6px; font-size:0.8rem;" onclick="baixarPDFPedido(${p.id})" title="Baixar só este pedido em PDF">📄 PDF</button>
-                            </div>
+                            <button class="btn" style="width:100%; margin-top:5px; background:#475569; color:white; padding:6px; font-size:0.8rem;" onclick="reimprimirPedido(${p.id})" title="Imprimir só este pedido">🖨️ Imprimir</button>
                         </div>`;
                 }
 
@@ -3354,7 +3399,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     statusHtml = '<span class="status-badge" style="background:var(--success);">✅ Finalizado</span>';
                     acoesHtml = btnImprimir + `<button onclick="editarPedido(${p.id})" class="btn btn-warning" style="padding: 4px 8px; font-size: 0.8rem; margin-right: 5px;">✏️</button> ${btnCancelarGestao}`;
                 } else if (p.statusPainel === 'cancelado') {
-                    statusHtml = '<span class="status-badge" style="background:var(--danger);">❌ Cancelado</span>';
+                    statusHtml = `<span class="status-badge" style="background:var(--danger);" title="${p.motivoCancelamento ? 'Motivo: ' + p.motivoCancelamento : 'Motivo não registrado'}">❌ Cancelado</span>`;
                     acoesHtml = btnImprimir + '<span style="color:gray; font-size: 0.8rem;">Bloqueado</span>';
                 } else {
                     if (p.statusPainel === 'pronto') statusHtml = '<span class="status-badge" style="background:var(--primary);">📺 Pronto TV</span>';
@@ -3703,9 +3748,9 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
             let htmlProds = '';
             if (c.produtosVendidos && Object.keys(c.produtosVendidos).length > 0) {
-                for (let prod in c.produtosVendidos) {
-                    htmlProds += `<div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px dashed #eee;"><span>${prod}</span><b>${c.produtosVendidos[prod]} un.</b></div>`;
-                }
+                Object.entries(c.produtosVendidos).sort((a, b) => b[1] - a[1]).forEach(([prod, qtd]) => {
+                    htmlProds += `<div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px dashed #eee;"><span>${prod}</span><b>${qtd} un.</b></div>`;
+                });
             } else {
                 htmlProds = '<p style="color:gray;">Nenhum produto registrado.</p>';
             }
@@ -3849,9 +3894,9 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
             let htmlProdsPrint = '';
             if (c.produtosVendidos && Object.keys(c.produtosVendidos).length > 0) {
-                for (let prod in c.produtosVendidos) {
-                    htmlProdsPrint += `<div class="print-row"><span>${prod}</span><span class="print-bold">${c.produtosVendidos[prod]} un</span></div>`;
-                }
+                Object.entries(c.produtosVendidos).sort((a, b) => b[1] - a[1]).forEach(([prod, qtd]) => {
+                    htmlProdsPrint += `<div class="print-row"><span>${prod}</span><span class="print-bold">${qtd} un</span></div>`;
+                });
             }
 
             const areaPrint = document.getElementById('area-impressao');
@@ -4102,15 +4147,46 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             gerarGraficos(dados.validos);
         }
 
+        if (typeof Chart !== 'undefined' && typeof ChartDataLabels !== 'undefined') {
+            Chart.register(ChartDataLabels);
+        }
+
+        // Rótulo fixo (sem precisar de hover) pra barra/linha — só a
+        // quantidade (% ali não teria um "todo" claro de referência, ex:
+        // ranking do Top 5).
+        function formatarQtd(value) {
+            return (typeof value === 'number' && value) ? String(value) : '';
+        }
+
+        // Rótulo fixo pra pizza/rosca — quantidade + % do total daquele
+        // gráfico. Blindado com try/catch porque o datalabels às vezes chama
+        // o formatter em passos intermediários de animação/legenda com um
+        // contexto incompleto.
+        function formatarQtdEPct(value, ctx) {
+            if (typeof value !== 'number' || !value) return '';
+            try {
+                const dados = ctx.chart.data.datasets[ctx.datasetIndex].data;
+                const total = dados.reduce((a, b) => a + (typeof b === 'number' ? b : 0), 0);
+                const pct = total > 0 ? Math.round((value / total) * 100) : 0;
+                return `${value} (${pct}%)`;
+            } catch (e) {
+                return String(value);
+            }
+        }
+
         function gerarGraficos(pedidos) {
             let contagemProdutos = {}; let contagemHoras = {}; let contagemCategorias = {}; let contagemRetirada = { 'Agora': 0, 'Depois': 0 };
 
             pedidos.forEach(p => {
+                // Bonificação é cortesia, não venda de verdade — fica de fora
+                // dos 3 gráficos de volume/proporção pra não distorcer o real
+                // padrão de consumo (só o de "Mais Vendidos" excluía antes,
+                // deixando Categoria e Tipo de Retirada inconsistentes).
+                if (p.pagamento && p.pagamento.startsWith('Bonificação')) return;
+
                 const horaCheia = p.hora.split(':')[0] + 'h'; contagemHoras[horaCheia] = (contagemHoras[horaCheia] || 0) + 1;
                 p.itens.forEach(i => {
-                    if(!p.pagamento || !p.pagamento.startsWith('Bonificação')) {
-                        contagemProdutos[i.nome] = (contagemProdutos[i.nome] || 0) + i.qtd;
-                    }
+                    contagemProdutos[i.nome] = (contagemProdutos[i.nome] || 0) + i.qtd;
                     contagemCategorias[i.categoria] = (contagemCategorias[i.categoria] || 0) + i.qtd;
                     if (i.fase === 'agora' || i.fase === 'entregue') contagemRetirada['Agora'] += i.qtd; else contagemRetirada['Depois'] += i.qtd;
                 });
@@ -4121,10 +4197,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (chartVendas) chartVendas.destroy(); if (chartHorarios) chartHorarios.destroy(); if (chartCategorias) chartCategorias.destroy(); if (chartRetirada) chartRetirada.destroy();
             const coresBase = ['#2563eb', '#16a34a', '#f59e0b', '#8b5cf6', '#ef4444', '#0ea5e9', '#14b8a6'];
 
-            chartVendas = new Chart(document.getElementById('chartMaisVendidos').getContext('2d'), { type: 'bar', data: { labels: topProdutos.map(item => item[0]), datasets: [{ label: 'Unidades Vendidas (Vendas)', data: topProdutos.map(item => item[1]), backgroundColor: '#2563eb', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false } });
-            chartHorarios = new Chart(document.getElementById('chartHorarios').getContext('2d'), { type: 'line', data: { labels: horasOrdenadas.length > 0 ? horasOrdenadas : ['Sem dados'], datasets: [{ label: 'Qtd de Pedidos', data: dadosHoras.length > 0 ? dadosHoras : [0], borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.2)', fill: true, tension: 0.3 }] }, options: { responsive: true, maintainAspectRatio: false } });
-            chartCategorias = new Chart(document.getElementById('chartCategorias').getContext('2d'), { type: 'doughnut', data: { labels: Object.keys(contagemCategorias), datasets: [{ data: Object.values(contagemCategorias), backgroundColor: coresBase }] }, options: { responsive: true, maintainAspectRatio: false } });
-            chartRetirada = new Chart(document.getElementById('chartRetirada').getContext('2d'), { type: 'pie', data: { labels: ['🟢 Retirar Agora', '📦 Retirar Depois'], datasets: [{ data: [contagemRetirada['Agora'], contagemRetirada['Depois']], backgroundColor: ['#16a34a', '#8b5cf6'] }] }, options: { responsive: true, maintainAspectRatio: false } });
+            chartVendas = new Chart(document.getElementById('chartMaisVendidos').getContext('2d'), { type: 'bar', data: { labels: topProdutos.map(item => item[0]), datasets: [{ label: 'Unidades Vendidas (Vendas)', data: topProdutos.map(item => item[1]), backgroundColor: '#2563eb', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { datalabels: { anchor: 'end', align: 'top', color: '#1f2937', font: { weight: 'bold' }, formatter: formatarQtd } } } });
+            chartHorarios = new Chart(document.getElementById('chartHorarios').getContext('2d'), { type: 'line', data: { labels: horasOrdenadas.length > 0 ? horasOrdenadas : ['Sem dados'], datasets: [{ label: 'Qtd de Pedidos', data: dadosHoras.length > 0 ? dadosHoras : [0], borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.2)', fill: true, tension: 0.3 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { datalabels: { align: 'top', color: '#92400e', font: { weight: 'bold' }, formatter: formatarQtd } } } });
+            chartCategorias = new Chart(document.getElementById('chartCategorias').getContext('2d'), { type: 'doughnut', data: { labels: Object.keys(contagemCategorias), datasets: [{ data: Object.values(contagemCategorias), backgroundColor: coresBase }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { datalabels: { color: '#fff', font: { weight: 'bold', size: 11 }, formatter: formatarQtdEPct } } } });
+            chartRetirada = new Chart(document.getElementById('chartRetirada').getContext('2d'), { type: 'pie', data: { labels: ['🟢 Retirar Agora', '📦 Retirar Depois'], datasets: [{ data: [contagemRetirada['Agora'], contagemRetirada['Depois']], backgroundColor: ['#16a34a', '#8b5cf6'] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { datalabels: { color: '#fff', font: { weight: 'bold', size: 12 }, formatter: formatarQtdEPct } } } });
         }
 
         function editarPedido(id) {
@@ -4307,6 +4383,7 @@ window.pedirConfirmacao = pedirConfirmacao;
 window.verMeuRelatorioCaixa = verMeuRelatorioCaixa;
 window.limparCarrinhoComConfirmacao = limparCarrinhoComConfirmacao;
 window.alternarVozAnuncio = alternarVozAnuncio;
+window.alternarModoEscuro = alternarModoEscuro;
 window.ajustarVolumeAnuncio = ajustarVolumeAnuncio;
 window.ajustarZoomTela = ajustarZoomTela;
 window.fecharTecladoNumerico = fecharTecladoNumerico;
@@ -4343,7 +4420,6 @@ window.gerarPDFEstoquePorCategoria = gerarPDFEstoquePorCategoria;
 window.imprimirEstoquePorCategoria = imprimirEstoquePorCategoria;
 window.imprimirRelatorioCaixaAtual = imprimirRelatorioCaixaAtual;
 window.imprimirPedidosEmPausa = imprimirPedidosEmPausa;
-window.baixarPDFPedidosEmPausa = baixarPDFPedidosEmPausa;
 window.baixarPDFPedido = baixarPDFPedido;
 window.imprimirRelatorioFechamento = imprimirRelatorioFechamento;
 window.iniciarGravaçãoAtalho = iniciarGravaçãoAtalho;

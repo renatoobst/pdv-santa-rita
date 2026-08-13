@@ -14,9 +14,38 @@
             --text: #1f2937;
             --bg: #f3f4f6;
             --card-bg: #ffffff;
+            --borda: #e5e7eb;
         }
 
-        body { font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; background-color: var(--bg); color: var(--text); }
+        /* Modo escuro é opt-in (o usuário liga pelo botão 🌙, guardado no
+           localStorage deste dispositivo) — troca só as variáveis acima, que
+           já são usadas no body/cards/modais. Boa parte da tela de operação
+           (Pedido/Cozinha/Balcão) usa muito HTML gerado com estilo inline
+           "background:white" direto no JS — a regra de atributo logo abaixo
+           pega a maioria desses casos sem precisar reescrever cada template. */
+        html[data-theme="dark"] {
+            --secondary: #1e293b;
+            --text: #e2e8f0;
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --borda: #334155;
+        }
+        html[data-theme="dark"] [style*="background:white" i],
+        html[data-theme="dark"] [style*="background: white" i],
+        html[data-theme="dark"] [style*="background:#fff" i],
+        html[data-theme="dark"] [style*="background: #fff" i],
+        html[data-theme="dark"] [style*="background:#ffffff" i] {
+            background: var(--card-bg) !important;
+            color: var(--text) !important;
+        }
+        html[data-theme="dark"] table { color: var(--text); }
+        html[data-theme="dark"] input, html[data-theme="dark"] select, html[data-theme="dark"] textarea {
+            background: #0f172a; color: var(--text); border-color: var(--borda);
+        }
+        html[data-theme="dark"] .tag-categoria { background: var(--borda); color: var(--text); }
+        html[data-theme="dark"] .tag-categoria:hover { background: #475569; }
+
+        body { font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; background-color: var(--bg); color: var(--text); transition: background-color 0.2s, color 0.2s; }
 
         nav { background-color: #111827; padding: 0.65rem 1rem; display: flex; gap: 4px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); flex-wrap: wrap; align-items: center; position: relative; z-index: 1000; }
 

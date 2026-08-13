@@ -6,6 +6,9 @@
     <title>PDV Pro - Santuário Santa Rita</title>
     <link rel="stylesheet" href="css/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Mostra o valor (e %, nos gráficos de pizza/rosca) escrito direto em
+         cima da barra/fatia, sem precisar passar o mouse em cima. -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <!-- BIBLIOTECA PARA GERAR PDF DIRETO -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <!-- html2pdf empacota o html2canvas por dentro, mas não deixa ele acessível
@@ -14,6 +17,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
+
+    <div id="indicador-offline" style="display:none; position:fixed; top:0; left:0; right:0; z-index:2000000; background:#dc2626; color:white; text-align:center; padding:6px; font-weight:bold; font-size:0.85rem;">
+        📡 Sem conexão com o servidor — salvando só neste dispositivo até a conexão voltar
+    </div>
 
     <div id="modal-aviso" class="modal-geral">
         <div class="modal-content" style="text-align: center; border-top: 6px solid var(--primary);">
@@ -190,6 +197,7 @@
         </div>
 
         <button class="nav-btn-icon" onclick="fazerLogout()" title="Sair">🚪 <span id="nome-usuario-atual-nav"></span></button>
+        <button class="nav-btn-icon" id="btn-modo-escuro" onclick="alternarModoEscuro()" title="Alternar modo escuro">🌙</button>
         <button class="nav-btn-icon" onclick="toggleMenuGlobal()" title="Ocultar Menu">⬆</button>
     </nav>
 
@@ -594,7 +602,6 @@
             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
                 <h2 style="border: none; padding: 0; margin: 0;">Pedidos em Pausa <span id="contagem-agendados" class="contagem-tela">0 pedidos</span></h2>
                 <button class="btn" style="background:#475569; color:white;" onclick="imprimirPedidosEmPausa()" title="Imprime o recibo de todos os pedidos em pausa de uma vez">🖨️ Imprimir Todos</button>
-                <button class="btn" style="background:#b91c1c; color:white;" onclick="baixarPDFPedidosEmPausa()" title="Baixa em PDF o recibo de todos os pedidos em pausa">📄 Baixar PDF</button>
             </div>
             <div class="grid-pedidos" id="fila-agendados"></div>
         </div>
