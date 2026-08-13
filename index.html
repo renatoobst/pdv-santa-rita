@@ -702,9 +702,10 @@
 
         <!-- TELA: PRODUTOS & ESTOQUE & COMBOS -->
         <div id="tela-produtos" class="tab-content">
-            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+            <div style="position: sticky; top: 0; z-index: 20; background: var(--bg); display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding: 10px 0; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
                 <h2 style="border: none; padding: 0; margin: 0;">Gerenciar Produtos, Combos, Categorias & Estoque</h2>
                 <div style="display:flex; gap:10px; flex-wrap: wrap;">
+                    <button id="btn-toggle-form-produto" class="btn" style="background:#16a34a; color:white;" onclick="toggleFormularioProduto()">➕ Cadastrar Produto</button>
                     <button class="btn btn-primary" onclick="imprimirEstoquePorCategoria()">🖨️ Imprimir Estoque por Categoria</button>
                     <button class="btn btn-success" onclick="gerarPDFEstoquePorCategoria()" style="background:#0d9488;">📄 Baixar PDF Estoque</button>
                     <button class="btn btn-success" onclick="gerarJPGEstoque()" style="background:#7c3aed;">🖼️ JPG</button>
@@ -713,7 +714,7 @@
 
             <div class="produtos-layout">
 
-                <div class="produtos-coluna-esquerda">
+                <div class="produtos-coluna-esquerda colapsado" id="painel-cadastro-produto">
                     <div class="card-produtos">
                         <div style="display:flex; gap:5px; margin-bottom: 15px; background: #f3f4f6; padding: 5px; border-radius: 8px;">
                             <button id="tab-simples" class="btn btn-primary" style="flex:1; padding: 8px;" onclick="mudarModoCadastro('simples')">Produto Simples</button>

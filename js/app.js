@@ -1533,6 +1533,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         }
 
         function prepararEdicaoProduto(id) {
+            const painelEdicao = document.getElementById('painel-cadastro-produto');
+            painelEdicao.classList.remove('colapsado');
+            painelEdicao.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
             const p = produtosDB.find(prod => prod.id === id);
             document.getElementById('novo-prod-nome').value = p.nome;
             document.getElementById('novo-prod-preco').value = p.preco;
@@ -1577,7 +1581,24 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             document.getElementById('btn-cancelar-edicao-prod').style.display = 'block';
         }
 
+        // Formulário de cadastro virou um painel recolhível (fica escondido
+        // por padrão, a lista de produtos ocupa a tela toda) — esse toggle
+        // abre pra "novo produto" quando não há edição em andamento, ou só
+        // fecha se já estiver aberto. prepararEdicaoProduto() abre sozinho
+        // quando o usuário clica em ✏️ numa linha da lista.
+        function toggleFormularioProduto() {
+            const painel = document.getElementById('painel-cadastro-produto');
+            if (!painel.classList.contains('colapsado')) {
+                painel.classList.add('colapsado');
+                return;
+            }
+            if (produtoEmEdicaoId === null) cancelarEdicaoProduto();
+            painel.classList.remove('colapsado');
+            painel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
         function cancelarEdicaoProduto() {
+            document.getElementById('painel-cadastro-produto').classList.add('colapsado');
             produtoEmEdicaoId = null;
             document.getElementById('novo-prod-nome').value = '';
             document.getElementById('novo-prod-preco').value = '';
@@ -4611,6 +4632,7 @@ window.mudarAba = mudarAba;
 window.mudarModoCadastro = mudarModoCadastro;
 window.mudarTipoRetiradaGlobal = mudarTipoRetiradaGlobal;
 window.prepararEdicaoProduto = prepararEdicaoProduto;
+window.toggleFormularioProduto = toggleFormularioProduto;
 window.processarUploadFoto = processarUploadFoto;
 window.reimprimirPedido = reimprimirPedido;
 window.verDetalhesPedido = verDetalhesPedido;
