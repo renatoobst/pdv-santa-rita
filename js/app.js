@@ -2161,7 +2161,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         }
 
         function atualizarValoresMisto(origem = '1') {
-            const total = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd), 0);
+            const total = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd) - (item.desconto || 0), 0);
             const inputVal1 = document.getElementById('misto-valor-1');
             const inputVal2 = document.getElementById('misto-valor-2');
             
@@ -2178,7 +2178,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         }
 
         function calcularTroco() {
-            const total = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd), 0);
+            const total = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd) - (item.desconto || 0), 0);
             const forma = document.getElementById('forma-pagto').value;
             const recVal = parseFloat(document.getElementById('valor-recebido-dinheiro').value) || 0;
             
@@ -2269,34 +2269,59 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         }
 
         function setFaseItem(cartId, novaFase) { carrinho.find(i => i.cartId === cartId).fase = novaFase; atualizarCarrinhoUI(); }
-        
+
+        // Desconto é um valor fixo em R$ por item (não %), guardado direto no
+        // item do carrinho — segue pro pedido salvo e aparece no recibo, pra
+        // ficar registrado o motivo da diferença de valor depois.
+        async function abrirDescontoItem(cartId) {
+            const item = carrinho.find(i => i.cartId === cartId);
+            if (!item) return;
+
+            const maximo = item.preco * item.qtd;
+            const valorStr = await pedirTexto(`Valor de desconto (R$) para "${item.nome}" (máximo R$ ${maximo.toFixed(2)}). Deixe 0 pra remover o desconto:`, { titulo: '🏷️ Desconto no Item', valorInicial: item.desconto ? item.desconto.toFixed(2) : '' });
+            if (valorStr === null) return;
+
+            const valor = parseFloat(valorStr.replace(',', '.'));
+            if (isNaN(valor) || valor < 0) return exibirAviso("Valor de desconto inválido.");
+            if (valor > maximo) return exibirAviso(`O desconto não pode ser maior que o valor do item (R$ ${maximo.toFixed(2)}).`);
+
+            item.desconto = valor > 0 ? valor : undefined;
+            atualizarCarrinhoUI();
+        }
+
         function atualizarCarrinhoUI() {
-            const divItens = document.getElementById('itens-carrinho'); 
+            const divItens = document.getElementById('itens-carrinho');
             const tipoGlobal = document.getElementById('tipo-retirada-global').value;
             divItens.innerHTML = ''; let total = 0;
             if (carrinho.length === 0) divItens.innerHTML = '<p style="color:gray; text-align:center;">Nenhum item adicionado.</p>';
-            
+
             let temItemCozinha = false;
 
             carrinho.forEach(item => {
-                total += (item.preco * item.qtd);
+                const desconto = item.desconto || 0;
+                total += (item.preco * item.qtd) - desconto;
                 if (item.cozinha || (item.isCombo && item.itensComboEscolhidos.some(sub => sub.cozinha))) {
                     temItemCozinha = true;
                 }
 
-                let htmlFase = tipoGlobal === 'parcial' 
+                let htmlFase = tipoGlobal === 'parcial'
                     ? `<select onchange="setFaseItem('${item.cartId}', this.value)" style="margin:0; padding:6px; font-size:0.85rem;"><option value="agora" ${item.fase==='agora'?'selected':''}>Agora</option><option value="mais_tarde" ${item.fase==='mais_tarde'?'selected':''}>Depois</option></select>`
                     : `<span style="font-size:0.8rem; background:#f3f4f6; padding:4px;">${item.fase === 'mais_tarde' ? '📦 Depois' : '🟢 Agora'}</span>`;
-                
+
                 let descCombo = item.isCombo ? `<div style="font-size:0.75rem; color:gray; margin-top:2px;">↳ Contém: ${item.itensComboEscolhidos.map(sub=>`1x ${sub.nome}`).join(', ')}</div>` : '';
+
+                let htmlPreco = desconto > 0
+                    ? `<b><s style="color:gray; font-weight:normal; font-size:0.85rem;">R$ ${(item.preco).toFixed(2)}</s> R$ ${(item.preco - desconto).toFixed(2)}</b>`
+                    : `<b>R$ ${(item.preco).toFixed(2)}</b>`;
 
                 divItens.innerHTML += `
                     <div class="item-carrinho">
-                        <div style="display:flex; justify-content:space-between;"><b>1x ${item.nome}</b><b>R$ ${(item.preco).toFixed(2)}</b></div>
+                        <div style="display:flex; justify-content:space-between;"><b>1x ${item.nome}</b>${htmlPreco}</div>
                         ${descCombo}
+                        ${desconto > 0 ? `<div style="color:var(--success); font-size:0.8rem; font-weight:bold; margin-top:2px;">🏷️ Desconto: R$ ${desconto.toFixed(2)}</div>` : ''}
                         ${item.obs ? `<div style="color:var(--danger); font-size:0.85rem; margin-top:4px;">📝 Observação: ${item.obs}</div>` : ''}
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
-                            <div style="display:flex; gap:8px;">${htmlFase} <button class="btn btn-warning" style="padding:6px; font-size:0.8rem;" onclick="abrirModalObs('${item.cartId}')">Observação</button></div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; flex-wrap:wrap; gap:6px;">
+                            <div style="display:flex; gap:8px; flex-wrap:wrap;">${htmlFase} <button class="btn btn-warning" style="padding:6px; font-size:0.8rem;" onclick="abrirModalObs('${item.cartId}')">Observação</button> <button class="btn" style="padding:6px; font-size:0.8rem; background:#0d9488; color:white;" onclick="abrirDescontoItem('${item.cartId}')" title="Aplicar desconto neste item">🏷️ Desconto</button></div>
                             <div class="qtd-controle"><button class="btn btn-danger" style="padding:6px; font-size:0.8rem;" onclick="removerItemCarrinho('${item.cartId}')">🗑️ Remover</button></div>
                         </div>
                     </div>`;
@@ -2383,7 +2408,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 return exibirAviso("Por favor, selecione o Tipo de Retirada (Levar ou Local)!");
             }
 
-            const total = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd), 0);
+            const total = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd) - (item.desconto || 0), 0);
 
             let detalhesMisto = null;
 
@@ -2552,7 +2577,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 let det = '';
                 if(i.isCombo) { det = `<div style="font-size:12px; font-weight:bold; padding-left:5px; color:#000;">↳ ${i.itensComboEscolhidos.map(sub=> `1x ${sub.nome}`).join('<br>↳ ')}</div>`; }
                 let obs = i.obs ? `<div style="font-size:12px; font-weight:bold;">Observação: ${i.obs}</div>` : '';
-                return `<div style="margin-top:5px;"><div class="print-row"><span class="print-bold">1x ${i.nome}</span><span class="print-bold">R$ ${(i.preco).toFixed(2)}</span></div>${det}${obs}</div>`;
+                let desconto = i.desconto ? `<div style="font-size:12px; font-weight:bold;">Desconto: -R$ ${i.desconto.toFixed(2)}</div>` : '';
+                return `<div style="margin-top:5px;"><div class="print-row"><span class="print-bold">1x ${i.nome}</span><span class="print-bold">R$ ${(i.preco).toFixed(2)}</span></div>${det}${desconto}${obs}</div>`;
             };
 
             return `
@@ -3699,6 +3725,68 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             `).join('');
         }
 
+        // Registro rápido no histórico pra um dia que rodou sem o sistema (ou
+        // fechou por fora) — só pra constar o total nos relatórios/soma do
+        // período. Sem pedidosDetalhados/produtosVendidos reais, então esse
+        // registro não aparece nos gráficos de produtos/bonificação nem no
+        // "Ver Detalhes" com o mesmo nível de informação de um fechamento
+        // feito pelo app — só os campos básicos (campanha, data, total).
+        function abrirModalFechamentoManual() {
+            if (!usuarioAtual || !usuarioAtual.isMaster) return exibirAviso("Só o usuário Master pode lançar um fechamento manual.");
+            document.getElementById('manual-campanha').value = '';
+            document.getElementById('manual-data-fechamento').value = '';
+            document.getElementById('manual-total-vendas').value = '';
+            document.getElementById('manual-obs').value = '';
+            document.getElementById('modal-fechamento-manual').style.display = 'flex';
+        }
+
+        function fecharModalFechamentoManual() {
+            document.getElementById('modal-fechamento-manual').style.display = 'none';
+        }
+
+        function confirmarFechamentoManual() {
+            const campanha = document.getElementById('manual-campanha').value.trim();
+            const dataStr = document.getElementById('manual-data-fechamento').value;
+            const totalVendas = parseFloat(document.getElementById('manual-total-vendas').value);
+            const obs = document.getElementById('manual-obs').value.trim();
+
+            if (!campanha) return exibirAviso("Informe a campanha/evento.");
+            if (!dataStr) return exibirAviso("Informe a data do fechamento.");
+            if (isNaN(totalVendas) || totalVendas < 0) return exibirAviso("Informe um total de vendas válido.");
+
+            const [ano, mes, dia] = dataStr.split('-');
+            const dataFechamentoFormatada = `${dia}/${mes}/${ano} 23:59`;
+
+            const registroManual = {
+                id: historicoCaixasDB.length > 0 ? Math.max(...historicoCaixasDB.map(c => c.id)) + 1 : 1,
+                usuarioNome: usuarioAtual.nome,
+                campanha: campanha,
+                dataAbertura: dataFechamentoFormatada,
+                dataFechamento: dataFechamentoFormatada,
+                fundoInicial: 0,
+                totalVendas: totalVendas,
+                pix: 0,
+                pixDireto: 0,
+                credito: 0,
+                debito: 0,
+                dinheiroVendas: totalVendas,
+                bonificacao: 0,
+                totalGaveta: totalVendas,
+                qtdPedidos: 0,
+                produtosVendidos: {},
+                valorProdutosVendidos: {},
+                pedidosDetalhados: [],
+                lancadoManualmente: true,
+                observacaoManual: obs || null
+            };
+
+            historicoCaixasDB.unshift(registroManual);
+            salvarNoBancoLocal();
+            fecharModalFechamentoManual();
+            renderizarHistoricoCaixas();
+            exibirAviso(`Fechamento manual de "${campanha}" (${dataFechamentoFormatada.split(' ')[0]}) lançado com sucesso!`);
+        }
+
         function renderizarHistoricoCaixas() {
             const tbody = document.getElementById('tabela-historico-caixas');
             const elTotalFiltrado = document.getElementById('total-vendas-historico-filtrado');
@@ -4435,6 +4523,7 @@ function filtrarMenuBusca() {
 // innerHTML gerado dinamicamente resolvem onclick por nome em 'window')
 window.abrirCaixaPrompt = abrirCaixaPrompt;
 window.abrirModalObs = abrirModalObs;
+window.abrirDescontoItem = abrirDescontoItem;
 window.abrirModalTodosPedidos = abrirModalTodosPedidos;
 window.abrirModalTrocaItem = abrirModalTrocaItem;
 window.addCarrinho = addCarrinho;
@@ -4540,6 +4629,9 @@ window.toggleMenuMobile = toggleMenuMobile;
 window.toggleStatusAtivoProduto = toggleStatusAtivoProduto;
 window.verDetalhesCaixa = verDetalhesCaixa;
 window.renderizarHistoricoCaixas = renderizarHistoricoCaixas;
+window.abrirModalFechamentoManual = abrirModalFechamentoManual;
+window.fecharModalFechamentoManual = fecharModalFechamentoManual;
+window.confirmarFechamentoManual = confirmarFechamentoManual;
 
 // PWA: registra o service worker (sw.js) só cuida do "shell" do app pra ele
 // abrir mesmo sem internet — os dados de verdade continuam vindo do

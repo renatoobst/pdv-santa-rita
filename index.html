@@ -140,6 +140,30 @@
         </div>
     </div>
 
+    <div id="modal-fechamento-manual" class="modal-geral">
+        <div class="modal-content" style="width: 420px; max-width: 95%;">
+            <h3 style="margin-top:0; border-bottom: 2px solid #e5e7eb; padding-bottom:10px; color:var(--primary);">➕ Lançar Fechamento Manual</h3>
+            <p style="font-size:0.8rem; color:#6b7280; margin:0 0 12px 0;">Pra registrar no histórico um dia que rodou sem o sistema (ou fechou por fora) — entra só com o total, sem detalhamento de pagamento nem produtos.</p>
+
+            <label style="font-size: 0.85rem; font-weight: bold;">Campanha / Evento:</label>
+            <input type="text" id="manual-campanha" placeholder="Ex: Festa Desatadora">
+
+            <label style="font-size: 0.85rem; font-weight: bold;">Data do Fechamento:</label>
+            <input type="date" id="manual-data-fechamento">
+
+            <label style="font-size: 0.85rem; font-weight: bold;">Total de Vendas (R$):</label>
+            <input type="number" id="manual-total-vendas" step="0.01" placeholder="0.00">
+
+            <label style="font-size: 0.85rem; font-weight: bold;">Observação (opcional):</label>
+            <input type="text" id="manual-obs" placeholder="Ex: Lançado manualmente, caixa rodou sem o sistema">
+
+            <div style="display:flex; gap:10px; margin-top:15px;">
+                <button class="btn btn-primary" style="flex:1;" onclick="confirmarFechamentoManual()">Salvar 💾</button>
+                <button class="btn btn-neutro" style="flex:1;" onclick="fecharModalFechamentoManual()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
     <button id="btn-show-global-menu" class="btn-show-menu" onclick="toggleMenuGlobal()">⬇ Mostrar Menu</button>
 
     <nav id="nav-principal">
@@ -1155,6 +1179,7 @@
                 <div style="background:#dcfce7; border:2px solid #16a34a; padding:8px 16px; border-radius:8px; font-weight:bold; color:#15803d;">
                     Total Vendas no filtro: <span id="total-vendas-historico-filtrado">R$ 0.00</span>
                 </div>
+                <button class="btn" style="background:#7c3aed; color:white; margin-left:auto;" onclick="abrirModalFechamentoManual()">➕ Lançar Fechamento Manual</button>
             </div>
             <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-height: 70vh; overflow-y: auto; overflow-x: auto;">
                 <table style="width: 100%; min-width: 700px; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
