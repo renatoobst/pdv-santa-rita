@@ -3185,12 +3185,18 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             document.getElementById('fila-entrega').innerHTML = htmlBalcao || '<p style="color:gray;">Livre.</p>';
             document.getElementById('fila-agendados').innerHTML = htmlAgenda || '<p style="color:gray;">Nenhum retido.</p>';
             
-            document.getElementById('badge-cozinha').innerText = countCoz; 
+            document.getElementById('badge-cozinha').innerText = countCoz;
             document.getElementById('badge-cozinha').style.display = countCoz ? 'inline-block' : 'none';
-            document.getElementById('badge-entrega').innerText = countBalc; 
+            document.getElementById('badge-entrega').innerText = countBalc;
             document.getElementById('badge-entrega').style.display = countBalc ? 'inline-block' : 'none';
-            document.getElementById('badge-agendados').innerText = countAgend; 
+            document.getElementById('badge-agendados').innerText = countAgend;
             document.getElementById('badge-agendados').style.display = countAgend ? 'inline-block' : 'none';
+
+            // Mesmas contagens, só que escritas por extenso no cabeçalho de
+            // cada tela (o badge do menu é pequeno demais pra bater o olho).
+            document.getElementById('contagem-cozinha').innerText = `${countCoz} ${countCoz === 1 ? 'pedido' : 'pedidos'}`;
+            document.getElementById('contagem-entrega').innerText = `${countBalc} ${countBalc === 1 ? 'pedido' : 'pedidos'}`;
+            document.getElementById('contagem-agendados').innerText = `${countAgend} ${countAgend === 1 ? 'pedido' : 'pedidos'}`;
 
             document.getElementById('tv-lista-preparando').innerHTML = htmlPrepTV || '<div style="color:gray;text-align:center;width:100%;font-size:1.5vw;margin-top:20px;">Aguardando...</div>';
             

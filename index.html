@@ -600,7 +600,7 @@
         <!-- TELA 2: PEDIDOS EM PAUSA -->
         <div id="tela-agendados" class="tab-content">
             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
-                <h2 style="border: none; padding: 0; margin: 0;">Pedidos em Pausa</h2>
+                <h2 style="border: none; padding: 0; margin: 0;">Pedidos em Pausa <span id="contagem-agendados" class="contagem-tela">0 pedidos</span></h2>
                 <button class="btn" style="background:#475569; color:white;" onclick="imprimirPedidosEmPausa()" title="Imprime o recibo de todos os pedidos em pausa de uma vez">🖨️ Imprimir Todos</button>
             </div>
             <div class="grid-pedidos" id="fila-agendados"></div>
@@ -609,7 +609,7 @@
         <!-- TELA 3: COZINHA COM SIDEBAR RESUMO -->
         <div id="tela-preparo" class="tab-content">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
-                <h2 style="margin:0;">Fila da Cozinha (Apenas Leitura)</h2>
+                <h2 style="margin:0;">Fila da Cozinha (Apenas Leitura) <span id="contagem-cozinha" class="contagem-tela">0 pedidos</span></h2>
                 <div style="display:flex; gap:8px; align-items:center;">
                     <div class="controle-zoom-tela">
                         <button onclick="ajustarZoomTela('conteudo-zoom-preparo', -10)">➖</button>
@@ -635,7 +635,7 @@
         <!-- TELA 4: BALCÃO / ENTREGA COM SIDEBAR EM TABELA NO CANTO -->
         <div id="tela-entrega" class="tab-content">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
-                <h2 style="margin:0;">Painel de Entrega (Balcão/Entrega)</h2>
+                <h2 style="margin:0;">Painel de Entrega (Balcão/Entrega) <span id="contagem-entrega" class="contagem-tela">0 pedidos</span></h2>
                 <div style="display:flex; gap:8px; align-items:center;">
                     <button class="btn btn-success btn-toggle-voz" onclick="alternarVozAnuncio()">🗣️ Voz Ligada</button>
                     <div class="controle-zoom-tela" title="Volume do aviso (bipe fica realmente mais alto acima de 100%; a voz é limitada a 100% pelo navegador)">
