@@ -786,9 +786,17 @@
                             </div>
                         </div>
 
-                        <div class="secao-form-produto" style="grid-column: 1 / -1;" title="O produto é único — cadastrado uma vez, mas só é vendido nas barracas marcadas aqui. Cada barraca marcada controla seu próprio estoque dele.">
-                            <h4>🏪 Visibilidade (barracas onde este produto é vendido)</h4>
-                            <div id="checklist-barracas-produto" style="display:flex; flex-wrap:wrap; gap:6px 14px; background:#f9fafb; padding:8px; border-radius:6px; border:1px solid #e5e7eb;"></div>
+                        <!-- Visibilidade e Salvar ficam FORA de box-categoria-subcategoria
+                             de propósito: aquela caixa some no modo Combo (mudarModoCadastro),
+                             mas visibilidade por barraca e o botão de salvar precisam continuar
+                             disponíveis em produto simples E em combo. -->
+                        <div class="campo-produto" title="O produto é único — cadastrado uma vez, mas só é vendido nas barracas marcadas aqui. Cada barraca marcada controla seu próprio estoque dele.">
+                            <label>🏪 Visibilidade (barracas):</label>
+                            <div id="checklist-barracas-produto" style="display:flex; flex-wrap:wrap; gap:4px 10px; background:#f9fafb; padding:6px; border-radius:6px; border:1px solid #e5e7eb; min-height:34px; box-sizing:border-box;"></div>
+                        </div>
+                        <div class="campo-produto" style="display:flex; align-items:flex-end; gap:6px;">
+                            <button id="btn-salvar-produto" class="btn btn-primary" style="flex:1; margin-bottom:6px;" onclick="salvarProduto()">Salvar 💾</button>
+                            <button id="btn-cancelar-edicao-prod" class="btn btn-danger" style="display: none; margin-bottom:6px; padding: 8px 12px;" onclick="cancelarEdicaoProduto()" title="Cancelar Edição / Novo Produto">❌</button>
                         </div>
 
                         <div id="box-itens-combo" class="secao-form-produto" style="display:none; grid-column: 1 / -1; background: #fef08a;">
@@ -801,11 +809,6 @@
                             </div>
                             <ul id="lista-combo-temporario" style="margin:0; padding-left:20px; font-size: 0.85rem; font-weight:bold;"></ul>
                         </div>
-                    </div>
-
-                    <div style="display: flex; gap: 10px; margin-top: 15px;">
-                        <button id="btn-salvar-produto" class="btn btn-primary" style="flex: 1;" onclick="salvarProduto()">Salvar 💾</button>
-                        <button id="btn-cancelar-edicao-prod" class="btn btn-danger" style="display: none; padding: 12px 15px;" onclick="cancelarEdicaoProduto()" title="Cancelar Edição / Novo Produto">❌</button>
                     </div>
                 </div>
             </div>
