@@ -1032,16 +1032,26 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             elementosFocaveis[indexFocoAtual].focus();
         }
 
+        // Controla quais ações aparecem na tabela desse modal — o mesmo modal
+        // é usado tanto pelo "📋 Ver Todos os Pedidos" da tela de Pedido
+        // (ali pode alterar/excluir) quanto pelo "✅ Pedidos Já Entregues" do
+        // Balcão (ali é só consulta, sem editar nem apagar nada).
+        let origemModalTodosPedidos = 'pedido';
+
         function abrirModalTodosPedidos() {
+            origemModalTodosPedidos = 'pedido';
             renderizarTabelaModalTodosPedidos();
             document.getElementById('modal-todos-pedidos').style.display = 'flex';
         }
 
         // Atalho usado pelo botão "Pedidos Já Entregues" no Balcão — mesmo
-        // modal de "Ver Todos os Pedidos", só que já abre filtrado.
+        // modal de "Ver Todos os Pedidos", já abre filtrado e só com o olho
+        // (ver detalhes), sem alterar/excluir.
         function abrirModalPedidosEntregues() {
             document.getElementById('filtro-modal-status').value = 'entregue';
-            abrirModalTodosPedidos();
+            origemModalTodosPedidos = 'balcao';
+            renderizarTabelaModalTodosPedidos();
+            document.getElementById('modal-todos-pedidos').style.display = 'flex';
         }
 
         function fecharModalTodosPedidos() {
@@ -1072,16 +1082,21 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     else if (p.statusPainel === 'entregue') statusTag = '<span style="background:var(--success); color:white; padding:3px 6px; border-radius:4px; font-weight:bold;">FINALIZADO</span>';
                     else statusTag = '<span style="background:var(--warning); color:black; padding:3px 6px; border-radius:4px; font-weight:bold;">EM PREPARO</span>';
 
-                    // Nessa tela (Pedido > Ver Todos os Pedidos) só olho pra ver
-                    // o pedido completo e alterar — sem imprimir/PDF/apagar
-                    // aqui (isso fica só na tela de Gestão). Pedido já
-                    // finalizado (entregue) tampouco pode ser alterado aqui —
-                    // só resta o olho, igual cancelado.
+                    // Vindo do Balcão ("Pedidos Já Entregues") é só consulta —
+                    // nada de alterar/excluir ali. Vindo da tela de Pedido
+                    // ("Ver Todos os Pedidos") tem as ações completas: olho
+                    // sempre, alterar (exceto cancelado/finalizado) e excluir
+                    // (cancelarPedido já é Master-only e devolve o estoque).
                     let acoes = `<button onclick="verDetalhesPedido(${p.id})" class="btn" style="background:#0891b2; color:white; padding: 4px 8px; font-size: 0.8rem; margin-right: 4px;" title="Ver Pedido Completo">👁️</button>`;
-                    if (p.statusPainel !== 'cancelado' && p.statusPainel !== 'entregue') {
-                        acoes += `<button onclick="editarPedido(${p.id}); fecharModalTodosPedidos();" class="btn btn-warning" style="padding: 4px 8px; font-size: 0.8rem;">✏️ Alterar</button>`;
-                    } else if (p.statusPainel === 'cancelado') {
-                        acoes += `<span style="color:gray; font-size: 0.8rem;">Bloqueado</span>`;
+                    if (origemModalTodosPedidos === 'pedido') {
+                        if (p.statusPainel !== 'cancelado' && p.statusPainel !== 'entregue') {
+                            acoes += `<button onclick="editarPedido(${p.id}); fecharModalTodosPedidos();" class="btn btn-warning" style="padding: 4px 8px; font-size: 0.8rem; margin-right: 4px;">✏️ Alterar</button>`;
+                        }
+                        if (p.statusPainel !== 'cancelado') {
+                            acoes += `<button onclick="cancelarPedido(${p.id}); renderizarTabelaModalTodosPedidos();" class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem;" title="Excluir Pedido (devolve o estoque)">🗑️</button>`;
+                        } else {
+                            acoes += `<span style="color:gray; font-size: 0.8rem;">Bloqueado</span>`;
+                        }
                     }
 
                     const tempoPreparo = calcularDiferencaMinutos(p.horaEntradaCozinha || p.hora, p.horaEntrega);
@@ -1533,9 +1548,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         }
 
         function prepararEdicaoProduto(id) {
-            const painelEdicao = document.getElementById('painel-cadastro-produto');
-            painelEdicao.classList.remove('colapsado');
-            painelEdicao.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            document.getElementById('painel-cadastro-produto').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
             const p = produtosDB.find(prod => prod.id === id);
             document.getElementById('novo-prod-nome').value = p.nome;
@@ -1581,24 +1594,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             document.getElementById('btn-cancelar-edicao-prod').style.display = 'block';
         }
 
-        // Formulário de cadastro virou um painel recolhível (fica escondido
-        // por padrão, a lista de produtos ocupa a tela toda) — esse toggle
-        // abre pra "novo produto" quando não há edição em andamento, ou só
-        // fecha se já estiver aberto. prepararEdicaoProduto() abre sozinho
-        // quando o usuário clica em ✏️ numa linha da lista.
-        function toggleFormularioProduto() {
-            const painel = document.getElementById('painel-cadastro-produto');
-            if (!painel.classList.contains('colapsado')) {
-                painel.classList.add('colapsado');
-                return;
-            }
-            if (produtoEmEdicaoId === null) cancelarEdicaoProduto();
-            painel.classList.remove('colapsado');
-            painel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-
         function cancelarEdicaoProduto() {
-            document.getElementById('painel-cadastro-produto').classList.add('colapsado');
             produtoEmEdicaoId = null;
             document.getElementById('novo-prod-nome').value = '';
             document.getElementById('novo-prod-preco').value = '';
@@ -2967,27 +2963,6 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         // som fica numa máquina específica do evento), por isso fica só no
         // localStorage, não sincroniza pelo Supabase. O beep sempre toca,
         // independente disso.
-        // Modo escuro — preferência opt-in por dispositivo (localStorage, não
-        // sincroniza pelo Supabase, cada tela pode preferir diferente).
-        const CHAVE_MODO_ESCURO = 'pdv_modo_escuro';
-        function modoEscuroEstaAtivo() {
-            return localStorage.getItem(CHAVE_MODO_ESCURO) === '1';
-        }
-        function aplicarModoEscuroSalvo() {
-            const ativo = modoEscuroEstaAtivo();
-            document.documentElement.setAttribute('data-theme', ativo ? 'dark' : 'light');
-            const btn = document.getElementById('btn-modo-escuro');
-            if (btn) btn.innerText = ativo ? '☀️' : '🌙';
-        }
-        function alternarModoEscuro() {
-            localStorage.setItem(CHAVE_MODO_ESCURO, modoEscuroEstaAtivo() ? '0' : '1');
-            aplicarModoEscuroSalvo();
-        }
-        // Aplica assim que o script carrega (módulo é deferred, DOM já existe
-        // nesse ponto) — tema já correto na tela de login, sem esperar o
-        // onload inteiro do app rodar.
-        aplicarModoEscuroSalvo();
-
         const CHAVE_VOZ_ANUNCIO = 'pdv_voz_anuncio_ativa';
         function vozAnuncioEstaAtiva() {
             return localStorage.getItem(CHAVE_VOZ_ANUNCIO) !== '0';
@@ -3744,68 +3719,6 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     <td style="text-align:center; font-weight:bold;">${c.qtdPedidos}</td>
                 </tr>
             `).join('');
-        }
-
-        // Registro rápido no histórico pra um dia que rodou sem o sistema (ou
-        // fechou por fora) — só pra constar o total nos relatórios/soma do
-        // período. Sem pedidosDetalhados/produtosVendidos reais, então esse
-        // registro não aparece nos gráficos de produtos/bonificação nem no
-        // "Ver Detalhes" com o mesmo nível de informação de um fechamento
-        // feito pelo app — só os campos básicos (campanha, data, total).
-        function abrirModalFechamentoManual() {
-            if (!usuarioAtual || !usuarioAtual.isMaster) return exibirAviso("Só o usuário Master pode lançar um fechamento manual.");
-            document.getElementById('manual-campanha').value = '';
-            document.getElementById('manual-data-fechamento').value = '';
-            document.getElementById('manual-total-vendas').value = '';
-            document.getElementById('manual-obs').value = '';
-            document.getElementById('modal-fechamento-manual').style.display = 'flex';
-        }
-
-        function fecharModalFechamentoManual() {
-            document.getElementById('modal-fechamento-manual').style.display = 'none';
-        }
-
-        function confirmarFechamentoManual() {
-            const campanha = document.getElementById('manual-campanha').value.trim();
-            const dataStr = document.getElementById('manual-data-fechamento').value;
-            const totalVendas = parseFloat(document.getElementById('manual-total-vendas').value);
-            const obs = document.getElementById('manual-obs').value.trim();
-
-            if (!campanha) return exibirAviso("Informe a campanha/evento.");
-            if (!dataStr) return exibirAviso("Informe a data do fechamento.");
-            if (isNaN(totalVendas) || totalVendas < 0) return exibirAviso("Informe um total de vendas válido.");
-
-            const [ano, mes, dia] = dataStr.split('-');
-            const dataFechamentoFormatada = `${dia}/${mes}/${ano} 23:59`;
-
-            const registroManual = {
-                id: historicoCaixasDB.length > 0 ? Math.max(...historicoCaixasDB.map(c => c.id)) + 1 : 1,
-                usuarioNome: usuarioAtual.nome,
-                campanha: campanha,
-                dataAbertura: dataFechamentoFormatada,
-                dataFechamento: dataFechamentoFormatada,
-                fundoInicial: 0,
-                totalVendas: totalVendas,
-                pix: 0,
-                pixDireto: 0,
-                credito: 0,
-                debito: 0,
-                dinheiroVendas: totalVendas,
-                bonificacao: 0,
-                totalGaveta: totalVendas,
-                qtdPedidos: 0,
-                produtosVendidos: {},
-                valorProdutosVendidos: {},
-                pedidosDetalhados: [],
-                lancadoManualmente: true,
-                observacaoManual: obs || null
-            };
-
-            historicoCaixasDB.unshift(registroManual);
-            salvarNoBancoLocal();
-            fecharModalFechamentoManual();
-            renderizarHistoricoCaixas();
-            exibirAviso(`Fechamento manual de "${campanha}" (${dataFechamentoFormatada.split(' ')[0]}) lançado com sucesso!`);
         }
 
         function renderizarHistoricoCaixas() {
@@ -4582,7 +4495,6 @@ window.pedirConfirmacao = pedirConfirmacao;
 window.verMeuRelatorioCaixa = verMeuRelatorioCaixa;
 window.limparCarrinhoComConfirmacao = limparCarrinhoComConfirmacao;
 window.alternarVozAnuncio = alternarVozAnuncio;
-window.alternarModoEscuro = alternarModoEscuro;
 window.ajustarVolumeAnuncio = ajustarVolumeAnuncio;
 window.ajustarZoomTela = ajustarZoomTela;
 window.fecharTecladoNumerico = fecharTecladoNumerico;
@@ -4632,7 +4544,6 @@ window.mudarAba = mudarAba;
 window.mudarModoCadastro = mudarModoCadastro;
 window.mudarTipoRetiradaGlobal = mudarTipoRetiradaGlobal;
 window.prepararEdicaoProduto = prepararEdicaoProduto;
-window.toggleFormularioProduto = toggleFormularioProduto;
 window.processarUploadFoto = processarUploadFoto;
 window.reimprimirPedido = reimprimirPedido;
 window.verDetalhesPedido = verDetalhesPedido;
@@ -4651,9 +4562,6 @@ window.toggleMenuMobile = toggleMenuMobile;
 window.toggleStatusAtivoProduto = toggleStatusAtivoProduto;
 window.verDetalhesCaixa = verDetalhesCaixa;
 window.renderizarHistoricoCaixas = renderizarHistoricoCaixas;
-window.abrirModalFechamentoManual = abrirModalFechamentoManual;
-window.fecharModalFechamentoManual = fecharModalFechamentoManual;
-window.confirmarFechamentoManual = confirmarFechamentoManual;
 
 // PWA: registra o service worker (sw.js) só cuida do "shell" do app pra ele
 // abrir mesmo sem internet — os dados de verdade continuam vindo do

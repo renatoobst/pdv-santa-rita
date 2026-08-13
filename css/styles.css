@@ -17,35 +17,7 @@
             --borda: #e5e7eb;
         }
 
-        /* Modo escuro é opt-in (o usuário liga pelo botão 🌙, guardado no
-           localStorage deste dispositivo) — troca só as variáveis acima, que
-           já são usadas no body/cards/modais. Boa parte da tela de operação
-           (Pedido/Cozinha/Balcão) usa muito HTML gerado com estilo inline
-           "background:white" direto no JS — a regra de atributo logo abaixo
-           pega a maioria desses casos sem precisar reescrever cada template. */
-        html[data-theme="dark"] {
-            --secondary: #1e293b;
-            --text: #e2e8f0;
-            --bg: #0f172a;
-            --card-bg: #1e293b;
-            --borda: #334155;
-        }
-        html[data-theme="dark"] [style*="background:white" i],
-        html[data-theme="dark"] [style*="background: white" i],
-        html[data-theme="dark"] [style*="background:#fff" i],
-        html[data-theme="dark"] [style*="background: #fff" i],
-        html[data-theme="dark"] [style*="background:#ffffff" i] {
-            background: var(--card-bg) !important;
-            color: var(--text) !important;
-        }
-        html[data-theme="dark"] table { color: var(--text); }
-        html[data-theme="dark"] input, html[data-theme="dark"] select, html[data-theme="dark"] textarea {
-            background: #0f172a; color: var(--text); border-color: var(--borda);
-        }
-        html[data-theme="dark"] .tag-categoria { background: var(--borda); color: var(--text); }
-        html[data-theme="dark"] .tag-categoria:hover { background: #475569; }
-
-        body { font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; background-color: var(--bg); color: var(--text); transition: background-color 0.2s, color 0.2s; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; background-color: var(--bg); color: var(--text); }
 
         nav { background-color: #111827; padding: 0.65rem 1rem; display: flex; gap: 4px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); flex-wrap: wrap; align-items: center; position: relative; z-index: 1000; }
 
@@ -111,39 +83,39 @@
         .btn-info { background-color: var(--info); }
         .btn-neutro { background-color: #e5e7eb; color: #1f2937; }
 
-        /* Formulário de cadastro deixou de ser uma coluna fixa do lado —
-           agora é um painel recolhível em cima, largura toda, e a lista de
-           produtos ocupa o espaço inteiro por padrão (só o formulário some,
-           a lista nunca precisa dividir espaço com ele). */
+        /* Cabeçalho + formulário de cadastro ficam fixos no topo da tela de
+           Produtos (sempre visíveis, sem precisar abrir/fechar nada) — só a
+           lista embaixo rola. */
+        .produtos-topo-fixo { position: sticky; top: 0; z-index: 20; background: var(--bg); padding-bottom: 15px; }
         .produtos-layout { display: flex; flex-direction: column; gap: 20px; }
-        .produtos-coluna-esquerda { width: 100%; max-width: 700px; }
-        .produtos-coluna-esquerda.colapsado { display: none; }
-        .produtos-coluna-lista { flex: 1; min-width: 0; height: calc(100vh - 220px); min-height: 400px; display: flex; flex-direction: column; box-sizing: border-box; }
+        .produtos-coluna-lista { flex: 1; min-width: 0; height: calc(100vh - 640px); min-height: 300px; display: flex; flex-direction: column; box-sizing: border-box; }
         .card-produtos { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); box-sizing: border-box; }
         /* Cada bloco do formulário de cadastro vira um "cartão" com borda de
            acento à esquerda — separa visualmente Informações/Foto/Preço/etc
            melhor que a divisória fina de antes, sem mudar nenhum id/campo. */
-        .secao-form-produto { background: #f8fafc; border-left: 3px solid var(--primary); border-radius: 0 8px 8px 0; margin-top: 12px; padding: 12px 14px; }
-        .secao-form-produto:first-of-type { margin-top: 0; }
+        .secao-form-produto { background: #f8fafc; border-left: 3px solid var(--primary); border-radius: 0 8px 8px 0; padding: 12px 14px; }
         .secao-form-produto h4 { margin: 0 0 8px 0; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; font-weight: 800; }
 
-        html[data-theme="dark"] .secao-form-produto { background: #0f172a; }
+        /* Grid compacto pros blocos do formulário (Informações, Foto,
+           Preço&Estoque etc.) lado a lado em vez de empilhados — o
+           formulário inteiro precisa caber numa altura razoável já que fica
+           fixo no topo o tempo todo. */
+        .cadastro-produto-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
 
         /* Contraste zebrado só entra em linhas SEM background próprio (ex:
            produto inativo já tem fundo vermelho claro inline, que continua
            valendo por cima disso). */
         #tabela-produtos tr:nth-child(even) { background: #f9fafb; }
-        html[data-theme="dark"] #tabela-produtos tr:nth-child(even) { background: #1e293b; }
 
         /* Sombra que "avisa" que dá pra rolar mais pra baixo — sem isso, o
            fim da lista de produtos parecia só "acabar" no meio da tela. */
         .lista-produtos-scroll { position: relative; }
         .lista-produtos-scroll::after { content: ''; position: sticky; display: block; left: 0; right: 0; bottom: 0; height: 24px; margin-top: -24px; background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95)); pointer-events: none; }
-        html[data-theme="dark"] .lista-produtos-scroll::after { background: linear-gradient(to bottom, rgba(30,41,59,0), rgba(30,41,59,0.95)); }
 
         @media (max-width: 900px) {
             .produtos-layout { flex-direction: column; }
-            .produtos-coluna-esquerda { width: 100%; }
+            .cadastro-produto-grid { grid-template-columns: 1fr; }
+            .cadastro-produto-grid > [style*="span 2"] { grid-column: span 1 !important; }
             .produtos-coluna-lista { height: 70vh; }
         }
         

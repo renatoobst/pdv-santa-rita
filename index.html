@@ -140,30 +140,6 @@
         </div>
     </div>
 
-    <div id="modal-fechamento-manual" class="modal-geral">
-        <div class="modal-content" style="width: 420px; max-width: 95%;">
-            <h3 style="margin-top:0; border-bottom: 2px solid #e5e7eb; padding-bottom:10px; color:var(--primary);">➕ Lançar Fechamento Manual</h3>
-            <p style="font-size:0.8rem; color:#6b7280; margin:0 0 12px 0;">Pra registrar no histórico um dia que rodou sem o sistema (ou fechou por fora) — entra só com o total, sem detalhamento de pagamento nem produtos.</p>
-
-            <label style="font-size: 0.85rem; font-weight: bold;">Campanha / Evento:</label>
-            <input type="text" id="manual-campanha" placeholder="Ex: Festa Desatadora">
-
-            <label style="font-size: 0.85rem; font-weight: bold;">Data do Fechamento:</label>
-            <input type="date" id="manual-data-fechamento">
-
-            <label style="font-size: 0.85rem; font-weight: bold;">Total de Vendas (R$):</label>
-            <input type="number" id="manual-total-vendas" step="0.01" placeholder="0.00">
-
-            <label style="font-size: 0.85rem; font-weight: bold;">Observação (opcional):</label>
-            <input type="text" id="manual-obs" placeholder="Ex: Lançado manualmente, caixa rodou sem o sistema">
-
-            <div style="display:flex; gap:10px; margin-top:15px;">
-                <button class="btn btn-primary" style="flex:1;" onclick="confirmarFechamentoManual()">Salvar 💾</button>
-                <button class="btn btn-neutro" style="flex:1;" onclick="fecharModalFechamentoManual()">Cancelar</button>
-            </div>
-        </div>
-    </div>
-
     <button id="btn-show-global-menu" class="btn-show-menu" onclick="toggleMenuGlobal()">⬇ Mostrar Menu</button>
 
     <nav id="nav-principal">
@@ -217,7 +193,6 @@
         </div>
 
         <button class="nav-btn-icon" onclick="fazerLogout()" title="Sair">🚪 <span id="nome-usuario-atual-nav"></span></button>
-        <button class="nav-btn-icon" id="btn-modo-escuro" onclick="alternarModoEscuro()" title="Alternar modo escuro">🌙</button>
         <button class="nav-btn-icon" onclick="toggleMenuGlobal()" title="Ocultar Menu">⬆</button>
     </nav>
 
@@ -702,28 +677,27 @@
 
         <!-- TELA: PRODUTOS & ESTOQUE & COMBOS -->
         <div id="tela-produtos" class="tab-content">
-            <div style="position: sticky; top: 0; z-index: 20; background: var(--bg); display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding: 10px 0; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
-                <h2 style="border: none; padding: 0; margin: 0;">Gerenciar Produtos, Combos, Categorias & Estoque</h2>
-                <div style="display:flex; gap:10px; flex-wrap: wrap;">
-                    <button id="btn-toggle-form-produto" class="btn" style="background:#16a34a; color:white;" onclick="toggleFormularioProduto()">➕ Cadastrar Produto</button>
-                    <button class="btn btn-primary" onclick="imprimirEstoquePorCategoria()">🖨️ Imprimir Estoque por Categoria</button>
-                    <button class="btn btn-success" onclick="gerarPDFEstoquePorCategoria()" style="background:#0d9488;">📄 Baixar PDF Estoque</button>
-                    <button class="btn btn-success" onclick="gerarJPGEstoque()" style="background:#7c3aed;">🖼️ JPG</button>
+            <div class="produtos-topo-fixo">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+                    <h2 style="border: none; padding: 0; margin: 0;">Gerenciar Produtos, Combos, Categorias & Estoque</h2>
+                    <div style="display:flex; gap:10px; flex-wrap: wrap;">
+                        <button class="btn btn-primary" onclick="imprimirEstoquePorCategoria()">🖨️ Imprimir Estoque por Categoria</button>
+                        <button class="btn btn-success" onclick="gerarPDFEstoquePorCategoria()" style="background:#0d9488;">📄 Baixar PDF Estoque</button>
+                        <button class="btn btn-success" onclick="gerarJPGEstoque()" style="background:#7c3aed;">🖼️ JPG</button>
+                    </div>
                 </div>
-            </div>
 
-            <div class="produtos-layout">
-
-                <div class="produtos-coluna-esquerda colapsado" id="painel-cadastro-produto">
-                    <div class="card-produtos">
-                        <div style="display:flex; gap:5px; margin-bottom: 15px; background: #f3f4f6; padding: 5px; border-radius: 8px;">
-                            <button id="tab-simples" class="btn btn-primary" style="flex:1; padding: 8px;" onclick="mudarModoCadastro('simples')">Produto Simples</button>
-                            <button id="tab-combo" class="btn" style="flex:1; padding: 8px; background:transparent; color:#333;" onclick="mudarModoCadastro('combo')">Criar Combo</button>
+                <div class="card-produtos" id="painel-cadastro-produto">
+                    <div style="display:flex; justify-content: space-between; align-items:center; gap:10px; margin-bottom: 10px; flex-wrap:wrap;">
+                        <h3 id="titulo-form-produto" style="margin: 0;">Cadastrar Produto</h3>
+                        <div style="display:flex; gap:5px; background: #f3f4f6; padding: 5px; border-radius: 8px;">
+                            <button id="tab-simples" class="btn btn-primary" style="padding: 6px 14px; font-size:0.85rem;" onclick="mudarModoCadastro('simples')">Produto Simples</button>
+                            <button id="tab-combo" class="btn" style="padding: 6px 14px; font-size:0.85rem; background:transparent; color:#333;" onclick="mudarModoCadastro('combo')">Criar Combo</button>
                         </div>
+                    </div>
 
-                        <h3 id="titulo-form-produto" style="margin-top: 0;">Cadastrar Produto</h3>
-
-                        <div class="secao-form-produto">
+                    <div class="cadastro-produto-grid">
+                        <div class="secao-form-produto" style="grid-column: span 2;">
                             <h4>📝 Informações</h4>
                             <label style="font-size: 0.85rem; font-weight: bold;">Nome (Produto ou Combo):</label>
                             <input type="text" id="novo-prod-nome" placeholder="Ex: X-Bacon" required spellcheck="true" lang="pt-BR">
@@ -761,21 +735,10 @@
                             </div>
                         </div>
 
-                        <div class="secao-form-produto">
+                        <div class="secao-form-produto" style="grid-column: span 2;">
                             <h4>🏪 Visibilidade</h4>
                             <p style="font-size: 0.75rem; color: #6b7280; margin: 0 0 8px 0;">O produto é único — cadastrado uma vez, mas só é vendido nas barracas marcadas aqui. Cada barraca marcada controla seu próprio estoque dele.</p>
                             <div id="checklist-barracas-produto" style="display:flex; flex-wrap:wrap; gap:6px 14px; background:#f9fafb; padding:10px; border-radius:6px; border:1px solid #e5e7eb;"></div>
-                        </div>
-
-                        <div id="box-itens-combo" class="secao-form-produto" style="display:none; background: #fef08a; padding: 12px; border-radius: 8px; border-top: none; margin-top: 14px;">
-                            <h4 style="color: #854d0e;">✨ Itens Inclusos no Combo</h4>
-                            <p style="font-size: 0.75rem; color: #854d0e; margin: 0 0 10px 0;">Você pode adicionar uma categoria inteira ou um produto fixo.</p>
-                            <div style="display: flex; gap: 5px; margin-bottom: 10px;">
-                                <select id="combo-add-select" style="margin-bottom:0; flex:1;"></select>
-                                <input type="number" id="combo-add-qtd" value="1" min="1" style="margin-bottom:0; width:60px;">
-                                <button class="btn btn-success" style="padding: 10px;" onclick="addProdutoTemporarioAoCombo()">➕</button>
-                            </div>
-                            <ul id="lista-combo-temporario" style="margin:0; padding-left:20px; font-size: 0.85rem; font-weight:bold;"></ul>
                         </div>
 
                         <div class="secao-form-produto" id="box-categoria-subcategoria">
@@ -805,12 +768,26 @@
                             </select>
                         </div>
 
-                        <div style="display: flex; gap: 10px; margin-top: 15px;">
-                            <button id="btn-salvar-produto" class="btn btn-primary" style="flex: 1;" onclick="salvarProduto()">Salvar 💾</button>
-                            <button id="btn-cancelar-edicao-prod" class="btn btn-danger" style="display: none; padding: 12px 15px;" onclick="cancelarEdicaoProduto()" title="Cancelar Edição">❌</button>
+                        <div id="box-itens-combo" class="secao-form-produto" style="display:none; grid-column: span 2; background: #fef08a;">
+                            <h4 style="color: #854d0e;">✨ Itens Inclusos no Combo</h4>
+                            <p style="font-size: 0.75rem; color: #854d0e; margin: 0 0 10px 0;">Você pode adicionar uma categoria inteira ou um produto fixo.</p>
+                            <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+                                <select id="combo-add-select" style="margin-bottom:0; flex:1;"></select>
+                                <input type="number" id="combo-add-qtd" value="1" min="1" style="margin-bottom:0; width:60px;">
+                                <button class="btn btn-success" style="padding: 10px;" onclick="addProdutoTemporarioAoCombo()">➕</button>
+                            </div>
+                            <ul id="lista-combo-temporario" style="margin:0; padding-left:20px; font-size: 0.85rem; font-weight:bold;"></ul>
                         </div>
                     </div>
+
+                    <div style="display: flex; gap: 10px; margin-top: 15px;">
+                        <button id="btn-salvar-produto" class="btn btn-primary" style="flex: 1;" onclick="salvarProduto()">Salvar 💾</button>
+                        <button id="btn-cancelar-edicao-prod" class="btn btn-danger" style="display: none; padding: 12px 15px;" onclick="cancelarEdicaoProduto()" title="Cancelar Edição / Novo Produto">❌</button>
+                    </div>
                 </div>
+            </div>
+
+            <div class="produtos-layout">
 
                 <div class="produtos-coluna-lista card-produtos">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 4px;">
@@ -1180,7 +1157,6 @@
                 <div style="background:#dcfce7; border:2px solid #16a34a; padding:8px 16px; border-radius:8px; font-weight:bold; color:#15803d;">
                     Total Vendas no filtro: <span id="total-vendas-historico-filtrado">R$ 0.00</span>
                 </div>
-                <button class="btn" style="background:#7c3aed; color:white; margin-left:auto;" onclick="abrirModalFechamentoManual()">➕ Lançar Fechamento Manual</button>
             </div>
             <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-height: 70vh; overflow-y: auto; overflow-x: auto;">
                 <table style="width: 100%; min-width: 700px; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
