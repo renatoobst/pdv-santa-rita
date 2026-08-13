@@ -1344,6 +1344,9 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 );
             }
 
+            const contadorEl = document.getElementById('contagem-produtos-lista');
+            if (contadorEl) contadorEl.innerText = `Mostrando ${lista.length} ${lista.length === 1 ? 'produto' : 'produtos'}${produtosDB.length !== lista.length ? ` de ${produtosDB.length} no total` : ''}`;
+
             if (lista.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: gray;">Nenhum produto ou combo encontrado.</td></tr>';
                 return;
@@ -4145,6 +4148,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             }
 
             gerarGraficos(dados.validos);
+            renderizarTempoPreparoPorProduto(dados.validos);
         }
 
         if (typeof Chart !== 'undefined' && typeof ChartDataLabels !== 'undefined') {
@@ -4203,8 +4207,62 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             chartRetirada = new Chart(document.getElementById('chartRetirada').getContext('2d'), { type: 'pie', data: { labels: ['🟢 Retirar Agora', '📦 Retirar Depois'], datasets: [{ data: [contagemRetirada['Agora'], contagemRetirada['Depois']], backgroundColor: ['#16a34a', '#8b5cf6'] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { datalabels: { color: '#fff', font: { weight: 'bold', size: 12 }, formatter: formatarQtdEPct } } } });
         }
 
+        // Tempo é medido por PEDIDO (entrada → entrega), não por item — não dá
+        // pra saber quanto cada produto isoladamente demorou dentro de um
+        // pedido com vários itens. Como aproximação honesta, atribui o tempo
+        // total do pedido a cada produto de cozinha que ele continha, e tira a
+        // média — serve pra apontar quais produtos costumam aparecer em
+        // pedidos mais demorados (gargalo), não um cronômetro exato por item.
+        function renderizarTempoPreparoPorProduto(pedidos) {
+            const tbody = document.getElementById('tabela-tempo-preparo');
+            if (!tbody) return;
+
+            let somaPorProduto = {};
+            let contagemPorProduto = {};
+
+            pedidos.forEach(p => {
+                if (!p.horaEntradaCozinha || !p.horaEntrega) return;
+                const [h1, m1] = p.horaEntradaCozinha.split(':').map(Number);
+                const [h2, m2] = p.horaEntrega.split(':').map(Number);
+                if (isNaN(h1) || isNaN(m1) || isNaN(h2) || isNaN(m2)) return;
+                let min1 = h1 * 60 + m1, min2 = h2 * 60 + m2;
+                if (min2 < min1) min2 += 24 * 60;
+                const tempoPedido = min2 - min1;
+
+                const produtosDoPedido = new Set();
+                p.itens.forEach(item => {
+                    if (item.isCombo) {
+                        item.itensComboEscolhidos.forEach(sub => { if (sub.cozinha) produtosDoPedido.add(sub.nome); });
+                    } else if (item.cozinha) {
+                        produtosDoPedido.add(item.nome);
+                    }
+                });
+                produtosDoPedido.forEach(nome => {
+                    somaPorProduto[nome] = (somaPorProduto[nome] || 0) + tempoPedido;
+                    contagemPorProduto[nome] = (contagemPorProduto[nome] || 0) + 1;
+                });
+            });
+
+            const linhas = Object.keys(somaPorProduto)
+                .map(nome => ({ nome, qtdPedidos: contagemPorProduto[nome], media: somaPorProduto[nome] / contagemPorProduto[nome] }))
+                .sort((a, b) => b.media - a.media);
+
+            if (linhas.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" style="padding:12px; text-align:center; color:gray;">Sem dados suficientes ainda (precisa de pedidos já entregues, com hora de entrada na cozinha registrada).</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = linhas.map(l => `
+                <tr style="border-bottom:1px solid #f1f5f9;">
+                    <td style="padding:8px; font-weight:600;">${l.nome}</td>
+                    <td>${l.qtdPedidos}</td>
+                    <td style="font-weight:bold; color:${l.media > 20 ? 'var(--danger)' : (l.media > 10 ? 'var(--warning)' : 'var(--success)')};">${Math.round(l.media)} min</td>
+                </tr>
+            `).join('');
+        }
+
         function editarPedido(id) {
-            const p = pedidosGerais.find(x => x.id === id); 
+            const p = pedidosGerais.find(x => x.id === id);
             if(!p) return;
 
             carrinho = JSON.parse(JSON.stringify(p.itens));
@@ -4451,3 +4509,14 @@ window.toggleMenuGlobal = toggleMenuGlobal;
 window.toggleMenuMobile = toggleMenuMobile;
 window.toggleStatusAtivoProduto = toggleStatusAtivoProduto;
 window.verDetalhesCaixa = verDetalhesCaixa;
+
+// PWA: registra o service worker (sw.js) só cuida do "shell" do app pra ele
+// abrir mesmo sem internet — os dados de verdade continuam vindo do
+// Supabase, isso aqui nunca intercepta essas chamadas (ver sw.js).
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch((erro) => {
+            console.log('Service worker não pôde ser registrado (app continua funcionando normal):', erro);
+        });
+    });
+}

@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PDV Pro - Santuário Santa Rita</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
+    <link rel="apple-touch-icon" href="assets/icon.svg">
+    <meta name="theme-color" content="#2563eb">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="stylesheet" href="css/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Mostra o valor (e %, nos gráficos de pizza/rosca) escrito direto em
@@ -792,16 +799,17 @@
                 </div>
 
                 <div class="produtos-coluna-lista card-produtos">
-                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 4px;">
                         <h3 style="margin: 0;">Lista de Produtos & Combos <small style="font-size:0.7rem; color:gray; font-weight:normal;">✨ Arraste ☰ para reordenar (mesma categoria)</small></h3>
                         <div style="width: 280px; max-width: 100%;">
                             <input type="text" id="busca-tabela-produtos" placeholder="🔍 Pesquisar na lista..." oninput="renderizarTabelaProdutos()" style="margin-bottom: 0; padding: 8px; font-weight: bold; border: 2px solid #cbd5e1; background: #f8fafc;" spellcheck="true" lang="pt-BR">
                         </div>
                     </div>
+                    <div style="font-size:0.78rem; color:#6b7280; font-weight:600; margin-bottom: 10px;" id="contagem-produtos-lista">Mostrando 0 produtos</div>
 
                     <div class="menu-categorias" id="abas-tabela-produtos-container" style="margin-bottom: 12px;"></div>
 
-                    <div style="flex: 1; min-height: 0; overflow-y: auto; overflow-x: auto;">
+                    <div class="lista-produtos-scroll" style="flex: 1; min-height: 0; overflow-y: auto; overflow-x: auto;">
                         <table style="width: 100%; min-width: 700px; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
                             <thead>
                                 <tr style="border-bottom: 2px solid #e5e7eb;">
@@ -1122,6 +1130,23 @@
                 <div class="chart-box"><h3 style="margin-top:0;">⏰ Picos de Horário</h3><canvas id="chartHorarios" style="max-height: 250px;"></canvas></div>
                 <div class="chart-box"><h3 style="margin-top:0;">🛍️ Divisão por Categoria</h3><canvas id="chartCategorias" style="max-height: 250px;"></canvas></div>
                 <div class="chart-box"><h3 style="margin-top:0;">📦 Tipo de Retirada (Itens)</h3><canvas id="chartRetirada" style="max-height: 250px;"></canvas></div>
+            </div>
+
+            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-top: 20px;">
+                <h3 style="margin-top:0;">⏱️ Tempo Médio de Preparo por Produto</h3>
+                <p style="font-size:0.8rem; color:gray; margin-top:-8px;">Média do tempo total do pedido (entrada → entrega) pros pedidos que continham cada produto de cozinha — não é o tempo isolado do item, é uma referência de quais produtos costumam estar em pedidos mais demorados.</p>
+                <div style="max-height: 300px; overflow-y: auto; overflow-x: auto;">
+                    <table style="width:100%; min-width:400px; border-collapse: collapse; text-align:left; font-size:0.9rem;">
+                        <thead>
+                            <tr style="border-bottom: 2px solid #e5e7eb; background:#f8fafc;">
+                                <th style="padding:8px;">Produto</th>
+                                <th>Pedidos</th>
+                                <th>Tempo Médio</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-tempo-preparo"></tbody>
+                    </table>
+                </div>
             </div>
         </div>
 

@@ -115,9 +115,26 @@
         .produtos-coluna-esquerda { display: flex; flex-direction: column; gap: 20px; width: 340px; flex-shrink: 0; }
         .produtos-coluna-lista { flex: 1; min-width: 0; height: calc(100vh - 220px); min-height: 400px; display: flex; flex-direction: column; box-sizing: border-box; }
         .card-produtos { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); box-sizing: border-box; }
-        .secao-form-produto { border-top: 1px solid #f1f5f9; margin-top: 14px; padding-top: 14px; }
-        .secao-form-produto:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+        /* Cada bloco do formulário de cadastro vira um "cartão" com borda de
+           acento à esquerda — separa visualmente Informações/Foto/Preço/etc
+           melhor que a divisória fina de antes, sem mudar nenhum id/campo. */
+        .secao-form-produto { background: #f8fafc; border-left: 3px solid var(--primary); border-radius: 0 8px 8px 0; margin-top: 12px; padding: 12px 14px; }
+        .secao-form-produto:first-of-type { margin-top: 0; }
         .secao-form-produto h4 { margin: 0 0 8px 0; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; font-weight: 800; }
+
+        html[data-theme="dark"] .secao-form-produto { background: #0f172a; }
+
+        /* Contraste zebrado só entra em linhas SEM background próprio (ex:
+           produto inativo já tem fundo vermelho claro inline, que continua
+           valendo por cima disso). */
+        #tabela-produtos tr:nth-child(even) { background: #f9fafb; }
+        html[data-theme="dark"] #tabela-produtos tr:nth-child(even) { background: #1e293b; }
+
+        /* Sombra que "avisa" que dá pra rolar mais pra baixo — sem isso, o
+           fim da lista de produtos parecia só "acabar" no meio da tela. */
+        .lista-produtos-scroll { position: relative; }
+        .lista-produtos-scroll::after { content: ''; position: sticky; display: block; left: 0; right: 0; bottom: 0; height: 24px; margin-top: -24px; background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95)); pointer-events: none; }
+        html[data-theme="dark"] .lista-produtos-scroll::after { background: linear-gradient(to bottom, rgba(30,41,59,0), rgba(30,41,59,0.95)); }
 
         @media (max-width: 900px) {
             .produtos-layout { flex-direction: column; }
