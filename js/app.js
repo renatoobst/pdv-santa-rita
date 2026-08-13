@@ -1261,7 +1261,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     let acoes = `<button onclick="verDetalhesPedido(${p.id})" class="btn" style="background:#0891b2; color:white; padding: 4px 8px; font-size: 0.8rem; margin-right: 4px;" title="Ver Pedido Completo">👁️</button>`;
                     if (origemModalTodosPedidos === 'pedido') {
                         acoes += `<button onclick="reimprimirPedido(${p.id})" class="btn" style="background:#475569; color:white; padding: 4px 8px; font-size: 0.8rem; margin-right: 4px;" title="Reimprimir Pedido">🖨️</button>`;
-                        if (p.statusPainel !== 'cancelado' && p.statusPainel !== 'entregue') {
+                        if (p.statusPainel !== 'cancelado') {
                             acoes += `<button onclick="editarPedido(${p.id}); fecharModalTodosPedidos();" class="btn btn-warning" style="padding: 4px 8px; font-size: 0.8rem; margin-right: 4px;">✏️ Alterar</button>`;
                         }
                         if (p.statusPainel !== 'cancelado') {
