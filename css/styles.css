@@ -116,7 +116,12 @@
         #painel-cadastro-produto input,
         #painel-cadastro-produto select,
         #painel-cadastro-produto textarea { padding: 6px 8px; margin-bottom: 6px; font-size: 0.85rem; }
-        #painel-cadastro-produto label { margin-bottom: 2px; display: inline-block; }
+        #painel-cadastro-produto label { margin-bottom: 2px; display: inline-block; font-size: 0.8rem; font-weight: bold; }
+        /* Campo "solto" (Nome, Status, Foto, Preço etc.) sem a caixa colorida
+           de seção — só label+input, o mais enxuto possível. Cabe muito mais
+           por linha assim do que dentro de secao-form-produto (que tem
+           padding, borda e cabeçalho h4 extra). */
+        .campo-produto { min-width: 0; }
         /* Sobrescreve o ".row-inputs { flex-direction: column }" do bloco de
            responsividade geral (@media max-width:900px, mais abaixo) — aqui
            dentro precisa continuar lado a lado até telas bem estreitas de

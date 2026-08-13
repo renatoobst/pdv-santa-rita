@@ -725,82 +725,70 @@
                     </div>
 
                     <div class="cadastro-produto-grid">
-                        <div class="secao-form-produto" style="grid-column: 1 / -1;">
-                            <h4>📝 Informações</h4>
-                            <div class="row-inputs">
-                                <div style="flex: 1;">
-                                    <label style="font-size: 0.85rem; font-weight: bold;">Nome (Produto ou Combo):</label>
-                                    <input type="text" id="novo-prod-nome" placeholder="Ex: X-Bacon" required spellcheck="true" lang="pt-BR">
-                                </div>
-                                <div style="flex: 1;">
-                                    <label style="font-size: 0.85rem; font-weight: bold; color:#0284c7;">Ingredientes / Itens Inclusos (vírgula):</label>
-                                    <input type="text" id="novo-prod-ingredientes" placeholder="Ex: Pão, Hamburguer, Queijo, Tomate, Alface" spellcheck="true" lang="pt-BR">
-                                </div>
+                        <div class="campo-produto">
+                            <label>Nome (Produto ou Combo):</label>
+                            <input type="text" id="novo-prod-nome" placeholder="Ex: X-Bacon" required spellcheck="true" lang="pt-BR">
+                        </div>
+                        <div class="campo-produto" style="grid-column: span 2;">
+                            <label style="color:#0284c7;">Ingredientes / Itens Inclusos (vírgula):</label>
+                            <input type="text" id="novo-prod-ingredientes" placeholder="Ex: Pão, Hamburguer, Queijo, Tomate, Alface" spellcheck="true" lang="pt-BR">
+                        </div>
+                        <div class="campo-produto">
+                            <label>Status:</label>
+                            <select id="novo-prod-ativo" style="font-weight: bold;">
+                                <option value="true">🟢 ATIVO</option>
+                                <option value="false">🔴 INATIVO</option>
+                            </select>
+                        </div>
+                        <div class="campo-produto" style="min-width:120px;">
+                            <label>🖼️ Foto:</label>
+                            <input type="file" id="file-prod-foto" accept="image/*" style="margin-bottom: 0; padding:4px;" onchange="processarUploadFoto(this)">
+                            <input type="hidden" id="novo-prod-foto">
+                            <div id="preview-foto-container" style="display:none;">
+                                <img id="preview-foto-img" style="width: 28px; height: 28px; object-fit: cover; border-radius: 4px; border: 1px solid #ccc; margin-top:2px;">
                             </div>
+                        </div>
 
+                        <div class="campo-produto">
+                            <label>Preço Total (R$):</label>
+                            <input type="number" id="novo-prod-preco" placeholder="0.00" step="0.01" required>
+                        </div>
+                        <div class="campo-produto" id="box-estoque-simples">
+                            <label>Estoque nesta barraca:</label>
+                            <input type="number" id="novo-prod-estoque" placeholder="Vazio = Livre">
+                        </div>
+                        <div class="campo-produto" id="box-cozinha-simples" title="Vai para Cozinha: aparece na tela de Cozinha. Só Balcão: espera retirada no Balcão. Não vai pra nenhum (rifa/ingresso): já entra como entregue na hora do pagamento.">
+                            <label>👨‍🍳 Para onde vai a venda?</label>
+                            <select id="novo-prod-cozinha">
+                                <option value="cozinha">👨‍🍳 Cozinha (Preparo)</option>
+                                <option value="balcao">🛍️ Só Balcão</option>
+                                <option value="instantaneo">🎟️ Nenhum (Rifa/Ingresso)</option>
+                            </select>
+                        </div>
+                        <div class="campo-produto" id="box-categoria-subcategoria" style="grid-column: span 2;">
                             <div class="row-inputs">
-                                <div style="flex: 1;">
-                                    <label style="font-size: 0.85rem; font-weight: bold;">Status:</label>
-                                    <select id="novo-prod-ativo" style="font-weight: bold;">
-                                        <option value="true">🟢 ATIVO</option>
-                                        <option value="false">🔴 INATIVO</option>
-                                    </select>
+                                <div style="flex:1;">
+                                    <label>Categoria:</label>
+                                    <div style="display:flex; gap:4px;">
+                                        <select id="novo-prod-categoria" onchange="atualizarListaSubcategoriasExistentes()" style="flex:1;"></select>
+                                        <button type="button" class="btn btn-neutro" style="padding:0 10px;" onclick="abrirModalGerenciarCategorias()" title="Gerenciar categorias">⚙️</button>
+                                    </div>
                                 </div>
-                                <div style="flex: 1; min-width:120px;">
-                                    <label style="font-size: 0.85rem; font-weight: bold;">🖼️ Foto:</label>
-                                    <input type="file" id="file-prod-foto" accept="image/*" style="margin-bottom: 0; padding:4px;" onchange="processarUploadFoto(this)">
-                                    <input type="hidden" id="novo-prod-foto">
-                                    <div id="preview-foto-container" style="display:none;">
-                                        <img id="preview-foto-img" style="width: 32px; height: 32px; object-fit: cover; border-radius: 4px; border: 1px solid #ccc; margin-top:4px;">
+                                <div style="flex:1;">
+                                    <label>Subcategoria:</label>
+                                    <div style="display:flex; gap:4px;">
+                                        <select id="novo-prod-subcategoria" style="flex:1;">
+                                            <option value="">-- Nenhuma --</option>
+                                        </select>
+                                        <button type="button" class="btn btn-neutro" style="padding:0 10px;" onclick="abrirModalGerenciarSubcategorias()" title="Gerenciar subcategorias desta categoria">⚙️</button>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="secao-form-produto" style="grid-column: 1 / -1;">
-                            <h4>🏪 Visibilidade</h4>
-                            <p style="font-size: 0.75rem; color: #6b7280; margin: 0 0 8px 0;">O produto é único — cadastrado uma vez, mas só é vendido nas barracas marcadas aqui. Cada barraca marcada controla seu próprio estoque dele.</p>
-                            <div id="checklist-barracas-produto" style="display:flex; flex-wrap:wrap; gap:6px 14px; background:#f9fafb; padding:10px; border-radius:6px; border:1px solid #e5e7eb;"></div>
-                        </div>
-
-                        <div class="secao-form-produto">
-                            <h4>💰 Preço &amp; Estoque</h4>
-                            <div class="row-inputs">
-                                <div style="flex: 1;">
-                                    <label style="font-size: 0.85rem; font-weight: bold;">Preço Total (R$):</label>
-                                    <input type="number" id="novo-prod-preco" placeholder="0.00" step="0.01" required>
-                                </div>
-                                <div style="flex: 1;" id="box-estoque-simples">
-                                    <label style="font-size: 0.85rem; font-weight: bold;">Estoque nesta barraca:</label>
-                                    <input type="number" id="novo-prod-estoque" placeholder="Vazio = Livre">
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="secao-form-produto" id="box-categoria-subcategoria">
-                            <h4>📁 Categoria &amp; Subcategoria</h4>
-                            <label style="font-size: 0.85rem; font-weight: bold;">Categoria Vinculada:</label>
-                            <div style="display:flex; gap:6px;">
-                                <select id="novo-prod-categoria" onchange="atualizarListaSubcategoriasExistentes()" style="flex:1;"></select>
-                                <button type="button" class="btn btn-neutro" style="padding:0 12px;" onclick="abrirModalGerenciarCategorias()" title="Gerenciar categorias">⚙️</button>
-                            </div>
-
-                            <label style="font-size: 0.85rem; font-weight: bold;">Subcategoria (opcional):</label>
-                            <div style="display:flex; gap:6px;">
-                                <select id="novo-prod-subcategoria" style="flex:1;">
-                                    <option value="">-- Nenhuma --</option>
-                                </select>
-                                <button type="button" class="btn btn-neutro" style="padding:0 12px;" onclick="abrirModalGerenciarSubcategorias()" title="Gerenciar subcategorias desta categoria">⚙️</button>
-                            </div>
-                        </div>
-
-                        <div id="box-cozinha-simples" class="secao-form-produto" title="Vai para Cozinha: aparece na tela de Cozinha. Só Balcão: espera retirada no Balcão. Não vai pra nenhum (rifa/ingresso): já entra como entregue na hora do pagamento.">
-                            <h4>👨‍🍳 Para onde vai a venda?</h4>
-                            <select id="novo-prod-cozinha">
-                                <option value="cozinha">👨‍🍳 Vai para a Cozinha (Preparo)</option>
-                                <option value="balcao">🛍️ Só Balcão (Pronta Entrega, espera retirada)</option>
-                                <option value="instantaneo">🎟️ Não vai pra nenhum (Rifa / Ingresso — já entrega na hora)</option>
-                            </select>
+                        <div class="secao-form-produto" style="grid-column: 1 / -1;" title="O produto é único — cadastrado uma vez, mas só é vendido nas barracas marcadas aqui. Cada barraca marcada controla seu próprio estoque dele.">
+                            <h4>🏪 Visibilidade (barracas onde este produto é vendido)</h4>
+                            <div id="checklist-barracas-produto" style="display:flex; flex-wrap:wrap; gap:6px 14px; background:#f9fafb; padding:8px; border-radius:6px; border:1px solid #e5e7eb;"></div>
                         </div>
 
                         <div id="box-itens-combo" class="secao-form-produto" style="display:none; grid-column: 1 / -1; background: #fef08a;">
