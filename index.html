@@ -728,23 +728,23 @@
                         <div class="secao-form-produto" style="grid-column: 1 / -1;">
                             <h4>📝 Informações</h4>
                             <div class="row-inputs">
-                                <div style="flex: 2;">
+                                <div style="flex: 1;">
                                     <label style="font-size: 0.85rem; font-weight: bold;">Nome (Produto ou Combo):</label>
                                     <input type="text" id="novo-prod-nome" placeholder="Ex: X-Bacon" required spellcheck="true" lang="pt-BR">
                                 </div>
+                                <div style="flex: 1;">
+                                    <label style="font-size: 0.85rem; font-weight: bold; color:#0284c7;">Ingredientes / Itens Inclusos (vírgula):</label>
+                                    <input type="text" id="novo-prod-ingredientes" placeholder="Ex: Pão, Hamburguer, Queijo, Tomate, Alface" spellcheck="true" lang="pt-BR">
+                                </div>
+                            </div>
+
+                            <div class="row-inputs">
                                 <div style="flex: 1;">
                                     <label style="font-size: 0.85rem; font-weight: bold;">Status:</label>
                                     <select id="novo-prod-ativo" style="font-weight: bold;">
                                         <option value="true">🟢 ATIVO</option>
                                         <option value="false">🔴 INATIVO</option>
                                     </select>
-                                </div>
-                            </div>
-
-                            <div class="row-inputs">
-                                <div style="flex: 3;">
-                                    <label style="font-size: 0.85rem; font-weight: bold; color:#0284c7;">Ingredientes / Itens Inclusos (vírgula):</label>
-                                    <input type="text" id="novo-prod-ingredientes" placeholder="Ex: Pão, Hamburguer, Queijo, Tomate, Alface" spellcheck="true" lang="pt-BR">
                                 </div>
                                 <div style="flex: 1; min-width:120px;">
                                     <label style="font-size: 0.85rem; font-weight: bold;">🖼️ Foto:</label>
