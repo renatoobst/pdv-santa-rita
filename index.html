@@ -727,17 +727,22 @@
                     <div class="cadastro-produto-grid">
                         <div class="secao-form-produto" style="grid-column: span 2;">
                             <h4>📝 Informações</h4>
-                            <label style="font-size: 0.85rem; font-weight: bold;">Nome (Produto ou Combo):</label>
-                            <input type="text" id="novo-prod-nome" placeholder="Ex: X-Bacon" required spellcheck="true" lang="pt-BR">
+                            <div class="row-inputs">
+                                <div style="flex: 2;">
+                                    <label style="font-size: 0.85rem; font-weight: bold;">Nome (Produto ou Combo):</label>
+                                    <input type="text" id="novo-prod-nome" placeholder="Ex: X-Bacon" required spellcheck="true" lang="pt-BR">
+                                </div>
+                                <div style="flex: 1;">
+                                    <label style="font-size: 0.85rem; font-weight: bold;">Status:</label>
+                                    <select id="novo-prod-ativo" style="font-weight: bold;">
+                                        <option value="true">🟢 ATIVO</option>
+                                        <option value="false">🔴 INATIVO</option>
+                                    </select>
+                                </div>
+                            </div>
 
                             <label style="font-size: 0.85rem; font-weight: bold; color:#0284c7;">Ingredientes / Itens Inclusos (Separados por vírgula):</label>
                             <input type="text" id="novo-prod-ingredientes" placeholder="Ex: Pão, Hamburguer, Queijo, Tomate, Alface" spellcheck="true" lang="pt-BR">
-
-                            <label style="font-size: 0.85rem; font-weight: bold;">Status do Produto (Visibilidade no PDV):</label>
-                            <select id="novo-prod-ativo" style="font-weight: bold;">
-                                <option value="true">🟢 ATIVO (Aparece nas Vendas)</option>
-                                <option value="false">🔴 INATIVO (Oculto das Vendas)</option>
-                            </select>
                         </div>
 
                         <div class="secao-form-produto">

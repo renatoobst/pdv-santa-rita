@@ -93,14 +93,26 @@
         /* Cada bloco do formulário de cadastro vira um "cartão" com borda de
            acento à esquerda — separa visualmente Informações/Foto/Preço/etc
            melhor que a divisória fina de antes, sem mudar nenhum id/campo. */
-        .secao-form-produto { background: #f8fafc; border-left: 3px solid var(--primary); border-radius: 0 8px 8px 0; padding: 12px 14px; }
-        .secao-form-produto h4 { margin: 0 0 8px 0; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; font-weight: 800; }
+        .secao-form-produto { background: #f8fafc; border-left: 3px solid var(--primary); border-radius: 0 8px 8px 0; padding: 8px 10px; }
+        .secao-form-produto h4 { margin: 0 0 4px 0; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; font-weight: 800; }
 
         /* Grid compacto pros blocos do formulário (Informações, Foto,
            Preço&Estoque etc.) lado a lado em vez de empilhados — o
            formulário inteiro precisa caber numa altura razoável já que fica
            fixo no topo o tempo todo. */
-        .cadastro-produto-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+        .cadastro-produto-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: start; }
+
+        /* Cadastro de produto fica fixo no topo o tempo todo (ver
+           .produtos-topo-fixo) — precisa ser bem mais compacto que um
+           formulário normal, senão sobra pouca altura pra lista de produtos
+           rolar embaixo. Reduz o respiro padrão de input/select/label só
+           aqui dentro, sem mexer no resto do site. */
+        #painel-cadastro-produto { padding: 12px 16px; }
+        #painel-cadastro-produto input,
+        #painel-cadastro-produto select,
+        #painel-cadastro-produto textarea { padding: 6px 8px; margin-bottom: 6px; font-size: 0.85rem; }
+        #painel-cadastro-produto label { margin-bottom: 2px; display: inline-block; }
+        #painel-cadastro-produto .row-inputs { gap: 8px; }
 
         /* Contraste zebrado só entra em linhas SEM background próprio (ex:
            produto inativo já tem fundo vermelho claro inline, que continua
@@ -112,10 +124,16 @@
         .lista-produtos-scroll { position: relative; }
         .lista-produtos-scroll::after { content: ''; position: sticky; display: block; left: 0; right: 0; bottom: 0; height: 24px; margin-top: -24px; background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.95)); pointer-events: none; }
 
-        @media (max-width: 900px) {
-            .produtos-layout { flex-direction: column; }
+        /* Só derruba pra 1 coluna em telas realmente estreitas (celular) —
+           tablet em pé (768-900px) já cabia direito em 2 colunas e ficava
+           bem mais alto/menos compacto derrubando cedo demais. */
+        @media (max-width: 640px) {
             .cadastro-produto-grid { grid-template-columns: 1fr; }
             .cadastro-produto-grid > [style*="span 2"] { grid-column: span 1 !important; }
+        }
+
+        @media (max-width: 900px) {
+            .produtos-layout { flex-direction: column; }
             .produtos-coluna-lista { height: 70vh; }
         }
         
