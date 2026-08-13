@@ -1157,10 +1157,14 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 // seta — evita que um re-render automático (realtime, clique
                 // de mouse em "Chamar Painel" etc.) jogue a tela pro topo só
                 // por causa desse destaque, mesmo sem o usuário estar
-                // navegando por teclado.
-                if (!rolar) return;
-
-                cardTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                // navegando por teclado. MAS o foco precisa ser reaplicado
+                // sempre, mesmo sem rolar: atualizarTelas() recria os cards do
+                // zero (innerHTML), então o botão que estava focado antes do
+                // "Chamar Painel" deixa de existir — sem refocar aqui, o
+                // Enter de novo (Retirado) parava de funcionar depois do
+                // primeiro Enter (Chamar). Usa preventScroll pra não rolar a
+                // tela ao focar de novo quando rolar=false.
+                if (rolar) cardTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
                 // Prioriza o botão de ação principal do card (Chamar Painel /
                 // Retirado / Enviar p/ Cozinha) em vez de literalmente o
@@ -1176,7 +1180,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     || cardTarget.querySelector("button[onclick*='chamarNoPainel']")
                     || cardTarget.querySelector("button[onclick*='moverParaAgora']")
                     || cardTarget.querySelector('button');
-                if (botaoPrincipal) botaoPrincipal.focus();
+                if (botaoPrincipal) botaoPrincipal.focus({ preventScroll: !rolar });
             }
         }
 
