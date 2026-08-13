@@ -168,7 +168,7 @@
                     <button onclick="mudarAba('tela-produtos', this)">📦 Produtos & Estoque</button>
                     <button id="btn-nav-barracas" onclick="mudarAba('tela-barracas', this)">🏪 Barracas</button>
                     <button id="btn-sub-gestao" onclick="mudarAba('tela-gestao', this)">📋 Gestão de Pedidos</button>
-                    <button id="btn-sub-fechamento" onclick="mudarAba('tela-fechamento-caixa', this)">📜 Histórico de Caixas</button>
+                    <button id="btn-sub-fechamento" onclick="mudarAba('tela-fechamento-caixa', this)">📜 Fechamentos de Caixa</button>
                     <button onclick="mudarAba('tela-gestao-usuarios', this)">👤 Gerenciar Usuários</button>
                 </div>
             </div>
@@ -180,7 +180,6 @@
                 <div class="dropdown-inner">
                     <button id="btn-sub-dash" onclick="mudarAba('tela-relatorio', this)">📈 Dashboard Analytics</button>
                     <button id="btn-sub-dash-geral" onclick="mudarAba('tela-dashboard-geral', this)">🏬 Dashboard Geral (Todas as Barracas)</button>
-                    <button id="btn-sub-fechamentos-datas" onclick="mudarAba('tela-dashboard-caixas', this)">📅 Fechamentos por Período</button>
                 </div>
             </div>
         </div>
@@ -1143,22 +1142,51 @@
 
         <!-- TELA 8: HISTÓRICO DE FECHAMENTOS DE CAIXA -->
         <div id="tela-fechamento-caixa" class="tab-content">
-            <h2>📜 Histórico de Fechamentos de Caixa</h2>
-            <div style="display:flex; gap:15px; align-items:flex-end; flex-wrap:wrap; margin-bottom:15px;">
-                <div>
-                    <label style="font-size:0.8rem; font-weight:bold; display:block;">Data Início:</label>
-                    <input type="date" id="filtro-historico-data-inicio" onchange="renderizarHistoricoCaixas()" style="margin-bottom:0;">
-                </div>
-                <div>
-                    <label style="font-size:0.8rem; font-weight:bold; display:block;">Data Fim:</label>
-                    <input type="date" id="filtro-historico-data-fim" onchange="renderizarHistoricoCaixas()" style="margin-bottom:0;">
-                </div>
-                <button class="btn btn-neutro" onclick="document.getElementById('filtro-historico-data-inicio').value=''; document.getElementById('filtro-historico-data-fim').value=''; renderizarHistoricoCaixas();">🧹 Limpar Filtro</button>
-                <div style="background:#dcfce7; border:2px solid #16a34a; padding:8px 16px; border-radius:8px; font-weight:bold; color:#15803d;">
-                    Total Vendas no filtro: <span id="total-vendas-historico-filtrado">R$ 0.00</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+                <h2 style="border: none; padding: 0; margin: 0;">📜 Fechamentos de Caixa</h2>
+                <button class="btn btn-success" style="background:#7c3aed;" onclick="gerarJPG('tela-fechamento-caixa', 'Fechamentos_De_Caixa.jpg')">🖼️ JPG</button>
+            </div>
+
+            <div style="background: white; padding: 15px 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 15px;">
+                <div class="row-inputs" style="align-items:flex-end;">
+                    <div>
+                        <label style="font-size: 0.8rem; font-weight: bold; display:block;">Data Início:</label>
+                        <input type="date" id="filtro-historico-data-inicio" onchange="renderizarHistoricoCaixas()" style="margin-bottom:0;">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.8rem; font-weight: bold; display:block;">Data Fim:</label>
+                        <input type="date" id="filtro-historico-data-fim" onchange="renderizarHistoricoCaixas()" style="margin-bottom:0;">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.8rem; font-weight: bold; display:block;">Operador:</label>
+                        <select id="filtro-historico-operador" onchange="renderizarHistoricoCaixas()" style="margin-bottom:0;">
+                            <option value="Todos">Todos os operadores</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-neutro" onclick="document.getElementById('filtro-historico-data-inicio').value=''; document.getElementById('filtro-historico-data-fim').value=''; document.getElementById('filtro-historico-operador').value='Todos'; renderizarHistoricoCaixas();">🧹 Limpar Filtro</button>
                 </div>
             </div>
-            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-height: 70vh; overflow-y: auto; overflow-x: auto;">
+
+            <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
+                <div style="background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; min-width: 150px; text-align: center; border-bottom: 4px solid var(--success);">
+                    <h3 style="margin-top: 0; color: gray; font-size: 0.85rem;">Faturamento no Filtro</h3>
+                    <p style="color: var(--success); font-size: 1.6rem; font-weight: 900; margin:0;">R$ <span id="hc-total-vendas">0.00</span></p>
+                </div>
+                <div style="background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; min-width: 150px; text-align: center; border-bottom: 4px solid #0284c7;">
+                    <h3 style="margin-top: 0; color: gray; font-size: 0.85rem;">Total em Gaveta</h3>
+                    <p style="color: #0284c7; font-size: 1.6rem; font-weight: 900; margin:0;">R$ <span id="hc-total-gaveta">0.00</span></p>
+                </div>
+                <div style="background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; min-width: 150px; text-align: center; border-bottom: 4px solid var(--primary);">
+                    <h3 style="margin-top: 0; color: gray; font-size: 0.85rem;">Fechamentos no Filtro</h3>
+                    <p style="color: var(--primary); font-size: 1.6rem; font-weight: 900; margin:0;" id="hc-qtd-fechamentos">0</p>
+                </div>
+                <div style="background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; min-width: 150px; text-align: center; border-bottom: 4px solid var(--info);">
+                    <h3 style="margin-top: 0; color: gray; font-size: 0.85rem;">Ticket Médio</h3>
+                    <p style="color: var(--info); font-size: 1.6rem; font-weight: 900; margin:0;">R$ <span id="hc-ticket-medio">0.00</span></p>
+                </div>
+            </div>
+
+            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-height: 60vh; overflow-y: auto; overflow-x: auto;">
                 <table style="width: 100%; min-width: 700px; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
                     <thead>
                         <tr style="border-bottom: 2px solid #e5e7eb; background: #f8fafc;">
@@ -1173,69 +1201,6 @@
                         </tr>
                     </thead>
                     <tbody id="tabela-historico-caixas"></tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- TELA: FECHAMENTOS DE CAIXA POR PERÍODO (com filtro de datas) -->
-        <div id="tela-dashboard-caixas" class="tab-content">
-            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
-                <h2 style="border: none; padding: 0; margin: 0;">📅 Fechamentos de Caixa por Período</h2>
-                <button class="btn btn-success" style="background:#7c3aed;" onclick="gerarJPG('tela-dashboard-caixas', 'Fechamentos_Por_Periodo.jpg')">🖼️ JPG</button>
-            </div>
-
-            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px;">
-                <div class="row-inputs">
-                    <div>
-                        <label style="font-size: 0.85rem; font-weight: bold;">De:</label>
-                        <input type="date" id="filtro-caixas-data-inicio" onchange="renderizarDashboardCaixas()">
-                    </div>
-                    <div>
-                        <label style="font-size: 0.85rem; font-weight: bold;">Até:</label>
-                        <input type="date" id="filtro-caixas-data-fim" onchange="renderizarDashboardCaixas()">
-                    </div>
-                    <div>
-                        <label style="font-size: 0.85rem; font-weight: bold;">Operador:</label>
-                        <select id="filtro-caixas-operador" onchange="renderizarDashboardCaixas()">
-                            <option value="Todos">Todos os operadores</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px;">
-                <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; min-width: 150px; text-align: center; border-bottom: 4px solid var(--success);">
-                    <h3 style="margin-top: 0; color: gray;">Faturamento no Período</h3>
-                    <p style="color: var(--success); font-size: 1.8rem; font-weight: 900; margin:0;">R$ <span id="dc-total-vendas">0.00</span></p>
-                </div>
-                <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; min-width: 150px; text-align: center; border-bottom: 4px solid #0284c7;">
-                    <h3 style="margin-top: 0; color: gray;">Total em Gaveta</h3>
-                    <p style="color: #0284c7; font-size: 1.8rem; font-weight: 900; margin:0;">R$ <span id="dc-total-gaveta">0.00</span></p>
-                </div>
-                <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; min-width: 150px; text-align: center; border-bottom: 4px solid var(--primary);">
-                    <h3 style="margin-top: 0; color: gray;">Fechamentos no Período</h3>
-                    <p style="color: var(--primary); font-size: 1.8rem; font-weight: 900; margin:0;" id="dc-qtd-fechamentos">0</p>
-                </div>
-                <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; min-width: 150px; text-align: center; border-bottom: 4px solid var(--info);">
-                    <h3 style="margin-top: 0; color: gray;">Ticket Médio</h3>
-                    <p style="color: var(--info); font-size: 1.8rem; font-weight: 900; margin:0;">R$ <span id="dc-ticket-medio">0.00</span></p>
-                </div>
-            </div>
-
-            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-height: 55vh; overflow-y: auto; overflow-x: auto;">
-                <table style="width: 100%; min-width: 700px; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
-                    <thead>
-                        <tr style="border-bottom: 2px solid #e5e7eb; background: #f8fafc;">
-                            <th style="padding: 12px;"># Ref</th>
-                            <th>Operador</th>
-                            <th>Campanha / Evento</th>
-                            <th>Fechamento</th>
-                            <th>Total Vendas</th>
-                            <th>Total Gaveta</th>
-                            <th>Qtd Pedidos</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tabela-dashboard-caixas"></tbody>
                 </table>
             </div>
         </div>

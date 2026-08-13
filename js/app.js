@@ -770,7 +770,6 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if(idAba === 'tela-gestao') atualizarFiltrosGestao();
             if(idAba === 'tela-relatorio') atualizarDashboard();
             if(idAba === 'tela-fechamento-caixa') renderizarHistoricoCaixas();
-            if(idAba === 'tela-dashboard-caixas') renderizarDashboardCaixas();
             if(idAba === 'tela-produtos') { renderizarCategoriasUI(); renderizarTabelaProdutos(); if (produtoEmEdicaoId === null) renderizarChecklistBarracasProduto(); }
             if(idAba === 'tela-pedido') {
                 renderizarCategoriasUI();
@@ -3668,17 +3667,27 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             return new Date(y, m - 1, d);
         }
 
-        function renderizarDashboardCaixas() {
-            const inicio = document.getElementById('filtro-caixas-data-inicio').value;
-            const fim = document.getElementById('filtro-caixas-data-fim').value;
-            const selectOperador = document.getElementById('filtro-caixas-operador');
+        // Fundiu "Histórico de Caixas" com "Fechamentos por Período" numa tela
+        // só — eram quase a mesma coisa (as duas listavam historicoCaixasDB
+        // filtrado por data). Ações (ver/imprimir/exportar/excluir) do
+        // Histórico + filtro de operador e os 4 cartões de resumo do Por
+        // Período, tudo numa única renderização.
+        function renderizarHistoricoCaixas() {
+            const tbody = document.getElementById('tabela-historico-caixas');
+            tbody.innerHTML = '';
 
-            if (!selectOperador.dataset.montado) {
+            const inicioEl = document.getElementById('filtro-historico-data-inicio');
+            const fimEl = document.getElementById('filtro-historico-data-fim');
+            const inicio = inicioEl ? inicioEl.value : '';
+            const fim = fimEl ? fimEl.value : '';
+
+            const selectOperador = document.getElementById('filtro-historico-operador');
+            if (selectOperador && !selectOperador.dataset.montado) {
                 const nomes = [...new Set(historicoCaixasDB.map(c => c.usuarioNome).filter(Boolean))];
                 selectOperador.innerHTML = '<option value="Todos">Todos os operadores</option>' + nomes.map(n => `<option value="${n}">${n}</option>`).join('');
                 selectOperador.dataset.montado = '1';
             }
-            const operador = selectOperador.value;
+            const operador = selectOperador ? selectOperador.value : 'Todos';
 
             let lista = [...historicoCaixasDB];
             if (inicio) {
@@ -3695,55 +3704,15 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
             const totalVendas = lista.reduce((a, c) => a + c.totalVendas, 0);
             const totalGaveta = lista.reduce((a, c) => a + c.totalGaveta, 0);
-            const qtdPedidos = lista.reduce((a, c) => a + c.qtdPedidos, 0);
-            const ticketMedio = qtdPedidos > 0 ? totalVendas / qtdPedidos : 0;
+            const qtdPedidosSoma = lista.reduce((a, c) => a + c.qtdPedidos, 0);
+            const ticketMedio = qtdPedidosSoma > 0 ? totalVendas / qtdPedidosSoma : 0;
 
-            document.getElementById('dc-total-vendas').innerText = totalVendas.toFixed(2);
-            document.getElementById('dc-total-gaveta').innerText = totalGaveta.toFixed(2);
-            document.getElementById('dc-qtd-fechamentos').innerText = lista.length;
-            document.getElementById('dc-ticket-medio').innerText = ticketMedio.toFixed(2);
-
-            const tbody = document.getElementById('tabela-dashboard-caixas');
-            if (lista.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px; color:gray;">Nenhum fechamento nesse período.</td></tr>';
-                return;
-            }
-            tbody.innerHTML = lista.map(c => `
-                <tr style="border-bottom:1px solid #e5e7eb;">
-                    <td style="padding:10px; font-weight:bold;">#${c.id}</td>
-                    <td style="font-weight:bold; color:#4b5563;">${c.usuarioNome || '-'}</td>
-                    <td style="text-transform:uppercase; color:var(--primary); font-weight:bold;">${c.campanha || 'Padrão'}</td>
-                    <td style="font-size:0.85rem; color:#4b5563;">${c.dataFechamento}</td>
-                    <td style="font-weight:bold; color:var(--success);">R$ ${c.totalVendas.toFixed(2)}</td>
-                    <td style="font-weight:bold; color:#0284c7;">R$ ${c.totalGaveta.toFixed(2)}</td>
-                    <td style="text-align:center; font-weight:bold;">${c.qtdPedidos}</td>
-                </tr>
-            `).join('');
-        }
-
-        function renderizarHistoricoCaixas() {
-            const tbody = document.getElementById('tabela-historico-caixas');
-            const elTotalFiltrado = document.getElementById('total-vendas-historico-filtrado');
-            tbody.innerHTML = '';
-
-            const inicioEl = document.getElementById('filtro-historico-data-inicio');
-            const fimEl = document.getElementById('filtro-historico-data-fim');
-            const inicio = inicioEl ? inicioEl.value : '';
-            const fim = fimEl ? fimEl.value : '';
-
-            let lista = [...historicoCaixasDB];
-            if (inicio) {
-                const dtInicio = new Date(inicio + 'T00:00:00');
-                lista = lista.filter(c => { const d = parseDataFechamentoBR(c.dataFechamento); return d && d >= dtInicio; });
-            }
-            if (fim) {
-                const dtFim = new Date(fim + 'T23:59:59');
-                lista = lista.filter(c => { const d = parseDataFechamentoBR(c.dataFechamento); return d && d <= dtFim; });
-            }
-
-            if (elTotalFiltrado) {
-                const totalFiltrado = lista.reduce((a, c) => a + c.totalVendas, 0);
-                elTotalFiltrado.innerText = `R$ ${totalFiltrado.toFixed(2)}`;
+            const elTotalVendas = document.getElementById('hc-total-vendas');
+            if (elTotalVendas) {
+                elTotalVendas.innerText = totalVendas.toFixed(2);
+                document.getElementById('hc-total-gaveta').innerText = totalGaveta.toFixed(2);
+                document.getElementById('hc-qtd-fechamentos').innerText = lista.length;
+                document.getElementById('hc-ticket-medio').innerText = ticketMedio.toFixed(2);
             }
 
             if (lista.length === 0) {
@@ -4160,9 +4129,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         // Botão de atalho na própria tela de Pedido — imprime o relatório do
         // caixa do usuário logado sem precisar ir até o Dashboard Analytics
         // nem mudar a aba selecionada lá.
-        function imprimirMeuCaixa() {
+        async function imprimirMeuCaixa() {
             const meuCaixa = caixaDoUsuarioAtual();
             if (!meuCaixa) return exibirAviso("Você não tem caixa aberto.");
+            if (!(await pedirConfirmacao("Deseja imprimir o relatório do seu caixa?", { titulo: '🖨️ Imprimir Relatório' }))) return;
             const selecaoAnterior = caixaRelatorioSelecionado;
             caixaRelatorioSelecionado = meuCaixa.id;
             imprimirRelatorioCaixaAtual();
@@ -4505,7 +4475,6 @@ window.tratarDropProduto = tratarDropProduto;
 window.tratarDragEndProduto = tratarDragEndProduto;
 window.atualizarListaSubcategoriasExistentes = atualizarListaSubcategoriasExistentes;
 window.abrirModalPedidosEntregues = abrirModalPedidosEntregues;
-window.renderizarDashboardCaixas = renderizarDashboardCaixas;
 window.gerarJPG = gerarJPG;
 window.abrirModalGerenciarCategorias = abrirModalGerenciarCategorias;
 window.fecharModalGerenciarCategorias = fecharModalGerenciarCategorias;
