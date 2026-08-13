@@ -4690,6 +4690,20 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     };
                     document.body.appendChild(btnFull);
                 }
+            } else if (!usuarioTemAcesso('tela-pedido')) {
+                // A tela-pedido vem marcada "active" direto no HTML estático
+                // — aplicarPermissoesNaUI() só esconde os botões do menu que
+                // o usuário não pode acessar, não troca a aba ativa sozinha.
+                // Sem isso, um usuário sem acesso à tela-pedido (ex: perfil
+                // só de Balcão/Pausa/TV Senha) via de cara uma tela de Pedido
+                // "vazia" que ele nem deveria ver. Manda pra primeira tela
+                // que ele TEM acesso, na mesma ordem em que aparecem no menu.
+                const ordemTelasPadrao = ['tela-pedido', 'tela-agendados', 'tela-preparo', 'tela-entrega', 'tela-tv', 'tela-produtos', 'tela-barracas', 'tela-gestao', 'tela-fechamento-caixa', 'tela-produtos-periodo', 'tela-relatorio', 'tela-dashboard-geral', 'tela-configuracoes', 'tela-gestao-usuarios'];
+                const primeiraPermitida = ordemTelasPadrao.find(id => usuarioTemAcesso(id));
+                if (primeiraPermitida) {
+                    const botaoCorrespondente = document.querySelector(`[onclick*="mudarAba('${primeiraPermitida}'"]`);
+                    mudarAba(primeiraPermitida, botaoCorrespondente);
+                }
             }
         };
 
