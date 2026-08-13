@@ -647,7 +647,137 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 });
         }
 
-        let carrinho = []; 
+        // --- Impressão em Rede ---
+        // Deixa vender/imprimir num dispositivo (ex: tablet) mas o recibo sair
+        // de verdade em OUTRA máquina logada no sistema (ex: o PC que está
+        // ligado de verdade na impressora térmica). Não grava nada no
+        // Supabase — usa Realtime Broadcast (mensagem avulsa entre navegadores
+        // abertos agora, nunca fica salva) + Presence (só pra saber quais
+        // dispositivos estão com "recebe impressões" ligado agora mesmo, pra
+        // popular o seletor de destino). Cada dispositivo guarda sua própria
+        // preferência no localStorage — é config de máquina física, não da
+        // barraca (não sincroniza pelo pdv_state).
+        let canalImpressaoRede = null;
+        let dispositivosImpressoraOnline = {};
+
+        function chaveImpressaoRemotaAtiva() { return `pdv_impressao_remota_ativa_${barracaStateId}`; }
+        function chaveImpressaoRemotaDestino() { return `pdv_impressao_remota_destino_${barracaStateId}`; }
+        function chaveSouImpressoraRede() { return `pdv_sou_impressora_rede_${barracaStateId}`; }
+
+        function impressaoRemotaAtiva() { return localStorage.getItem(chaveImpressaoRemotaAtiva()) === '1'; }
+        function destinoImpressaoRemota() { return localStorage.getItem(chaveImpressaoRemotaDestino()) || ''; }
+        function souImpressoraDeRede() { return localStorage.getItem(chaveSouImpressoraRede()) === '1'; }
+
+        function obterCanalImpressaoRede() {
+            if (!barracaStateId) return null;
+            if (canalImpressaoRede) return canalImpressaoRede;
+
+            canalImpressaoRede = supabaseClient.channel(`pdv-impressao-${barracaStateId}`, {
+                config: { presence: { key: usuarioAtual ? String(usuarioAtual.id) : PDV_CLIENT_ID } }
+            });
+
+            canalImpressaoRede
+                .on('broadcast', { event: 'imprimir' }, ({ payload }) => {
+                    if (!souImpressoraDeRede() || !usuarioAtual) return;
+                    if (String(payload.destinoUsuarioId) !== String(usuarioAtual.id)) return;
+                    document.getElementById('area-impressao').innerHTML = payload.html;
+                    window.print();
+                })
+                .on('presence', { event: 'sync' }, () => {
+                    const estado = canalImpressaoRede.presenceState();
+                    dispositivosImpressoraOnline = {};
+                    Object.keys(estado).forEach(chave => {
+                        const presencas = estado[chave];
+                        if (presencas && presencas[0]) dispositivosImpressoraOnline[chave] = presencas[0];
+                    });
+                    atualizarSelectDestinoImpressao();
+                })
+                .subscribe(status => {
+                    if (status === 'SUBSCRIBED' && souImpressoraDeRede() && usuarioAtual) {
+                        canalImpressaoRede.track({ usuarioNome: usuarioAtual.nome });
+                    }
+                });
+
+            return canalImpressaoRede;
+        }
+
+        // Substitui todo "window.print()" direto do app — se a impressão em
+        // rede estiver ligada E tiver destino escolhido e disponível agora,
+        // manda o conteúdo de #area-impressao por broadcast pra máquina de
+        // destino em vez de imprimir aqui; senão, imprime local como sempre
+        // (mesmo comportamento de hoje).
+        async function dispararImpressao() {
+            if (impressaoRemotaAtiva() && destinoImpressaoRemota()) {
+                const canal = obterCanalImpressaoRede();
+                const destino = destinoImpressaoRemota();
+                if (canal && dispositivosImpressoraOnline[destino]) {
+                    const html = document.getElementById('area-impressao').innerHTML;
+                    await canal.send({ type: 'broadcast', event: 'imprimir', payload: { html, destinoUsuarioId: destino } });
+                    exibirAviso(`🖨️ Impressão enviada para ${dispositivosImpressoraOnline[destino].usuarioNome}.`);
+                    return;
+                }
+                exibirAviso('⚠️ Impressora de rede escolhida não está disponível agora. Imprimindo aqui mesmo.');
+            }
+            window.print();
+        }
+
+        function alternarImpressaoRemota() {
+            const ativo = document.getElementById('cfg-impressao-remota-ativa').checked;
+            localStorage.setItem(chaveImpressaoRemotaAtiva(), ativo ? '1' : '0');
+            document.getElementById('linha-destino-impressao-remota').style.display = ativo ? 'block' : 'none';
+            if (ativo) obterCanalImpressaoRede();
+        }
+
+        function salvarDestinoImpressaoRemota() {
+            localStorage.setItem(chaveImpressaoRemotaDestino(), document.getElementById('cfg-destino-impressao-remota').value);
+        }
+
+        function alternarSouImpressoraRede() {
+            const ativo = document.getElementById('cfg-sou-impressora-rede').checked;
+            localStorage.setItem(chaveSouImpressoraRede(), ativo ? '1' : '0');
+            const canal = obterCanalImpressaoRede();
+            if (canal) {
+                if (ativo && usuarioAtual) canal.track({ usuarioNome: usuarioAtual.nome });
+                else canal.untrack();
+            }
+            document.getElementById('status-impressora-rede').innerText = ativo
+                ? `🟢 Recebendo impressões como "${usuarioAtual ? usuarioAtual.nome : ''}".`
+                : '';
+        }
+
+        function atualizarSelectDestinoImpressao() {
+            const select = document.getElementById('cfg-destino-impressao-remota');
+            if (!select) return;
+            const atual = select.value;
+            const entradas = Object.entries(dispositivosImpressoraOnline)
+                .filter(([id]) => !usuarioAtual || id !== String(usuarioAtual.id));
+            select.innerHTML = '<option value="">-- Selecione --</option>' +
+                entradas.map(([id, info]) => `<option value="${id}">${info.usuarioNome || ('Usuário ' + id)}</option>`).join('');
+            if (entradas.some(([id]) => id === atual)) select.value = atual;
+
+            const contagem = document.getElementById('contagem-impressoras-online');
+            if (contagem) {
+                contagem.innerText = entradas.length > 0
+                    ? `🟢 ${entradas.length} dispositivo(s) disponível(is) agora`
+                    : '🔴 Nenhum dispositivo disponível no momento';
+            }
+        }
+
+        function aplicarConfiguracoesImpressaoRedeNaTela() {
+            const chkAtiva = document.getElementById('cfg-impressao-remota-ativa');
+            const chkSou = document.getElementById('cfg-sou-impressora-rede');
+            if (!chkAtiva || !chkSou) return;
+            chkAtiva.checked = impressaoRemotaAtiva();
+            document.getElementById('linha-destino-impressao-remota').style.display = chkAtiva.checked ? 'block' : 'none';
+            chkSou.checked = souImpressoraDeRede();
+            document.getElementById('status-impressora-rede').innerText = chkSou.checked
+                ? `🟢 Recebendo impressões como "${usuarioAtual ? usuarioAtual.nome : ''}".`
+                : '';
+            if (chkAtiva.checked || chkSou.checked) obterCanalImpressaoRede();
+            atualizarSelectDestinoImpressao();
+        }
+
+        let carrinho = [];
         let pedidoEmEdicaoId = null; let categoriaFiltroAtual = 'Todos'; let produtoEmEdicaoId = null;
         let categoriaFiltroTabelaProdutos = 'Todos'; 
         
@@ -785,6 +915,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if(idAba === 'tela-barracas') renderizarPainelBarracas();
             if(idAba === 'tela-gestao-usuarios') renderizarTelaGestaoUsuarios();
             if(idAba === 'tela-dashboard-geral') carregarDashboardGeral();
+            if(idAba === 'tela-configuracoes') aplicarConfiguracoesImpressaoRedeNaTela();
         }
 
         function calcularDiferencaMinutos(horaInicio, horaFim) {
@@ -987,11 +1118,19 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         // destaca visualmente o card selecionado, rola ele até a área visível
         // e joga o foco no primeiro botão de dentro (Enter já dispara clique
         // no elemento focado, ver handler de 'Enter' logo acima).
-        function destacarCardTeclado(cards, index) {
+        function destacarCardTeclado(cards, index, rolar = true) {
             cards.forEach(c => c.classList.remove('card-selecionado-teclado'));
             if (cards[index]) {
                 const cardTarget = cards[index];
                 cardTarget.classList.add('card-selecionado-teclado');
+
+                // "rolar" só é true quando é resposta direta a uma tecla de
+                // seta — evita que um re-render automático (realtime, clique
+                // de mouse em "Chamar Painel" etc.) jogue a tela pro topo só
+                // por causa desse destaque, mesmo sem o usuário estar
+                // navegando por teclado.
+                if (!rolar) return;
+
                 cardTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
                 // Prioriza o botão de ação principal do card (Chamar Painel /
@@ -1012,8 +1151,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             }
         }
 
-        function destacarCardBalcao(cards) {
-            destacarCardTeclado(cards, indexPedidoSelecionadoBalcao);
+        function destacarCardBalcao(cards, rolar = true) {
+            destacarCardTeclado(cards, indexPedidoSelecionadoBalcao, rolar);
         }
 
         // Cima/baixo dentro do card atual (Balcão, Cozinha, Pausa) — cicla
@@ -1771,7 +1910,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 </div>
             `;
 
-            window.print();
+            dispararImpressao();
         }
 
         function gerarPDFEstoquePorCategoria() {
@@ -2396,6 +2535,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             document.getElementById('banner-alerta-edicao').style.display = 'none';
             document.getElementById('box-status-edicao').style.display = 'none';
             document.getElementById('box-modo-retirada-global').style.display = 'block';
+            document.getElementById('btn-limpar-pedido').style.display = 'block';
             document.getElementById('box-carrinho-container').classList.remove('modo-edicao');
             document.getElementById('titulo-painel-carrinho').innerText = "Pedido Atual";
             document.getElementById('btn-finalizar-pedido').innerHTML = `Cobrar, Imprimir e Enviar 🖨️`;
@@ -2572,8 +2712,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (catalogoAlteradoPorEstoque) salvarCatalogo();
             salvarNoBancoLocal();
 
-            gerarHTMLImpressao(novoPedido); 
-            window.print();
+            gerarHTMLImpressao(novoPedido);
+            dispararImpressao();
 
             limparCarrinho(); 
             renderizarMenu(categoriaFiltroAtual); 
@@ -2667,7 +2807,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             const pausados = pedidosGerais.filter(p => p.statusPainel !== 'cancelado' && p.itens.some(i => i.fase === 'mais_tarde'));
             if (pausados.length === 0) return exibirAviso("Não há pedidos em pausa pra imprimir.");
             document.getElementById('area-impressao').innerHTML = pausados.map((p, i) => montarHTMLReciboPedido(p, i > 0)).join('');
-            window.print();
+            dispararImpressao();
         }
 
         // #area-impressao só ganha a aparência de recibo (largura 80mm,
@@ -2779,7 +2919,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 </div>
             `;
 
-            window.print();
+            dispararImpressao();
         }
 
         function gerarPDFCaixaAtual() {
@@ -2914,7 +3054,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         
         function reimprimirPedido(idPedido) {
             const pedido = pedidosGerais.find(p => p.id === idPedido);
-            if (pedido) { gerarHTMLImpressao(pedido); window.print(); }
+            if (pedido) { gerarHTMLImpressao(pedido); dispararImpressao(); }
         }
 
         function moverParaAgora(id) { 
@@ -3392,7 +3532,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
             const cardsBalcaoVisiveis = Array.from(document.querySelectorAll('#fila-entrega .card-pedido'));
             if (cardsBalcaoVisiveis.length > 0) {
-                destacarCardBalcao(cardsBalcaoVisiveis);
+                destacarCardBalcao(cardsBalcaoVisiveis, false);
             }
         }
 
@@ -3709,14 +3849,12 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             }
 
             const totalVendas = lista.reduce((a, c) => a + c.totalVendas, 0);
-            const totalGaveta = lista.reduce((a, c) => a + c.totalGaveta, 0);
             const qtdPedidosSoma = lista.reduce((a, c) => a + c.qtdPedidos, 0);
             const ticketMedio = qtdPedidosSoma > 0 ? totalVendas / qtdPedidosSoma : 0;
 
             const elTotalVendas = document.getElementById('hc-total-vendas');
             if (elTotalVendas) {
                 elTotalVendas.innerText = totalVendas.toFixed(2);
-                document.getElementById('hc-total-gaveta').innerText = totalGaveta.toFixed(2);
                 document.getElementById('hc-qtd-fechamentos').innerText = lista.length;
                 document.getElementById('hc-ticket-medio').innerText = ticketMedio.toFixed(2);
             }
@@ -3966,7 +4104,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 </div>
             `;
 
-            window.print();
+            dispararImpressao();
         }
 
         // Widget de caixa na tela de Pedido (substitui o antigo bloco fixo de
@@ -4331,6 +4469,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             // agora/depois por item continua liberado sem precisar dele (ver
             // atualizarCarrinhoUI).
             document.getElementById('box-modo-retirada-global').style.display = 'none';
+            document.getElementById('btn-limpar-pedido').style.display = 'none';
 
             document.getElementById('box-carrinho-container').classList.add('modo-edicao');
             document.getElementById('titulo-painel-carrinho').innerText = `Alterando Pedido #${id}`;
@@ -4393,6 +4532,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             iniciarRealtimeSupabase();
             iniciarRealtimeRegistroBarracas();
             iniciarRealtimeCatalogo();
+            // Reconecta sozinho se este dispositivo já tinha sido configurado
+            // (numa sessão anterior) como impressora de rede ou como remetente
+            // — senão só voltaria a funcionar depois de reabrir a tela de
+            // Configurações manualmente a cada F5.
+            if (souImpressoraDeRede() || impressaoRemotaAtiva()) obterCanalImpressaoRede();
 
             // Suporte a abrir direto numa tela específica — usado por cada
             // quadrante do Multiview (iframe com ?abrirTela=X). Não chama
@@ -4473,6 +4617,9 @@ window.gerarPDFDashboardGeral = gerarPDFDashboardGeral;
 window.gerarJPGFechamento = gerarJPGFechamento;
 window.gerarPDFFechamento = gerarPDFFechamento;
 window.imprimirMeuCaixa = imprimirMeuCaixa;
+window.alternarImpressaoRemota = alternarImpressaoRemota;
+window.salvarDestinoImpressaoRemota = salvarDestinoImpressaoRemota;
+window.alternarSouImpressoraRede = alternarSouImpressoraRede;
 window.pedirTexto = pedirTexto;
 window.alternarMostrarSenha = alternarMostrarSenha;
 window.pedirConfirmacao = pedirConfirmacao;

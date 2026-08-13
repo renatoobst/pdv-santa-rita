@@ -170,6 +170,7 @@
                     <button id="btn-sub-gestao" onclick="mudarAba('tela-gestao', this)">📋 Gestão de Pedidos</button>
                     <button id="btn-sub-fechamento" onclick="mudarAba('tela-fechamento-caixa', this)">📜 Fechamentos de Caixa</button>
                     <button onclick="mudarAba('tela-gestao-usuarios', this)">👤 Gerenciar Usuários</button>
+                    <button onclick="mudarAba('tela-configuracoes', this)">⚙️ Configurações</button>
                 </div>
             </div>
         </div>
@@ -585,7 +586,7 @@
                         </div>
 
                         <button id="btn-finalizar-pedido" class="btn btn-primary" style="width: 100%; margin-bottom: 6px; font-size: 1rem; padding: 8px;" onclick="finalizarPedido()">Cobrar, Imprimir e Enviar 🖨️</button>
-                        <button class="btn-danger" style="width: 100%; padding: 6px; font-size: 0.85rem;" onclick="limparCarrinhoComConfirmacao()">Limpar Pedido</button>
+                        <button id="btn-limpar-pedido" class="btn-danger" style="width: 100%; padding: 6px; font-size: 0.85rem;" onclick="limparCarrinhoComConfirmacao()">Limpar Pedido</button>
                     </div>
                 </div>
             </div>
@@ -977,6 +978,39 @@
             </div>
         </div>
 
+        <!-- TELA: CONFIGURAÇÕES -->
+        <div id="tela-configuracoes" class="tab-content">
+            <h2>⚙️ Configurações</h2>
+            <p style="color: gray; margin-bottom: 20px;">Preferências deste dispositivo — não sincronizam com os outros, cada máquina/tablet configura a sua.</p>
+
+            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); max-width: 700px;">
+                <h3 style="margin-top:0;">🖨️ Impressão em Rede</h3>
+                <p style="font-size:0.85rem; color:#4b5563;">
+                    Permite vender/imprimir num dispositivo (ex: tablet) e o recibo sair de verdade na impressora de <b>outro</b> computador logado no sistema. Os botões de impressão continuam funcionando normalmente — só muda pra onde a impressão vai.
+                </p>
+
+                <label class="item-checkbox-ingrediente" style="margin-top: 10px;">
+                    <input type="checkbox" id="cfg-impressao-remota-ativa" onchange="alternarImpressaoRemota()">
+                    Enviar impressões deste dispositivo para outra máquina
+                </label>
+
+                <div id="linha-destino-impressao-remota" style="display:none; margin-top: 12px;">
+                    <label style="font-size: 0.85rem; font-weight: bold; display:block; margin-bottom:4px;">Máquina/impressora de destino:</label>
+                    <select id="cfg-destino-impressao-remota" onchange="salvarDestinoImpressaoRemota()"></select>
+                    <small id="contagem-impressoras-online" style="display:block; margin-top:6px; color:gray;">🔴 Nenhum dispositivo disponível no momento</small>
+                </div>
+
+                <hr style="margin: 18px 0; border: none; border-top: 1px solid #e5e7eb;">
+
+                <label class="item-checkbox-ingrediente">
+                    <input type="checkbox" id="cfg-sou-impressora-rede" onchange="alternarSouImpressoraRede()">
+                    📡 Este dispositivo recebe e imprime pedidos de outras máquinas
+                </label>
+                <small style="display:block; margin-top:6px; color:gray;">Ative isso na máquina que está de verdade ligada na impressora térmica. Ela vai imprimir automaticamente sempre que outro dispositivo mandar um trabalho pra cá — precisa deixar essa aba aberta e logada.</small>
+                <p id="status-impressora-rede" style="font-weight:bold; margin-top:8px; color: #16a34a;"></p>
+            </div>
+        </div>
+
         <!-- TELA: DASHBOARD GERAL (TODAS AS BARRACAS) -->
         <div id="tela-dashboard-geral" class="tab-content">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
@@ -1171,10 +1205,6 @@
                 <div style="background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; min-width: 150px; text-align: center; border-bottom: 4px solid var(--success);">
                     <h3 style="margin-top: 0; color: gray; font-size: 0.85rem;">Faturamento no Filtro</h3>
                     <p style="color: var(--success); font-size: 1.6rem; font-weight: 900; margin:0;">R$ <span id="hc-total-vendas">0.00</span></p>
-                </div>
-                <div style="background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; min-width: 150px; text-align: center; border-bottom: 4px solid #0284c7;">
-                    <h3 style="margin-top: 0; color: gray; font-size: 0.85rem;">Total em Gaveta</h3>
-                    <p style="color: #0284c7; font-size: 1.6rem; font-weight: 900; margin:0;">R$ <span id="hc-total-gaveta">0.00</span></p>
                 </div>
                 <div style="background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; min-width: 150px; text-align: center; border-bottom: 4px solid var(--primary);">
                     <h3 style="margin-top: 0; color: gray; font-size: 0.85rem;">Fechamentos no Filtro</h3>
