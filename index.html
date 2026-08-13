@@ -127,6 +127,16 @@
         </div>
     </div>
 
+    <div id="modal-detalhes-pedido" class="modal-geral">
+        <div class="modal-content" style="width: 400px; max-width: 95%;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 15px;">
+                <h3 style="margin: 0; color: var(--primary);">👁️ Pedido Completo</h3>
+                <button class="btn btn-danger" style="padding: 5px 12px;" onclick="fecharModalDetalhesPedido()">❌ Fechar</button>
+            </div>
+            <div id="corpo-detalhes-pedido"></div>
+        </div>
+    </div>
+
     <button id="btn-show-global-menu" class="btn-show-menu" onclick="toggleMenuGlobal()">⬇ Mostrar Menu</button>
 
     <nav id="nav-principal">
@@ -360,24 +370,6 @@
                 <tbody id="tabela-gestao-subcategorias"></tbody>
             </table>
             <button class="btn btn-neutro" style="width:100%; margin-top:15px;" onclick="fecharModalGerenciarSubcategorias()">Fechar</button>
-        </div>
-    </div>
-
-    <!-- MODAL: ABRIR TV SENHA EM OUTRO MONITOR -->
-    <div id="modal-tv-senha" class="modal-geral">
-        <div class="modal-content" style="width: 420px; max-width: 92%;">
-            <h3 style="margin-top:0; border-bottom: 2px solid #e5e7eb; padding-bottom:10px; color:var(--primary);">📺 Abrir TV Senha</h3>
-
-            <div style="background:#eff6ff; border:1px solid #93c5fd; border-radius:8px; padding:12px; margin-bottom:15px;">
-                <p style="font-size: 0.85rem; color: #1e40af; margin:0 0 10px 0;"><b>TV sem fio (Chromecast / Smart TV)?</b> Use este botão — ele usa o próprio recurso de transmissão do Chrome.</p>
-                <button class="btn btn-success" style="width:100%; background:#0891b2;" onclick="transmitirTvSenhaSemFio()">📡 Transmitir para TV sem fio</button>
-            </div>
-
-            <p style="font-size: 0.85rem; color: #4b5563;"><b>Monitor conectado por cabo?</b> Escolha em qual tela abrir em tela cheia (útil com divisores HDMI).</p>
-            <label style="font-size: 0.85rem; font-weight: bold; display:block; margin-bottom:4px;">Monitor:</label>
-            <select id="select-monitor-tv-senha" style="margin-bottom: 15px;"></select>
-            <button class="btn btn-success" style="width:100%;" onclick="abrirTvSenhaNoMonitorSelecionado()">Abrir em Monitor com Fio</button>
-            <button class="btn btn-neutro" style="width:100%; margin-top:8px;" onclick="fecharModalTvSenha()">Cancelar</button>
         </div>
     </div>
 
@@ -641,11 +633,10 @@
                     <button class="btn btn-success btn-toggle-voz" onclick="alternarVozAnuncio()">🗣️ Voz Ligada</button>
                     <div class="controle-zoom-tela" title="Volume do aviso (bipe fica realmente mais alto acima de 100%; a voz é limitada a 100% pelo navegador)">
                         🔊
-                        <input type="range" id="slider-volume-anuncio" min="0" max="500" step="10" value="100" oninput="ajustarVolumeAnuncio(this.value)" style="width:100px;">
+                        <input type="range" id="slider-volume-anuncio" min="0" max="100" step="10" value="100" oninput="ajustarVolumeAnuncio(this.value)" style="width:100px;">
                         <span id="txt-volume-anuncio">100%</span>
                     </div>
                     <button class="btn" style="background:#16a34a; color:white;" onclick="abrirModalPedidosEntregues()" title="Ver todos os pedidos já entregues">✅ Pedidos Já Entregues</button>
-                    <button class="btn" style="background:#0891b2; color:white;" onclick="abrirModalTvSenha()" title="Abrir TV Senha em outro monitor">📺 TV Senha</button>
                     <div class="controle-zoom-tela">
                         <button onclick="ajustarZoomTela('conteudo-zoom-entrega', -10)">➖</button>
                         <span id="txt-zoom-conteudo-zoom-entrega">100%</span>

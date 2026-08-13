@@ -663,7 +663,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         const CHAVE_VOLUME_ANUNCIO = 'pdv_volume_anuncio';
         function fatorVolumeAnuncio() {
             const salvo = parseInt(localStorage.getItem(CHAVE_VOLUME_ANUNCIO));
-            return (isNaN(salvo) ? 100 : salvo) / 100;
+            // Trava em 100% mesmo — o slider vai só até lá agora, mas isso
+            // aqui cobre um valor antigo (>100) que possa ter ficado salvo de
+            // antes, pra não amplificar o bipe além do que o controle mostra.
+            return Math.min(100, isNaN(salvo) ? 100 : salvo) / 100;
         }
 
         function tocarBeep() {
@@ -843,6 +846,12 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 gravandoAtalhoAcao = null;
                 document.querySelectorAll('.card-atalho').forEach(c => c.classList.remove('gravando'));
                 exibirAviso(`Tecla "${teclaPressionada}" gravada com sucesso!`);
+                return;
+            }
+
+            if (e.key === 'Escape' && document.getElementById('modal-troca-item').style.display === 'flex') {
+                fecharModalTroca();
+                e.preventDefault();
                 return;
             }
 
@@ -1053,17 +1062,12 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     else if (p.statusPainel === 'entregue') statusTag = '<span style="background:var(--success); color:white; padding:3px 6px; border-radius:4px; font-weight:bold;">FINALIZADO</span>';
                     else statusTag = '<span style="background:var(--warning); color:black; padding:3px 6px; border-radius:4px; font-weight:bold;">EM PREPARO</span>';
 
-                    let acoes = `
-                        <button onclick="reimprimirPedido(${p.id})" class="btn" style="background:#3b82f6; color:white; padding: 4px 8px; font-size: 0.8rem; margin-right: 4px;" title="Imprimir Pedido Completo">🖨️</button>
-                        <button onclick="baixarPDFPedido(${p.id})" class="btn" style="background:#b91c1c; color:white; padding: 4px 8px; font-size: 0.8rem; margin-right: 4px;" title="Baixar Pedido em PDF">📄</button>
-                    `;
+                    // Nessa tela (Pedido > Ver Todos os Pedidos) só olho pra ver
+                    // o pedido completo e alterar — sem imprimir/PDF/apagar
+                    // aqui (isso fica só na tela de Gestão).
+                    let acoes = `<button onclick="verDetalhesPedido(${p.id})" class="btn" style="background:#0891b2; color:white; padding: 4px 8px; font-size: 0.8rem; margin-right: 4px;" title="Ver Pedido Completo">👁️</button>`;
                     if (p.statusPainel !== 'cancelado') {
-                        acoes += `<button onclick="editarPedido(${p.id}); fecharModalTodosPedidos();" class="btn btn-warning" style="padding: 4px 8px; font-size: 0.8rem; margin-right: 4px;">✏️ Alterar</button>`;
-                        // Cancelar/apagar pedido é só pro Master — atendente
-                        // comum nem vê o botão aqui na tela de Pedido.
-                        if (usuarioAtual && usuarioAtual.isMaster) {
-                            acoes += `<button onclick="cancelarPedido(${p.id}); renderizarTabelaModalTodosPedidos();" class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem;">🗑️</button>`;
-                        }
+                        acoes += `<button onclick="editarPedido(${p.id}); fecharModalTodosPedidos();" class="btn btn-warning" style="padding: 4px 8px; font-size: 0.8rem;">✏️ Alterar</button>`;
                     } else {
                         acoes += `<span style="color:gray; font-size: 0.8rem;">Bloqueado</span>`;
                     }
@@ -2567,6 +2571,31 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             document.getElementById('area-impressao').innerHTML = montarHTMLReciboPedido(pedido);
         }
 
+        // "👁️ Ver Pedido Completo" — mesmo template do recibo, mas mostrado
+        // na tela dentro de um modal (sem imprimir nem gerar arquivo). As
+        // classes .print-* só têm estilo dentro de @media print, por isso
+        // aplica o mesmo CSS "na mão" que o baixarPDFRecibo usa.
+        function verDetalhesPedido(id) {
+            const pedido = pedidosGerais.find(p => p.id === id);
+            if (!pedido) return;
+            document.getElementById('corpo-detalhes-pedido').innerHTML = `
+                <style>
+                    .pdf-recibo { font-family: Arial, sans-serif; font-size: 14px; font-weight: bold; color: #111; }
+                    .pdf-recibo .print-center { text-align: center; }
+                    .pdf-recibo .print-bold { font-weight: 900; }
+                    .pdf-recibo .print-divider { border-top: 2px dashed #999; margin: 8px 0; }
+                    .pdf-recibo .print-row { display: flex; justify-content: space-between; margin-bottom: 4px; font-weight: bold; }
+                    .pdf-recibo .print-pagto-box { font-size: 16px; font-weight: 900; margin: 8px 0; text-transform: uppercase; background: #111; color: #fff; padding: 6px 2px; text-align: center; border-radius: 4px; }
+                </style>
+                <div class="pdf-recibo">${montarHTMLReciboPedido(pedido)}</div>
+            `;
+            document.getElementById('modal-detalhes-pedido').style.display = 'flex';
+        }
+
+        function fecharModalDetalhesPedido() {
+            document.getElementById('modal-detalhes-pedido').style.display = 'none';
+        }
+
         // Botão "🖨️ Imprimir Todos" na tela de Pedidos em Pausa — imprime de
         // uma vez o recibo de cada pedido que ainda tem item parado (fase
         // "mais_tarde"), com quebra de página entre eles.
@@ -2911,95 +2940,6 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
         function aplicarTodosZoomsSalvos() {
             ['conteudo-zoom-pedido', 'conteudo-zoom-preparo', 'conteudo-zoom-entrega'].forEach(aplicarZoomSalvo);
-        }
-
-        // TV Senha em outro monitor: usa a Window Management API do Chromium
-        // (getScreenDetails) pra listar as telas conectadas neste computador e
-        // abrir uma nova janela posicionada nos limites daquele monitor —
-        // pensado pro esquema de divisor HDMI (1 PC, várias saídas). Em
-        // navegadores sem suporte à API, cai num window.open() simples sem
-        // escolha de monitor (ainda funciona, só não posiciona sozinho).
-        async function abrirModalTvSenha() {
-            const modal = document.getElementById('modal-tv-senha');
-            const select = document.getElementById('select-monitor-tv-senha');
-            select.innerHTML = '';
-
-            if ('getScreenDetails' in window) {
-                try {
-                    const detalhes = await window.getScreenDetails();
-                    detalhes.screens.forEach((tela, i) => {
-                        const opt = document.createElement('option');
-                        opt.value = i;
-                        opt.innerText = `Tela ${i + 1} (${tela.width}x${tela.height}${tela.isPrimary ? ' - principal' : ''})`;
-                        select.appendChild(opt);
-                    });
-                } catch (erro) {
-                    console.log('Permissão de monitores negada ou indisponível:', erro);
-                    select.innerHTML = '<option value="">Padrão (sem escolha de monitor)</option>';
-                }
-            } else {
-                select.innerHTML = '<option value="">Padrão (navegador não suporta escolha de monitor)</option>';
-            }
-
-            modal.style.display = 'flex';
-        }
-
-        function fecharModalTvSenha() {
-            document.getElementById('modal-tv-senha').style.display = 'none';
-        }
-
-        // Transmissão sem fio de verdade (Chromecast, TV com webOS/Miracast
-        // etc.) usa a Presentation API, não a Window Management API — essa
-        // segunda só serve pra monitor fisicamente estendido no Windows; pra
-        // TV sem fio ela até detecta a tela, mas não consegue posicionar uma
-        // janela nela de forma confiável. A Presentation API abre o mesmo
-        // seletor de dispositivo nativo do botão "Transmitir" do Chrome.
-        async function transmitirTvSenhaSemFio() {
-            if (!('PresentationRequest' in window)) {
-                return exibirAviso('Este navegador não suporta transmissão sem fio direto pelo app. Abra a TV Senha numa aba normal e use o botão "Transmitir" do próprio Chrome (⋮ no canto superior direito).');
-            }
-            const url = `${location.origin}${location.pathname}?abrirTela=tela-tv`;
-            try {
-                const request = new PresentationRequest([url]);
-                await request.start();
-                fecharModalTvSenha();
-                exibirAviso('Transmitindo a TV Senha para o dispositivo escolhido!');
-            } catch (erro) {
-                console.log('Transmissão sem fio cancelada ou indisponível:', erro);
-            }
-        }
-
-        async function abrirTvSenhaNoMonitorSelecionado() {
-            const select = document.getElementById('select-monitor-tv-senha');
-            const idx = select.value;
-            const url = `${location.origin}${location.pathname}?abrirTela=tela-tv`;
-
-            if (idx !== '' && 'getScreenDetails' in window) {
-                try {
-                    const detalhes = await window.getScreenDetails();
-                    const tela = detalhes.screens[Number(idx)];
-                    if (tela) {
-                        const janela = window.open(url, '_blank', `left=${tela.left},top=${tela.top},width=${tela.width},height=${tela.height}`);
-                        // Alguns navegadores/combos de driver de tela sem fio
-                        // ignoram a posição passada em window.open — força de
-                        // novo depois que a janela já existe, como reforço.
-                        if (janela) {
-                            setTimeout(() => {
-                                try {
-                                    janela.moveTo(tela.left, tela.top);
-                                    janela.resizeTo(tela.width, tela.height);
-                                } catch (e) { /* alguns navegadores bloqueiam mover janela de outra origem/foco — sem problema, é só reforço */ }
-                            }, 300);
-                        }
-                        fecharModalTvSenha();
-                        return;
-                    }
-                } catch (erro) {
-                    console.log('Não foi possível posicionar na tela escolhida:', erro);
-                }
-            }
-            window.open(url, '_blank');
-            fecharModalTvSenha();
         }
 
         function atualizarBotoesVozAnuncio() {
@@ -4280,9 +4220,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             iniciarRealtimeRegistroBarracas();
             iniciarRealtimeCatalogo();
 
-            // Suporte a abrir direto numa tela específica — usado pelo "📺 Abrir
-            // TV Senha em outro monitor" (ver abrirModalTvSenha), que abre uma
-            // nova janela desta mesma URL com ?abrirTela=tela-tv. Não chama
+            // Suporte a abrir direto numa tela específica — usado por cada
+            // quadrante do Multiview (iframe com ?abrirTela=X). Não chama
             // requestFullscreen() sozinho aqui: navegador bloqueia tela cheia
             // disparada fora de um clique direto do usuário nesta janela — por
             // isso mostra um botão flutuante pra confirmar com 1 clique.
@@ -4385,10 +4324,6 @@ window.fecharModalGerenciarSubcategorias = fecharModalGerenciarSubcategorias;
 window.adicionarSubcategoria = adicionarSubcategoria;
 window.editarSubcategoria = editarSubcategoria;
 window.excluirSubcategoria = excluirSubcategoria;
-window.abrirModalTvSenha = abrirModalTvSenha;
-window.fecharModalTvSenha = fecharModalTvSenha;
-window.abrirTvSenhaNoMonitorSelecionado = abrirTvSenhaNoMonitorSelecionado;
-window.transmitirTvSenhaSemFio = transmitirTvSenhaSemFio;
 window.abrirModalConfigPedido = abrirModalConfigPedido;
 window.fecharModalConfigPedido = fecharModalConfigPedido;
 window.fecharModalCombo = fecharModalCombo;
@@ -4423,6 +4358,8 @@ window.mudarTipoRetiradaGlobal = mudarTipoRetiradaGlobal;
 window.prepararEdicaoProduto = prepararEdicaoProduto;
 window.processarUploadFoto = processarUploadFoto;
 window.reimprimirPedido = reimprimirPedido;
+window.verDetalhesPedido = verDetalhesPedido;
+window.fecharModalDetalhesPedido = fecharModalDetalhesPedido;
 window.removerItemCarrinho = removerItemCarrinho;
 window.removerItemComboTemporario = removerItemComboTemporario;
 window.renderizarTabelaModalTodosPedidos = renderizarTabelaModalTodosPedidos;
