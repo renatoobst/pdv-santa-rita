@@ -2701,16 +2701,31 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 horaEntregaCalculada = (!vaiParaCozinha && (tipoGlobalRetirada === 'agora_sem_cozinha' || todosInstantaneos)) ? horaAtual : null;
             }
 
+            // Pedido bonificado não cobrou nada de verdade — o valor dos itens
+            // e o total ficam zerados no pedido salvo (recibo, histórico,
+            // "Ver Detalhes" etc mostram R$ 0,00), só marcado como
+            // Bonificação. Já é excluído de todo faturamento/relatório
+            // financeiro em outros lugares do app; isso só deixa o próprio
+            // registro do pedido coerente com isso.
+            const ehBonificacao = formaPagto.startsWith('Bonificação');
+            const itensSnapshot = JSON.parse(JSON.stringify(carrinho)).map(item => {
+                if (!ehBonificacao) return item;
+                item.preco = 0;
+                item.desconto = undefined;
+                item.acrescimo = undefined;
+                return item;
+            });
+
             const novoPedido = {
                 id: pedidoEmEdicaoId !== null ? pedidoEmEdicaoId : contadorPedidos++,
                 cliente: cliente, pagamento: formaPagto, tipoAtendimento: tipoAtendimento,
-                total: total, data: dataAtual, hora: horaAtual,
+                total: ehBonificacao ? 0 : total, data: dataAtual, hora: horaAtual,
                 detalhesMisto: detalhesMisto,
                 horaEntradaCozinha: horaEntradaCozinhaCalculada,
                 horaEntrega: horaEntregaCalculada,
                 statusPainel: statusPainelCalculado,
                 caixaId: caixaIdPedido,
-                itens: JSON.parse(JSON.stringify(carrinho))
+                itens: itensSnapshot
             };
 
             let catalogoAlteradoPorEstoque = false;
