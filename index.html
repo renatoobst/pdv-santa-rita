@@ -725,7 +725,7 @@
                     </div>
 
                     <div class="cadastro-produto-grid">
-                        <div class="secao-form-produto" style="grid-column: span 2;">
+                        <div class="secao-form-produto" style="grid-column: 1 / -1;">
                             <h4>📝 Informações</h4>
                             <div class="row-inputs">
                                 <div style="flex: 2;">
@@ -757,6 +757,12 @@
                             </div>
                         </div>
 
+                        <div class="secao-form-produto" style="grid-column: 1 / -1;">
+                            <h4>🏪 Visibilidade</h4>
+                            <p style="font-size: 0.75rem; color: #6b7280; margin: 0 0 8px 0;">O produto é único — cadastrado uma vez, mas só é vendido nas barracas marcadas aqui. Cada barraca marcada controla seu próprio estoque dele.</p>
+                            <div id="checklist-barracas-produto" style="display:flex; flex-wrap:wrap; gap:6px 14px; background:#f9fafb; padding:10px; border-radius:6px; border:1px solid #e5e7eb;"></div>
+                        </div>
+
                         <div class="secao-form-produto">
                             <h4>💰 Preço &amp; Estoque</h4>
                             <div class="row-inputs">
@@ -769,12 +775,6 @@
                                     <input type="number" id="novo-prod-estoque" placeholder="Vazio = Livre">
                                 </div>
                             </div>
-                        </div>
-
-                        <div class="secao-form-produto" style="grid-column: span 2;">
-                            <h4>🏪 Visibilidade</h4>
-                            <p style="font-size: 0.75rem; color: #6b7280; margin: 0 0 8px 0;">O produto é único — cadastrado uma vez, mas só é vendido nas barracas marcadas aqui. Cada barraca marcada controla seu próprio estoque dele.</p>
-                            <div id="checklist-barracas-produto" style="display:flex; flex-wrap:wrap; gap:6px 14px; background:#f9fafb; padding:10px; border-radius:6px; border:1px solid #e5e7eb;"></div>
                         </div>
 
                         <div class="secao-form-produto" id="box-categoria-subcategoria">
@@ -794,9 +794,8 @@
                             </div>
                         </div>
 
-                        <div id="box-cozinha-simples" class="secao-form-produto">
+                        <div id="box-cozinha-simples" class="secao-form-produto" title="Vai para Cozinha: aparece na tela de Cozinha. Só Balcão: espera retirada no Balcão. Não vai pra nenhum (rifa/ingresso): já entra como entregue na hora do pagamento.">
                             <h4>👨‍🍳 Para onde vai a venda?</h4>
-                            <p style="font-size: 0.75rem; color: #6b7280; margin: 0 0 8px 0;">"Vai para Cozinha" aparece na tela de Cozinha. "Só Balcão" aparece esperando retirada no Balcão. "Não vai pra nenhum" (rifa, ingresso) já entra como entregue na hora do pagamento — não aparece em nenhuma das duas telas.</p>
                             <select id="novo-prod-cozinha">
                                 <option value="cozinha">👨‍🍳 Vai para a Cozinha (Preparo)</option>
                                 <option value="balcao">🛍️ Só Balcão (Pronta Entrega, espera retirada)</option>
@@ -804,7 +803,7 @@
                             </select>
                         </div>
 
-                        <div id="box-itens-combo" class="secao-form-produto" style="display:none; grid-column: span 2; background: #fef08a;">
+                        <div id="box-itens-combo" class="secao-form-produto" style="display:none; grid-column: 1 / -1; background: #fef08a;">
                             <h4 style="color: #854d0e;">✨ Itens Inclusos no Combo</h4>
                             <p style="font-size: 0.75rem; color: #854d0e; margin: 0 0 10px 0;">Você pode adicionar uma categoria inteira ou um produto fixo.</p>
                             <div style="display: flex; gap: 5px; margin-bottom: 10px;">
