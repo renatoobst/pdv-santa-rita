@@ -652,6 +652,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         let categoriaFiltroTabelaProdutos = 'Todos'; 
         
         let chartVendas, chartHorarios, chartCategorias, chartRetirada;
+        let chartPagamentoCaixa, chartProdutosCaixa;
 
         let modoCadastroAtivo = 'simples';
         let comboTemporario = [];
@@ -3758,29 +3759,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 htmlProds = '<p style="color:gray;">Nenhum produto registrado.</p>';
             }
 
-            let htmlListaPedidosCaixa = '';
-            if (c.pedidosDetalhados && c.pedidosDetalhados.length > 0) {
-                htmlListaPedidosCaixa = c.pedidosDetalhados.map(p => {
-                    const tempo = calcularDiferencaMinutos(p.horaEntradaCozinha || p.hora, p.horaEntrega);
-                    return `
-                        <tr style="border-bottom: 1px solid #f3f4f6; ${p.statusPainel === 'cancelado' ? 'opacity:0.5;' : ''}">
-                            <td style="padding:6px; font-weight:bold;">#${p.id}</td>
-                            <td>${p.cliente}</td>
-                            <td>${p.hora}</td>
-                            <td>${p.horaEntradaCozinha || '-'}</td>
-                            <td>${p.horaEntrega || '-'}</td>
-                            <td style="font-weight:bold; color:var(--primary);">${tempo}</td>
-                            <td>${p.pagamento}</td>
-                            <td style="font-weight:bold; color:var(--success);">R$ ${p.total.toFixed(2)}</td>
-                            <td>
-                                <button class="btn btn-info" style="padding: 2px 6px; font-size:0.75rem;" onclick="abrirVerPedidoUnicoDoCaixa(${c.id}, ${p.id})">🔍 Ver Pedido</button>
-                            </td>
-                        </tr>
-                    `;
-                }).join('');
-            } else {
-                htmlListaPedidosCaixa = '<tr><td colspan="9" style="text-align:center; padding:10px; color:gray;">Sem registros de pedidos antigos.</td></tr>';
-            }
+            const topProdutosCaixa = Object.entries(c.produtosVendidos || {}).sort((a, b) => b[1] - a[1]).slice(0, 8);
 
             corpo.innerHTML = `
                 <div style="background:#f8fafc; padding:12px; border-radius:8px; margin-bottom:15px; font-size:0.9rem;">
@@ -3796,6 +3775,9 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 </div>
 
                 <h4 style="margin:10px 0 5px 0; color:#1f2937;">💳 Formas de Pagamento Entradas</h4>
+                <div style="background:white; border:1px solid #e5e7eb; border-radius:8px; padding:10px; margin-bottom:10px;">
+                    <canvas id="chart-pagamento-caixa" style="max-height:220px;"></canvas>
+                </div>
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:15px; font-size:0.9rem;">
                     <div style="background:#f3e8ff; padding:10px; border-radius:6px;">💳 <b>Débito:</b> R$ ${c.debito.toFixed(2)}</div>
                     <div style="background:#fef3c7; padding:10px; border-radius:6px;">💳 <b>Crédito:</b> R$ ${c.credito.toFixed(2)}</div>
@@ -3809,82 +3791,40 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     <span>R$ ${c.totalGaveta.toFixed(2)}</span>
                 </div>
 
+                <h4 style="margin:10px 0 5px 0; color:#1f2937;">🏆 Produtos Mais Vendidos</h4>
+                <div style="background:white; border:1px solid #e5e7eb; border-radius:8px; padding:10px; margin-bottom:15px;">
+                    <canvas id="chart-produtos-caixa" style="max-height:260px;"></canvas>
+                </div>
+
                 <h4 style="margin:10px 0 5px 0; color:#1f2937;">📦 Produtos Vendidos</h4>
                 <div style="background:white; border:1px solid #e5e7eb; padding:10px; border-radius:8px; max-height:150px; overflow-y:auto; margin-bottom:15px;">
                     ${htmlProds}
                 </div>
-
-                <h4 style="margin:10px 0 5px 0; color:#1f2937;">⏱️ Raio-X de Pedidos & Tempo de Preparo</h4>
-                <div style="background:white; border:1px solid #e5e7eb; border-radius:8px; max-height:200px; overflow-y:auto; overflow-x:auto;">
-                    <table style="width:100%; min-width:600px; border-collapse:collapse; font-size:0.8rem; text-align:left;">
-                        <thead>
-                            <tr style="background:#f8fafc; border-bottom:1px solid #ddd;">
-                                <th style="padding:6px;"># ID</th>
-                                <th>Cliente</th>
-                                <th>Entrada</th>
-                                <th>Cozinha</th>
-                                <th>Entrega</th>
-                                <th>Tempo</th>
-                                <th>Pagto</th>
-                                <th>Total</th>
-                                <th>Ação</th>
-                            </tr>
-                        </thead>
-                        <tbody>${htmlListaPedidosCaixa}</tbody>
-                    </table>
-                </div>
             `;
 
             document.getElementById('modal-detalhes-caixa').style.display = 'flex';
-        }
 
-        function abrirVerPedidoUnicoDoCaixa(idCaixa, idPedido) {
-            const c = historicoCaixasDB.find(item => item.id === idCaixa);
-            // Caixa ainda aberto (visto pelo 👁️ na tela de Pedido) não está no
-            // histórico ainda — procura direto nos pedidos ao vivo desse caixa.
-            const pedido = c ? c.pedidosDetalhados.find(p => p.id === idPedido) : pedidosGerais.find(p => p.id === idPedido && p.caixaId === idCaixa);
-            if (!pedido) return;
+            if (chartPagamentoCaixa) chartPagamentoCaixa.destroy();
+            if (chartProdutosCaixa) chartProdutosCaixa.destroy();
 
-            document.getElementById('titulo-ver-pedido-unico').innerText = `Pedido #${pedido.id} - ${pedido.cliente}`;
-            
-            const itensHtml = pedido.itens.map(i => {
-                let comboDet = i.isCombo ? `<br><small style="color:gray;">Contém: ${i.itensComboEscolhidos.map(sub=>sub.nome).join(', ')}</small>` : '';
-                let obsDet = i.obs ? `<br><small style="color:red; font-weight:bold;">Obs: ${i.obs}</small>` : '';
-                return `
-                    <div style="display:flex; justify-content:space-between; border-bottom:1px dashed #eee; padding:6px 0;">
-                        <div><b>1x ${i.nome}</b>${comboDet}${obsDet}</div>
-                        <b>R$ ${i.preco.toFixed(2)}</b>
-                    </div>
-                `;
-            }).join('');
+            const labelsPagto = ['💳 Débito', '💳 Crédito', '📱 Pix (Máquina)', '💵 Dinheiro', '📲 Pix Direto'];
+            const valoresPagto = [c.debito, c.credito, c.pix, c.dinheiroVendas, c.pixDireto || 0];
+            chartPagamentoCaixa = new Chart(document.getElementById('chart-pagamento-caixa').getContext('2d'), {
+                type: 'doughnut',
+                data: { labels: labelsPagto, datasets: [{ data: valoresPagto, backgroundColor: ['#8b5cf6', '#f59e0b', '#0ea5e9', '#16a34a', '#0284c7'] }] },
+                options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { datalabels: { color: '#fff', font: { weight: 'bold', size: 11 }, formatter: (v, ctx) => {
+                    if (!v) return '';
+                    const total = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+                    const pct = total > 0 ? Math.round((v / total) * 100) : 0;
+                    return `R$ ${v.toFixed(0)} (${pct}%)`;
+                } } } }
+            });
 
-            document.getElementById('corpo-ver-pedido-unico').innerHTML = `
-                <div style="background:#f8fafc; padding:10px; border-radius:6px; margin-bottom:12px; font-size:0.85rem;">
-                    <div><b>Data/Hora Entrada:</b> ${pedido.data} ${pedido.hora}</div>
-                    <div><b>Entrada Cozinha:</b> ${pedido.horaEntradaCozinha || '-'}</div>
-                    <div><b>Horário Entrega:</b> ${pedido.horaEntrega || '-'}</div>
-                    <div><b>Tempo de Preparo:</b> ${calcularDiferencaMinutos(pedido.horaEntradaCozinha || pedido.hora, pedido.horaEntrega)}</div>
-                    <div><b>Pagamento:</b> ${pedido.pagamento}</div>
-                    <div><b>Tipo Retirada:</b> ${pedido.tipoAtendimento}</div>
-                </div>
-                <h4 style="margin:5px 0; color:#374151;">Itens do Pedido:</h4>
-                ${itensHtml}
-                <div style="display:flex; justify-content:space-between; background:#e5e7eb; padding:10px; border-radius:6px; font-weight:bold; margin-top:12px; font-size:1.1rem;">
-                    <span>Total:</span>
-                    <span>R$ ${pedido.total.toFixed(2)}</span>
-                </div>
-            `;
-
-            document.getElementById('btn-reimprimir-modal-unico').onclick = function() {
-                gerarHTMLImpressao(pedido);
-                window.print();
-            };
-
-            document.getElementById('modal-ver-pedido-unico').style.display = 'flex';
-        }
-
-        function fecharModalVerPedidoUnico() {
-            document.getElementById('modal-ver-pedido-unico').style.display = 'none';
+            chartProdutosCaixa = new Chart(document.getElementById('chart-produtos-caixa').getContext('2d'), {
+                type: 'bar',
+                data: { labels: topProdutosCaixa.map(i => i[0]), datasets: [{ label: 'Unidades Vendidas', data: topProdutosCaixa.map(i => i[1]), backgroundColor: '#2563eb', borderRadius: 4 }] },
+                options: { responsive: true, maintainAspectRatio: false, animation: false, indexAxis: 'y', plugins: { datalabels: { anchor: 'end', align: 'end', color: '#1f2937', font: { weight: 'bold' }, formatter: formatarQtd } } }
+            });
         }
 
         function fecharModalDetalhesCaixa() {
@@ -4405,7 +4345,6 @@ window.abrirCaixaPrompt = abrirCaixaPrompt;
 window.abrirModalObs = abrirModalObs;
 window.abrirModalTodosPedidos = abrirModalTodosPedidos;
 window.abrirModalTrocaItem = abrirModalTrocaItem;
-window.abrirVerPedidoUnicoDoCaixa = abrirVerPedidoUnicoDoCaixa;
 window.addCarrinho = addCarrinho;
 window.addProdutoTemporarioAoCombo = addProdutoTemporarioAoCombo;
 window.adicionarCategoria = adicionarCategoria;
@@ -4468,7 +4407,6 @@ window.fecharModalDetalhesCaixa = fecharModalDetalhesCaixa;
 window.fecharModalObs = fecharModalObs;
 window.fecharModalTodosPedidos = fecharModalTodosPedidos;
 window.fecharModalTroca = fecharModalTroca;
-window.fecharModalVerPedidoUnico = fecharModalVerPedidoUnico;
 window.filtrarMenu = filtrarMenu;
 window.filtrarMenuBusca = filtrarMenuBusca;
 window.finalizarEntrega = finalizarEntrega;
