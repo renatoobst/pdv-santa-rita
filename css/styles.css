@@ -136,7 +136,7 @@
         .controle-zoom-tela button { border: none; background: white; border-radius: 6px; width: 26px; height: 26px; cursor: pointer; font-size: 0.85rem; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
         .controle-zoom-tela span { font-size: 0.75rem; font-weight: bold; color: #374151; min-width: 34px; text-align: center; }
 
-        .teclado-flutuante { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2000000; background: white; border-top: 2px solid #cbd5e1; box-shadow: 0 -4px 12px rgba(0,0,0,0.15); padding: 10px; }
+        .teclado-flutuante { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5000000; background: white; border-top: 2px solid #cbd5e1; box-shadow: 0 -4px 12px rgba(0,0,0,0.15); padding: 10px; }
         .teclado-flutuante-topo { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; max-width: 640px; margin-left: auto; margin-right: auto; }
         .grid-teclado-texto { max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 6px; }
         .linha-teclado-texto { display: flex; gap: 5px; justify-content: center; }
