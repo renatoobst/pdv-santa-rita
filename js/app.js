@@ -1064,11 +1064,13 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
                     // Nessa tela (Pedido > Ver Todos os Pedidos) só olho pra ver
                     // o pedido completo e alterar — sem imprimir/PDF/apagar
-                    // aqui (isso fica só na tela de Gestão).
+                    // aqui (isso fica só na tela de Gestão). Pedido já
+                    // finalizado (entregue) tampouco pode ser alterado aqui —
+                    // só resta o olho, igual cancelado.
                     let acoes = `<button onclick="verDetalhesPedido(${p.id})" class="btn" style="background:#0891b2; color:white; padding: 4px 8px; font-size: 0.8rem; margin-right: 4px;" title="Ver Pedido Completo">👁️</button>`;
-                    if (p.statusPainel !== 'cancelado') {
+                    if (p.statusPainel !== 'cancelado' && p.statusPainel !== 'entregue') {
                         acoes += `<button onclick="editarPedido(${p.id}); fecharModalTodosPedidos();" class="btn btn-warning" style="padding: 4px 8px; font-size: 0.8rem;">✏️ Alterar</button>`;
-                    } else {
+                    } else if (p.statusPainel === 'cancelado') {
                         acoes += `<span style="color:gray; font-size: 0.8rem;">Bloqueado</span>`;
                     }
 
