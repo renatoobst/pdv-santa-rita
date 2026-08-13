@@ -63,6 +63,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         };
         let gravandoAtalhoAcao = null;
         let indexPedidoSelecionadoBalcao = 0;
+        let indexPedidoSelecionadoCozinha = 0;
+        let indexPedidoSelecionadoPausa = 0;
 
         // PARÂMETROS PADRÃO DA TELA DE PEDIDO (pré-seleção de forma de pagamento /
         // tipo de retirada / modo de retirada global toda vez que o carrinho é
@@ -915,19 +917,67 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                         if (btnRetirado) btnRetirado.click();
                     }
                 }
+                return;
+            }
+
+            // Mesma navegação por setas do Balcão (cima/baixo troca o botão
+            // focado dentro do card, esquerda/direita troca de card), só que
+            // pra Cozinha (só leitura, sem botão de ação) e Pedidos em Pausa
+            // (um botão "Enviar p/ Cozinha" por card).
+            const abaCozinha = document.getElementById('tela-preparo');
+            if (abaCozinha && abaCozinha.classList.contains('active')) {
+                const cardsCozinha = Array.from(document.querySelectorAll('#fila-cozinha .card-pedido'));
+                if (cardsCozinha.length === 0) return;
+                if (indexPedidoSelecionadoCozinha >= cardsCozinha.length) indexPedidoSelecionadoCozinha = 0;
+
+                if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                    indexPedidoSelecionadoCozinha = (indexPedidoSelecionadoCozinha + 1) % cardsCozinha.length;
+                    destacarCardTeclado(cardsCozinha, indexPedidoSelecionadoCozinha);
+                    e.preventDefault();
+                } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                    indexPedidoSelecionadoCozinha = (indexPedidoSelecionadoCozinha - 1 + cardsCozinha.length) % cardsCozinha.length;
+                    destacarCardTeclado(cardsCozinha, indexPedidoSelecionadoCozinha);
+                    e.preventDefault();
+                }
+                return;
+            }
+
+            const abaPausa = document.getElementById('tela-agendados');
+            if (abaPausa && abaPausa.classList.contains('active')) {
+                const cardsPausa = Array.from(document.querySelectorAll('#fila-agendados .card-pedido'));
+                if (cardsPausa.length === 0) return;
+                if (indexPedidoSelecionadoPausa >= cardsPausa.length) indexPedidoSelecionadoPausa = 0;
+
+                if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                    indexPedidoSelecionadoPausa = (indexPedidoSelecionadoPausa + 1) % cardsPausa.length;
+                    destacarCardTeclado(cardsPausa, indexPedidoSelecionadoPausa);
+                    e.preventDefault();
+                } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                    indexPedidoSelecionadoPausa = (indexPedidoSelecionadoPausa - 1 + cardsPausa.length) % cardsPausa.length;
+                    destacarCardTeclado(cardsPausa, indexPedidoSelecionadoPausa);
+                    e.preventDefault();
+                }
             }
         });
 
-        function destacarCardBalcao(cards) {
+        // Compartilhado pela navegação por setas de Balcão, Cozinha e Pausa —
+        // destaca visualmente o card selecionado, rola ele até a área visível
+        // e joga o foco no primeiro botão de dentro (Enter já dispara clique
+        // no elemento focado, ver handler de 'Enter' logo acima).
+        function destacarCardTeclado(cards, index) {
             cards.forEach(c => c.classList.remove('card-selecionado-teclado'));
-            if (cards[indexPedidoSelecionadoBalcao]) {
-                const cardTarget = cards[indexPedidoSelecionadoBalcao];
+            if (cards[index]) {
+                const cardTarget = cards[index];
                 cardTarget.classList.add('card-selecionado-teclado');
                 cardTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
                 const primeiroBotao = cardTarget.querySelector('button');
                 if (primeiroBotao) primeiroBotao.focus();
             }
+        }
+
+        function destacarCardBalcao(cards) {
+            destacarCardTeclado(cards, indexPedidoSelecionadoBalcao);
         }
 
         function abrirModalTodosPedidos() {
@@ -972,6 +1022,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
                     let acoes = `
                         <button onclick="reimprimirPedido(${p.id})" class="btn" style="background:#3b82f6; color:white; padding: 4px 8px; font-size: 0.8rem; margin-right: 4px;" title="Imprimir Pedido Completo">🖨️</button>
+                        <button onclick="baixarPDFPedido(${p.id})" class="btn" style="background:#b91c1c; color:white; padding: 4px 8px; font-size: 0.8rem; margin-right: 4px;" title="Baixar Pedido em PDF">📄</button>
                     `;
                     if (p.statusPainel !== 'cancelado') {
                         acoes += `
@@ -2429,11 +2480,14 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         // tanto pra imprimir 1 pedido (gerarHTMLImpressao) quanto vários de
         // uma vez (imprimirPedidosEmPausa).
         function montarHTMLReciboPedido(pedido, quebrarPagina = false) {
-            // Qualquer coisa que não seja explicitamente 'mais_tarde' entra aqui
-            // (não só 'agora'/'entregue') — cobre pedidos antigos que ficaram com
-            // item.fase = 'agora_sem_cozinha' salvo por engano (bug já corrigido
-            // em mudarTipoRetiradaGlobal), que senão sumiriam do recibo de vez.
-            const iAgora = pedido.itens.filter(i => i.fase !== 'mais_tarde');
+            // "Agora" = qualquer coisa que não seja 'mais_tarde' NEM 'entregue'
+            // (cobre pedidos antigos com item.fase = 'agora_sem_cozinha' salvo
+            // por engano — bug já corrigido em mudarTipoRetiradaGlobal — sem
+            // deixar esses itens sumirem do recibo). Excluir 'entregue' é o que
+            // evita reimprimir junto, como "a retirar agora", itens que já
+            // foram entregues numa retirada parcial anterior.
+            const iEntregue = pedido.itens.filter(i => i.fase === 'entregue');
+            const iAgora = pedido.itens.filter(i => i.fase !== 'mais_tarde' && i.fase !== 'entregue');
             const iDepois = pedido.itens.filter(i => i.fase === 'mais_tarde');
 
             const htmlItem = (i) => {
@@ -2454,6 +2508,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 <div class="print-divider"></div>
                 ${iAgora.length ? `<div class="print-center print-bold" style="margin-bottom:5px;">(RETIRAR AGORA)</div>` + iAgora.map(htmlItem).join('') : ''}
                 ${iDepois.length ? `<div class="print-divider"></div><div class="print-center print-bold" style="margin-bottom:5px;">[ RETIRAR DEPOIS ]</div>` + iDepois.map(htmlItem).join('') : ''}
+                ${iEntregue.length ? `<div class="print-divider"></div><div class="print-center print-bold" style="margin-bottom:5px; opacity:0.7;">(JÁ RETIRADO ANTES)</div>` + iEntregue.map(htmlItem).join('') : ''}
                 <div class="print-divider"></div>
 
                 <div class="print-pagto-box">
@@ -2481,6 +2536,54 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (pausados.length === 0) return exibirAviso("Não há pedidos em pausa pra imprimir.");
             document.getElementById('area-impressao').innerHTML = pausados.map((p, i) => montarHTMLReciboPedido(p, i > 0)).join('');
             window.print();
+        }
+
+        // #area-impressao só ganha a aparência de recibo (largura 80mm,
+        // fonte, divisórias) dentro de @media print — fora da impressão real
+        // essas classes (.print-center etc.) não valem nada. Pra baixar como
+        // PDF em vez de mandar pra impressora, clona o HTML do recibo pra
+        // fora da tela com essas mesmas regras aplicadas "na mão" e usa o
+        // html2pdf com página no tamanho real do conteúdo (papel de recibo
+        // não pagina, é uma tira só).
+        function baixarPDFRecibo(htmlConteudo, nomeArquivo) {
+            if (typeof html2pdf !== 'function') return;
+            const wrapper = document.createElement('div');
+            wrapper.style.cssText = 'position:absolute; left:-9999px; top:0;';
+            wrapper.innerHTML = `
+                <style>
+                    .pdf-recibo { width:80mm; padding:5mm; font-family:Arial, sans-serif; font-size:13px; font-weight:bold; color:black; background:white; }
+                    .pdf-recibo .print-center { text-align:center; }
+                    .pdf-recibo .print-bold { font-weight:900; }
+                    .pdf-recibo .print-divider { border-top:2px dashed black; margin:8px 0; }
+                    .pdf-recibo .print-row { display:flex; justify-content:space-between; margin-bottom:4px; font-weight:bold; }
+                    .pdf-recibo .print-pagto-box { font-size:18px; font-weight:900; margin:8px 0; text-transform:uppercase; background:#000; color:#fff; padding:6px 2px; text-align:center; border:2px solid #000; }
+                </style>
+                <div class="pdf-recibo">${htmlConteudo}</div>
+            `;
+            document.body.appendChild(wrapper);
+            const conteudo = wrapper.querySelector('.pdf-recibo');
+            const alturaMM = Math.max(100, (conteudo.scrollHeight * 25.4 / 96) + 10);
+            const limpar = () => document.body.contains(wrapper) && document.body.removeChild(wrapper);
+            html2pdf().set({
+                margin: 0,
+                filename: nomeArquivo,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2 },
+                jsPDF: { unit: 'mm', format: [80, alturaMM], orientation: 'portrait' }
+            }).from(conteudo).save().then(limpar).catch(limpar);
+        }
+
+        function baixarPDFPedido(idPedido) {
+            const pedido = pedidosGerais.find(p => p.id === idPedido);
+            if (!pedido) return;
+            baixarPDFRecibo(montarHTMLReciboPedido(pedido), `Pedido_${idPedido}.pdf`);
+        }
+
+        function baixarPDFPedidosEmPausa() {
+            const pausados = pedidosGerais.filter(p => p.statusPainel !== 'cancelado' && p.itens.some(i => i.fase === 'mais_tarde'));
+            if (pausados.length === 0) return exibirAviso("Não há pedidos em pausa pra baixar.");
+            const html = pausados.map(p => montarHTMLReciboPedido(p)).join('<div class="print-divider"></div>');
+            baixarPDFRecibo(html, `Pedidos_Pausa_${new Date().toISOString().slice(0,10)}.pdf`);
         }
 
         // O cálculo em si mora em barracas.js (calcularResumoPedidos), como uma
@@ -2942,7 +3045,13 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             pedidosGerais.forEach(p => {
                 if(p.statusPainel === 'cancelado') return;
                 
-                const iAgoraPendentes = p.itens.filter(i => i.fase !== 'mais_tarde');
+                // Exclui 'entregue' junto com 'mais_tarde' — senão, quando uma
+                // retirada parcial manda o restante pausado de volta pra
+                // cozinha (moverParaAgora reabre p.statusPainel = 'preparando'
+                // no pedido inteiro), os itens que já tinham sido entregues na
+                // primeira leva voltavam a aparecer na Cozinha/Balcão como se
+                // ainda precisassem ser produzidos/entregues de novo.
+                const iAgoraPendentes = p.itens.filter(i => i.fase !== 'mais_tarde' && i.fase !== 'entregue');
                 const iDepois = p.itens.filter(i => i.fase === 'mais_tarde');
 
                 // Só conta/mostra em produção quem está REALMENTE "preparando"
@@ -3058,6 +3167,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                             <div style="font-size: 0.85rem; font-weight: bold; color: var(--primary); margin-top:2px;">[ ${p.tipoAtendimento || 'Levar (Viagem)'} ]</div>
                             <div class="lista-itens" style="margin-top:8px;">${itensDetalhadosFicha}</div>
                             <button class="btn btn-info" onclick="moverParaAgora(${p.id})">📤 Enviar p/ Cozinha</button>
+                            <div style="display:flex; gap:5px; margin-top:5px;">
+                                <button class="btn" style="flex:1; background:#475569; color:white; padding:6px; font-size:0.8rem;" onclick="reimprimirPedido(${p.id})" title="Imprimir só este pedido">🖨️ Imprimir</button>
+                                <button class="btn" style="flex:1; background:#b91c1c; color:white; padding:6px; font-size:0.8rem;" onclick="baixarPDFPedido(${p.id})" title="Baixar só este pedido em PDF">📄 PDF</button>
+                            </div>
                         </div>`;
                 }
 
@@ -3242,7 +3355,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
             pedidosFiltrados.forEach(p => {
                 let statusHtml = ''; let acoesHtml = '';
-                let btnImprimir = `<button onclick="reimprimirPedido(${p.id})" class="btn" style="background:#3b82f6; color:white; padding: 4px 8px; font-size: 0.8rem; margin-right: 5px;" title="Reimprimir">🖨️</button>`;
+                let btnImprimir = `<button onclick="reimprimirPedido(${p.id})" class="btn" style="background:#3b82f6; color:white; padding: 4px 8px; font-size: 0.8rem; margin-right: 5px;" title="Reimprimir">🖨️</button><button onclick="baixarPDFPedido(${p.id})" class="btn" style="background:#b91c1c; color:white; padding: 4px 8px; font-size: 0.8rem; margin-right: 5px;" title="Baixar em PDF">📄</button>`;
 
                 if (p.statusPainel === 'entregue') { 
                     statusHtml = '<span class="status-badge" style="background:var(--success);">✅ Finalizado</span>'; 
@@ -3409,6 +3522,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             atualizarFiltrosGestao();
             atualizarDashboard();
 
+            imprimirRelatorioFechamento(registroFechamento.id);
+
             exibirAviso("Caixa fechado com sucesso! Redirecionando para o Histórico de Caixas...");
 
             mudarAba('tela-fechamento-caixa', document.getElementById('btn-sub-fechamento'));
@@ -3548,6 +3663,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                             <button onclick="verDetalhesCaixa(${c.id})" class="btn btn-info" style="padding: 6px 10px; font-size: 0.8rem; margin-right:2px;" title="Ver Detalhes">👁️</button>
                             <button onclick="imprimirRelatorioFechamento(${c.id})" class="btn" style="background:#047857; color:white; padding: 6px 10px; font-size: 0.8rem; margin-right:2px;" title="Imprimir Comprovante">🖨️</button>
                             <button onclick="gerarJPGFechamento(${c.id})" class="btn" style="background:#7c3aed; color:white; padding: 6px 10px; font-size: 0.8rem; margin-right:2px;" title="Baixar JPG">🖼️</button>
+                            <button onclick="gerarPDFFechamento(${c.id})" class="btn" style="background:#b91c1c; color:white; padding: 6px 10px; font-size: 0.8rem; margin-right:2px;" title="Baixar PDF">📄</button>
                             <button onclick="excluirRegistroCaixa(${c.id})" class="btn btn-danger" style="padding: 6px 10px; font-size: 0.8rem;" title="Excluir Caixa">🗑️</button>
                         </td>
                     </tr>
@@ -3842,15 +3958,43 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             atualizarDashboard();
         }
 
+        // Telas de relatório têm vários painéis internos com "max-height +
+        // overflow-y:auto" (tabelas, listas) — o html2canvas só captura a
+        // área visível desses painéis, cortando o resto do conteúdo. Antes
+        // de tirar a foto, remove temporariamente esse limite de todo mundo
+        // dentro do elemento capturado, deixa o layout se esticar pro
+        // tamanho real, tira a foto e devolve o CSS original em seguida.
+        function expandirRolaveisParaCaptura(container) {
+            const originais = [];
+            [container, ...container.querySelectorAll('*')].forEach(el => {
+                const cs = window.getComputedStyle(el);
+                if (cs.overflowY === 'auto' || cs.overflowY === 'scroll' || cs.overflowX === 'auto' || cs.overflowX === 'scroll') {
+                    originais.push({ el, overflow: el.style.overflow, overflowY: el.style.overflowY, overflowX: el.style.overflowX, maxHeight: el.style.maxHeight });
+                    el.style.overflow = 'visible';
+                    el.style.overflowY = 'visible';
+                    el.style.overflowX = 'visible';
+                    el.style.maxHeight = 'none';
+                }
+            });
+            return () => originais.forEach(o => {
+                o.el.style.overflow = o.overflow;
+                o.el.style.overflowY = o.overflowY;
+                o.el.style.overflowX = o.overflowX;
+                o.el.style.maxHeight = o.maxHeight;
+            });
+        }
+
         function gerarJPG(elementoId, nomeArquivo) {
             const el = document.getElementById(elementoId);
             if (!el || typeof html2canvas !== 'function') return;
+            const restaurar = expandirRolaveisParaCaptura(el);
             html2canvas(el, { scale: 2 }).then(canvas => {
+                restaurar();
                 const link = document.createElement('a');
                 link.download = nomeArquivo;
                 link.href = canvas.toDataURL('image/jpeg', 0.92);
                 link.click();
-            });
+            }).catch(restaurar);
         }
 
         function gerarJPGRelatorioCaixa() {
@@ -3868,13 +4012,14 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         function gerarPDFDashboardGeral() {
             const el = document.getElementById('tela-dashboard-geral');
             if (!el || typeof html2pdf !== 'function') return;
+            const restaurar = expandirRolaveisParaCaptura(el);
             html2pdf().set({
                 margin: 10,
                 filename: `Dashboard_Geral_${new Date().toISOString().slice(0,10)}.pdf`,
                 image: { type: 'jpeg', quality: 0.98 },
                 html2canvas: { scale: 2 },
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
-            }).from(el).save();
+            }).from(el).save().then(restaurar).catch(restaurar);
         }
 
         // JPG de um fechamento já histórico — reaproveita o mesmo modal de
@@ -3885,13 +4030,35 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             setTimeout(() => {
                 const el = document.querySelector('#modal-detalhes-caixa .modal-content');
                 if (!el || typeof html2canvas !== 'function') return;
+                const restaurar = expandirRolaveisParaCaptura(el);
                 html2canvas(el, { scale: 2 }).then(canvas => {
+                    restaurar();
                     const link = document.createElement('a');
                     link.download = `Fechamento_Caixa_${idCaixa}.jpg`;
                     link.href = canvas.toDataURL('image/jpeg', 0.92);
                     link.click();
                     fecharModalDetalhesCaixa();
-                });
+                }).catch(restaurar);
+            }, 150);
+        }
+
+        // PDF do mesmo modal de detalhes, reaproveitando o padrão do JPG acima.
+        function gerarPDFFechamento(idCaixa) {
+            verDetalhesCaixa(idCaixa);
+            setTimeout(() => {
+                const el = document.querySelector('#modal-detalhes-caixa .modal-content');
+                if (!el || typeof html2pdf !== 'function') return;
+                const restaurar = expandirRolaveisParaCaptura(el);
+                html2pdf().set({
+                    margin: 10,
+                    filename: `Fechamento_Caixa_${idCaixa}.pdf`,
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2 },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                }).from(el).save().then(() => {
+                    restaurar();
+                    fecharModalDetalhesCaixa();
+                }).catch(restaurar);
             }, 150);
         }
 
@@ -4140,6 +4307,7 @@ window.gerarJPGEstoque = gerarJPGEstoque;
 window.gerarJPGDashboardGeral = gerarJPGDashboardGeral;
 window.gerarPDFDashboardGeral = gerarPDFDashboardGeral;
 window.gerarJPGFechamento = gerarJPGFechamento;
+window.gerarPDFFechamento = gerarPDFFechamento;
 window.imprimirMeuCaixa = imprimirMeuCaixa;
 window.pedirTexto = pedirTexto;
 window.alternarMostrarSenha = alternarMostrarSenha;
@@ -4187,6 +4355,8 @@ window.gerarPDFEstoquePorCategoria = gerarPDFEstoquePorCategoria;
 window.imprimirEstoquePorCategoria = imprimirEstoquePorCategoria;
 window.imprimirRelatorioCaixaAtual = imprimirRelatorioCaixaAtual;
 window.imprimirPedidosEmPausa = imprimirPedidosEmPausa;
+window.baixarPDFPedidosEmPausa = baixarPDFPedidosEmPausa;
+window.baixarPDFPedido = baixarPDFPedido;
 window.imprimirRelatorioFechamento = imprimirRelatorioFechamento;
 window.iniciarGravaçãoAtalho = iniciarGravaçãoAtalho;
 window.limparCarrinho = limparCarrinho;
