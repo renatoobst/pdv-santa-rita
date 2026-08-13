@@ -324,6 +324,7 @@ export function calcularResumoPedidos(pedidosGerais, caixaAberto, valorFundoCaix
 
     let fatPix = 0, fatPixDireto = 0, fatCredito = 0, fatDebito = 0, fatDinheiro = 0;
     let resumoProdutosVendidos = {};
+    let valorProdutosVendidos = {};
     let bonificacoesLista = [];
 
     validos.forEach(p => {
@@ -346,8 +347,22 @@ export function calcularResumoPedidos(pedidosGerais, caixaAberto, valorFundoCaix
                 else if (p.pagamento === 'Cartão Débito') fatDebito += p.total;
                 else if (p.pagamento === 'Dinheiro') fatDinheiro += p.total;
             }
+            // Combo soma por item ESCOLHIDO dentro dele (sub.nome), igual o
+            // resumo da Cozinha/Balcão já faz — senão o combo conta sob o
+            // próprio nome ("COMBO 01") em vez do produto real. O combo não
+            // guarda preço por sub-item, só o total do combo — divide igual
+            // entre os itens escolhidos como aproximação do valor de cada um.
             (p.itens || []).forEach(i => {
-                resumoProdutosVendidos[i.nome] = (resumoProdutosVendidos[i.nome] || 0) + i.qtd;
+                if (i.isCombo && Array.isArray(i.itensComboEscolhidos) && i.itensComboEscolhidos.length > 0) {
+                    const valorUnitario = i.preco / i.itensComboEscolhidos.length;
+                    i.itensComboEscolhidos.forEach(sub => {
+                        resumoProdutosVendidos[sub.nome] = (resumoProdutosVendidos[sub.nome] || 0) + 1;
+                        valorProdutosVendidos[sub.nome] = (valorProdutosVendidos[sub.nome] || 0) + valorUnitario;
+                    });
+                } else {
+                    resumoProdutosVendidos[i.nome] = (resumoProdutosVendidos[i.nome] || 0) + i.qtd;
+                    valorProdutosVendidos[i.nome] = (valorProdutosVendidos[i.nome] || 0) + (i.preco * i.qtd);
+                }
             });
         }
     });
@@ -364,7 +379,8 @@ export function calcularResumoPedidos(pedidosGerais, caixaAberto, valorFundoCaix
         qtdBonificacoes: bonificacoesLista.length,
         bonificacoesLista,
         totalGaveta: caixaAberto ? (valorFundoCaixa + fatDinheiro) : 0.00,
-        resumoProdutosVendidos
+        resumoProdutosVendidos,
+        valorProdutosVendidos
     };
 }
 

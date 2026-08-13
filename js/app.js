@@ -2683,7 +2683,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             const fundoInicial = dados.totalGaveta - dados.fatDinheiro;
             let htmlProdsPrint = '';
             Object.entries(dados.resumoProdutosVendidos).sort((a, b) => b[1] - a[1]).forEach(([prod, qtd]) => {
-                htmlProdsPrint += `<div class="print-row"><span>${prod}</span><span class="print-bold">${qtd} un</span></div>`;
+                const linha = formatarLinhaProdutoVendido(prod, qtd, dados.valorProdutosVendidos);
+                htmlProdsPrint += `<div class="print-row"><span>${prod}</span><span class="print-bold">${linha.qtdTxt}</span></div>`;
             });
 
             let htmlBonoPrint = '';
@@ -2741,10 +2742,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
             let htmlTabelaProdutos = '';
             Object.entries(dados.resumoProdutosVendidos).sort((a, b) => b[1] - a[1]).forEach(([prod, qtd]) => {
+                const linha = formatarLinhaProdutoVendido(prod, qtd, dados.valorProdutosVendidos);
                 htmlTabelaProdutos += `
                     <tr>
                         <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-weight: 600;">${prod}</td>
-                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: 800; color: #2563eb;">${qtd} un.</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: 800; color: #2563eb;">${linha.qtdTxt}</td>
                     </tr>
                 `;
             });
@@ -3521,10 +3523,25 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 }
             });
 
+            // Combo soma por item ESCOLHIDO (sub.nome), igual o resumo da
+            // Cozinha/Balcão já faz — senão conta sob o nome do combo em vez
+            // do produto real. Combo não guarda preço por sub-item, só o
+            // total do combo — divide igual entre os itens escolhidos como
+            // aproximação do valor de cada um.
             let resumoProdutosVendidos = {};
+            let valorProdutosVendidos = {};
             validosFinanceiros.forEach(p => {
                 p.itens.forEach(i => {
-                    resumoProdutosVendidos[i.nome] = (resumoProdutosVendidos[i.nome] || 0) + i.qtd;
+                    if (i.isCombo && Array.isArray(i.itensComboEscolhidos) && i.itensComboEscolhidos.length > 0) {
+                        const valorUnitario = i.preco / i.itensComboEscolhidos.length;
+                        i.itensComboEscolhidos.forEach(sub => {
+                            resumoProdutosVendidos[sub.nome] = (resumoProdutosVendidos[sub.nome] || 0) + 1;
+                            valorProdutosVendidos[sub.nome] = (valorProdutosVendidos[sub.nome] || 0) + valorUnitario;
+                        });
+                    } else {
+                        resumoProdutosVendidos[i.nome] = (resumoProdutosVendidos[i.nome] || 0) + i.qtd;
+                        valorProdutosVendidos[i.nome] = (valorProdutosVendidos[i.nome] || 0) + (i.preco * i.qtd);
+                    }
                 });
             });
 
@@ -3549,6 +3566,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 totalGaveta: caixa.valorFundoCaixa + fatDinheiro,
                 qtdPedidos: validos.length,
                 produtosVendidos: resumoProdutosVendidos,
+                valorProdutosVendidos: valorProdutosVendidos,
                 pedidosDetalhados: JSON.parse(JSON.stringify(pedidosDoCaixa))
             };
 
@@ -3683,13 +3701,34 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
         function renderizarHistoricoCaixas() {
             const tbody = document.getElementById('tabela-historico-caixas');
+            const elTotalFiltrado = document.getElementById('total-vendas-historico-filtrado');
             tbody.innerHTML = '';
 
-            if (historicoCaixasDB.length === 0) {
-                return tbody.innerHTML = '<tr><td colspan="10" style="padding: 20px; text-align: center; color: gray;">Nenhum caixa foi fechado ainda.</td></tr>';
+            const inicioEl = document.getElementById('filtro-historico-data-inicio');
+            const fimEl = document.getElementById('filtro-historico-data-fim');
+            const inicio = inicioEl ? inicioEl.value : '';
+            const fim = fimEl ? fimEl.value : '';
+
+            let lista = [...historicoCaixasDB];
+            if (inicio) {
+                const dtInicio = new Date(inicio + 'T00:00:00');
+                lista = lista.filter(c => { const d = parseDataFechamentoBR(c.dataFechamento); return d && d >= dtInicio; });
+            }
+            if (fim) {
+                const dtFim = new Date(fim + 'T23:59:59');
+                lista = lista.filter(c => { const d = parseDataFechamentoBR(c.dataFechamento); return d && d <= dtFim; });
             }
 
-            historicoCaixasDB.forEach(c => {
+            if (elTotalFiltrado) {
+                const totalFiltrado = lista.reduce((a, c) => a + c.totalVendas, 0);
+                elTotalFiltrado.innerText = `R$ ${totalFiltrado.toFixed(2)}`;
+            }
+
+            if (lista.length === 0) {
+                return tbody.innerHTML = `<tr><td colspan="8" style="padding: 20px; text-align: center; color: gray;">${historicoCaixasDB.length === 0 ? 'Nenhum caixa foi fechado ainda.' : 'Nenhum fechamento no período filtrado.'}</td></tr>`;
+            }
+
+            lista.forEach(c => {
                 tbody.innerHTML += `
                     <tr style="border-bottom: 1px solid #e5e7eb;">
                         <td style="padding: 12px; font-weight: bold;">#${c.id}</td>
@@ -3697,9 +3736,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                         <td style="font-weight: bold; color: var(--primary); text-transform: uppercase;">${c.campanha || 'Padrão'}</td>
                         <td style="font-size: 0.85rem; color: #4b5563;">${c.dataAbertura}</td>
                         <td style="font-size: 0.85rem; color: #4b5563;">${c.dataFechamento}</td>
-                        <td style="font-weight: bold;">R$ ${c.fundoInicial.toFixed(2)}</td>
                         <td style="font-weight: bold; color: var(--success);">R$ ${c.totalVendas.toFixed(2)}</td>
-                        <td style="font-weight: bold; color: #0284c7;">R$ ${c.totalGaveta.toFixed(2)}</td>
                         <td style="text-align: center; font-weight: bold;">${c.qtdPedidos}</td>
                         <td>
                             <button onclick="verDetalhesCaixa(${c.id})" class="btn btn-info" style="padding: 6px 10px; font-size: 0.8rem; margin-right:2px;" title="Ver Detalhes">👁️</button>
@@ -3742,6 +3779,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 totalGaveta: dados.totalGaveta,
                 qtdPedidos: dados.validos.length,
                 produtosVendidos: dados.resumoProdutosVendidos,
+                valorProdutosVendidos: dados.valorProdutosVendidos,
                 pedidosDetalhados: pedidosDoCaixa
             });
         }
@@ -3756,15 +3794,35 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             return c.pedidosDetalhados.filter(p => p.statusPainel !== 'cancelado' && p.pagamento && p.pagamento.startsWith('Bonificação'));
         }
 
+        // Monta "94 un. — R$ 2.350,00" pra lista de Produtos Vendidos. Usa o
+        // valor já calculado na hora do fechamento (mapaValor); fechamentos
+        // salvos antes dessa função existir não têm esse campo, então cai
+        // pro preço ATUAL do catálogo × quantidade como aproximação (avisado
+        // como tal, já que o preço pode ter mudado desde a venda).
+        function formatarLinhaProdutoVendido(nome, qtd, mapaValor) {
+            let valor = mapaValor ? mapaValor[nome] : undefined;
+            let aproximado = false;
+            if (valor === undefined) {
+                const prod = produtosDB.find(p => p.nome === nome);
+                if (prod) { valor = prod.preco * qtd; aproximado = true; }
+            }
+            const valorTxt = valor !== undefined ? ` — R$ ${valor.toFixed(2)}${aproximado ? '*' : ''}` : '';
+            return { qtdTxt: `${qtd} un.${valorTxt}`, aproximado };
+        }
+
         function renderizarDetalhesCaixaNoModal(c) {
             document.getElementById('titulo-detalhe-caixa').innerText = `Caixa #${c.id} - ${c.campanha || 'Fechamento'}`;
             const corpo = document.getElementById('corpo-detalhes-caixa');
 
             let htmlProds = '';
+            let temValorAproximado = false;
             if (c.produtosVendidos && Object.keys(c.produtosVendidos).length > 0) {
                 Object.entries(c.produtosVendidos).sort((a, b) => b[1] - a[1]).forEach(([prod, qtd]) => {
-                    htmlProds += `<div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px dashed #eee;"><span>${prod}</span><b>${qtd} un.</b></div>`;
+                    const linha = formatarLinhaProdutoVendido(prod, qtd, c.valorProdutosVendidos);
+                    if (linha.aproximado) temValorAproximado = true;
+                    htmlProds += `<div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px dashed #eee;"><span>${prod}</span><b>${linha.qtdTxt}</b></div>`;
                 });
+                if (temValorAproximado) htmlProds += `<div style="font-size:0.7rem; color:gray; margin-top:6px;">* valor estimado pelo preço atual do produto (fechamento salvo antes do valor histórico ser guardado)</div>`;
             } else {
                 htmlProds = '<p style="color:gray;">Nenhum produto registrado.</p>';
             }
@@ -3864,7 +3922,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             let htmlProdsPrint = '';
             if (c.produtosVendidos && Object.keys(c.produtosVendidos).length > 0) {
                 Object.entries(c.produtosVendidos).sort((a, b) => b[1] - a[1]).forEach(([prod, qtd]) => {
-                    htmlProdsPrint += `<div class="print-row"><span>${prod}</span><span class="print-bold">${qtd} un</span></div>`;
+                    const linha = formatarLinhaProdutoVendido(prod, qtd, c.valorProdutosVendidos);
+                    htmlProdsPrint += `<div class="print-row"><span>${prod}</span><span class="print-bold">${linha.qtdTxt}</span></div>`;
                 });
             }
 
@@ -4480,6 +4539,7 @@ window.toggleMenuGlobal = toggleMenuGlobal;
 window.toggleMenuMobile = toggleMenuMobile;
 window.toggleStatusAtivoProduto = toggleStatusAtivoProduto;
 window.verDetalhesCaixa = verDetalhesCaixa;
+window.renderizarHistoricoCaixas = renderizarHistoricoCaixas;
 
 // PWA: registra o service worker (sw.js) só cuida do "shell" do app pra ele
 // abrir mesmo sem internet — os dados de verdade continuam vindo do
