@@ -4007,7 +4007,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             const resumo = calcularResumoProdutosPorPeriodo(inicio, fim);
             let linhas = Object.entries(resumo);
             if (busca) linhas = linhas.filter(([nome]) => nome.toLowerCase().includes(busca));
-            linhas.sort((a, b) => b[1].qtdVendida - a[1].qtdVendida);
+            linhas.sort((a, b) => (b[1].qtdVendida + b[1].qtdBonificada) - (a[1].qtdVendida + a[1].qtdBonificada));
 
             let totalQtd = 0, totalBonificada = 0, totalValor = 0;
             linhas.forEach(([, d]) => { totalQtd += d.qtdVendida; totalBonificada += d.qtdBonificada; totalValor += d.valorVendido; });
@@ -4015,9 +4015,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             document.getElementById('pp-total-qtd').innerText = totalQtd;
             document.getElementById('pp-total-bonificada').innerText = totalBonificada;
             document.getElementById('pp-total-valor').innerText = totalValor.toFixed(2);
+            document.getElementById('pp-total-geral').innerText = totalQtd + totalBonificada;
 
             if (linhas.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" style="padding: 20px; text-align: center; color: gray;">${historicoCaixasDB.length === 0 ? 'Nenhum caixa foi fechado ainda.' : 'Nenhum produto no período/busca filtrado.'}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="5" style="padding: 20px; text-align: center; color: gray;">${historicoCaixasDB.length === 0 ? 'Nenhum caixa foi fechado ainda.' : 'Nenhum produto no período/busca filtrado.'}</td></tr>`;
                 return;
             }
 
@@ -4026,6 +4027,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     <td style="padding: 10px; font-weight: bold;">${nome}</td>
                     <td style="text-align:center; font-weight: bold; color: var(--primary);">${d.qtdVendida}</td>
                     <td style="text-align:center; font-weight: bold; color: ${d.qtdBonificada > 0 ? '#dc2626' : '#9ca3af'};">${d.qtdBonificada}</td>
+                    <td style="text-align:center; font-weight: 900; color: #7c3aed;">${d.qtdVendida + d.qtdBonificada}</td>
                     <td style="text-align:right; font-weight: bold; color: var(--success);">R$ ${d.valorVendido.toFixed(2)}</td>
                 </tr>
             `).join('');

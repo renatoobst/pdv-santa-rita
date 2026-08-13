@@ -1303,6 +1303,10 @@
                     <h3 style="margin-top: 0; color: gray; font-size: 0.85rem;">Valor Total Vendido</h3>
                     <p style="color: var(--success); font-size: 1.6rem; font-weight: 900; margin:0;">R$ <span id="pp-total-valor">0.00</span></p>
                 </div>
+                <div style="background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; min-width: 150px; text-align: center; border-bottom: 4px solid #7c3aed;">
+                    <h3 style="margin-top: 0; color: gray; font-size: 0.85rem;">Qtd Total (Vendida + Bonificada)</h3>
+                    <p style="color: #7c3aed; font-size: 1.6rem; font-weight: 900; margin:0;" id="pp-total-geral">0</p>
+                </div>
             </div>
 
             <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-height: 60vh; overflow-y: auto; overflow-x: auto;">
@@ -1312,6 +1316,7 @@
                             <th style="padding: 12px;">Produto</th>
                             <th style="text-align:center;">Qtd Vendida</th>
                             <th style="text-align:center;">Qtd Bonificada</th>
+                            <th style="text-align:center;">Qtd Total</th>
                             <th style="text-align:right;">Valor Total (R$)</th>
                         </tr>
                     </thead>
