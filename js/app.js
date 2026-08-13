@@ -2320,7 +2320,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     temItemCozinha = true;
                 }
 
-                let htmlFase = tipoGlobal === 'parcial'
+                // Editando um pedido já existente, o toggle por item fica
+                // sempre disponível (não depende do Modo de Retirada Global,
+                // que fica escondido durante edição — ver editarPedido).
+                let htmlFase = (tipoGlobal === 'parcial' || pedidoEmEdicaoId !== null)
                     ? `<select onchange="setFaseItem('${item.cartId}', this.value)" style="margin:0; padding:6px; font-size:0.85rem;"><option value="agora" ${item.fase==='agora'?'selected':''}>Agora</option><option value="mais_tarde" ${item.fase==='mais_tarde'?'selected':''}>Depois</option></select>`
                     : `<span style="font-size:0.8rem; background:#f3f4f6; padding:4px;">${item.fase === 'mais_tarde' ? '📦 Depois' : '🟢 Agora'}</span>`;
 
@@ -2392,6 +2395,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             pedidoEmEdicaoId = null;
             document.getElementById('banner-alerta-edicao').style.display = 'none';
             document.getElementById('box-status-edicao').style.display = 'none';
+            document.getElementById('box-modo-retirada-global').style.display = 'block';
             document.getElementById('box-carrinho-container').classList.remove('modo-edicao');
             document.getElementById('titulo-painel-carrinho').innerText = "Pedido Atual";
             document.getElementById('btn-finalizar-pedido').innerHTML = `Cobrar, Imprimir e Enviar 🖨️`;
@@ -2417,7 +2421,9 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (!formaPagto) {
                 return exibirAviso("Por favor, selecione a Forma de Pagamento!");
             }
-            if (!tipoGlobalRetirada) {
+            // Editando, "Modo de Retirada (Global)" fica escondido (quem manda
+            // é "Status do Pedido") — não faz sentido exigir valor nele aqui.
+            if (pedidoEmEdicaoId === null && !tipoGlobalRetirada) {
                 return exibirAviso("Por favor, selecione o Modo de Retirada (Global)!");
             }
             if (!tipoAtendimento) {
@@ -4317,6 +4323,14 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             const selectStatusEdicao = document.getElementById('status-pedido-edicao');
             selectStatusEdicao.value = p.statusPainel || 'nenhum';
             document.getElementById('box-status-edicao').style.display = 'block';
+
+            // Durante edição quem manda é "Status do Pedido" ali em cima —
+            // "Modo de Retirada (Global)" só serve pra CRIAR pedido (decide o
+            // status inicial), editando ele não faz mais nada além de
+            // confundir com dois controles pra "mesma coisa". O toggle
+            // agora/depois por item continua liberado sem precisar dele (ver
+            // atualizarCarrinhoUI).
+            document.getElementById('box-modo-retirada-global').style.display = 'none';
 
             document.getElementById('box-carrinho-container').classList.add('modo-edicao');
             document.getElementById('titulo-painel-carrinho').innerText = `Alterando Pedido #${id}`;
