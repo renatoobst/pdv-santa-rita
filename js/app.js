@@ -2350,7 +2350,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         }
 
         function atualizarValoresMisto(origem = '1') {
-            const total = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd) - (item.desconto || 0), 0);
+            const total = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd) - (item.desconto || 0) + (item.acrescimo || 0), 0);
             const inputVal1 = document.getElementById('misto-valor-1');
             const inputVal2 = document.getElementById('misto-valor-2');
             
@@ -2367,7 +2367,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         }
 
         function calcularTroco() {
-            const total = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd) - (item.desconto || 0), 0);
+            const total = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd) - (item.desconto || 0) + (item.acrescimo || 0), 0);
             const forma = document.getElementById('forma-pagto').value;
             const recVal = parseFloat(document.getElementById('valor-recebido-dinheiro').value) || 0;
             
@@ -2478,6 +2478,24 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             atualizarCarrinhoUI();
         }
 
+        // Acréscimo é o oposto do desconto: cliente pagou A MAIS por aquele
+        // item (ex: pediu um extra que não está no cardápio, ou só quis dar
+        // uma diferença maior mesmo) — mesmo esquema (valor fixo em R$,
+        // guardado no item do carrinho, aparece no recibo).
+        async function abrirAcrescimoItem(cartId) {
+            const item = carrinho.find(i => i.cartId === cartId);
+            if (!item) return;
+
+            const valorStr = await pedirTexto(`Valor de acréscimo (R$) para "${item.nome}" — quanto a mais o cliente pagou. Deixe 0 pra remover o acréscimo:`, { titulo: '➕ Acréscimo no Item', valorInicial: item.acrescimo ? item.acrescimo.toFixed(2) : '' });
+            if (valorStr === null) return;
+
+            const valor = parseFloat(valorStr.replace(',', '.'));
+            if (isNaN(valor) || valor < 0) return exibirAviso("Valor de acréscimo inválido.");
+
+            item.acrescimo = valor > 0 ? valor : undefined;
+            atualizarCarrinhoUI();
+        }
+
         function atualizarCarrinhoUI() {
             const divItens = document.getElementById('itens-carrinho');
             const tipoGlobal = document.getElementById('tipo-retirada-global').value;
@@ -2488,7 +2506,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
             carrinho.forEach(item => {
                 const desconto = item.desconto || 0;
-                total += (item.preco * item.qtd) - desconto;
+                const acrescimo = item.acrescimo || 0;
+                total += (item.preco * item.qtd) - desconto + acrescimo;
                 if (item.cozinha || (item.isCombo && item.itensComboEscolhidos.some(sub => sub.cozinha))) {
                     temItemCozinha = true;
                 }
@@ -2502,8 +2521,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
                 let descCombo = item.isCombo ? `<div style="font-size:0.75rem; color:gray; margin-top:2px;">↳ Contém: ${item.itensComboEscolhidos.map(sub=>`1x ${sub.nome}`).join(', ')}</div>` : '';
 
-                let htmlPreco = desconto > 0
-                    ? `<b><s style="color:gray; font-weight:normal; font-size:0.85rem;">R$ ${(item.preco).toFixed(2)}</s> R$ ${(item.preco - desconto).toFixed(2)}</b>`
+                let htmlPreco = (desconto > 0 || acrescimo > 0)
+                    ? `<b><s style="color:gray; font-weight:normal; font-size:0.85rem;">R$ ${(item.preco).toFixed(2)}</s> R$ ${(item.preco - desconto + acrescimo).toFixed(2)}</b>`
                     : `<b>R$ ${(item.preco).toFixed(2)}</b>`;
 
                 divItens.innerHTML += `
@@ -2511,9 +2530,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                         <div style="display:flex; justify-content:space-between;"><b>1x ${item.nome}</b>${htmlPreco}</div>
                         ${descCombo}
                         ${desconto > 0 ? `<div style="color:var(--success); font-size:0.8rem; font-weight:bold; margin-top:2px;">🏷️ Desconto: R$ ${desconto.toFixed(2)}</div>` : ''}
+                        ${acrescimo > 0 ? `<div style="color:#c2410c; font-size:0.8rem; font-weight:bold; margin-top:2px;">➕ Acréscimo: R$ ${acrescimo.toFixed(2)}</div>` : ''}
                         ${item.obs ? `<div style="color:var(--danger); font-size:0.85rem; margin-top:4px;">📝 Observação: ${item.obs}</div>` : ''}
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; flex-wrap:wrap; gap:6px;">
-                            <div style="display:flex; gap:8px; flex-wrap:wrap;">${htmlFase} <button class="btn btn-warning" style="padding:6px; font-size:0.8rem;" onclick="abrirModalObs('${item.cartId}')">Observação</button> <button class="btn" style="padding:6px; font-size:0.8rem; background:#0d9488; color:white;" onclick="abrirDescontoItem('${item.cartId}')" title="Aplicar desconto neste item">🏷️ Desconto</button></div>
+                            <div style="display:flex; gap:8px; flex-wrap:wrap;">${htmlFase} <button class="btn btn-warning" style="padding:6px; font-size:0.8rem;" onclick="abrirModalObs('${item.cartId}')">Observação</button> <button class="btn" style="padding:6px; font-size:0.8rem; background:#0d9488; color:white;" onclick="abrirDescontoItem('${item.cartId}')" title="Aplicar desconto neste item">🏷️ Desconto</button> <button class="btn" style="padding:6px; font-size:0.8rem; background:#c2410c; color:white;" onclick="abrirAcrescimoItem('${item.cartId}')" title="Aplicar acréscimo neste item">➕ Acréscimo</button></div>
                             <div class="qtd-controle"><button class="btn btn-danger" style="padding:6px; font-size:0.8rem;" onclick="removerItemCarrinho('${item.cartId}')">🗑️ Remover</button></div>
                         </div>
                     </div>`;
@@ -2604,7 +2624,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 return exibirAviso("Por favor, selecione o Tipo de Retirada (Levar ou Local)!");
             }
 
-            const total = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd) - (item.desconto || 0), 0);
+            const total = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd) - (item.desconto || 0) + (item.acrescimo || 0), 0);
 
             let detalhesMisto = null;
 
@@ -2774,7 +2794,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 if(i.isCombo) { det = `<div style="font-size:12px; font-weight:bold; padding-left:5px; color:#000;">↳ ${i.itensComboEscolhidos.map(sub=> `1x ${sub.nome}`).join('<br>↳ ')}</div>`; }
                 let obs = i.obs ? `<div style="font-size:12px; font-weight:bold;">Observação: ${i.obs}</div>` : '';
                 let desconto = i.desconto ? `<div style="font-size:12px; font-weight:bold;">Desconto: -R$ ${i.desconto.toFixed(2)}</div>` : '';
-                return `<div style="margin-top:5px;"><div class="print-row"><span class="print-bold">1x ${i.nome}</span><span class="print-bold">R$ ${(i.preco).toFixed(2)}</span></div>${det}${desconto}${obs}</div>`;
+                let acrescimo = i.acrescimo ? `<div style="font-size:12px; font-weight:bold;">Acréscimo: +R$ ${i.acrescimo.toFixed(2)}</div>` : '';
+                return `<div style="margin-top:5px;"><div class="print-row"><span class="print-bold">1x ${i.nome}</span><span class="print-bold">R$ ${(i.preco).toFixed(2)}</span></div>${det}${desconto}${acrescimo}${obs}</div>`;
             };
 
             return `
@@ -4722,6 +4743,7 @@ function filtrarMenuBusca() {
 window.abrirCaixaPrompt = abrirCaixaPrompt;
 window.abrirModalObs = abrirModalObs;
 window.abrirDescontoItem = abrirDescontoItem;
+window.abrirAcrescimoItem = abrirAcrescimoItem;
 window.abrirModalTodosPedidos = abrirModalTodosPedidos;
 window.abrirModalTrocaItem = abrirModalTrocaItem;
 window.addCarrinho = addCarrinho;
