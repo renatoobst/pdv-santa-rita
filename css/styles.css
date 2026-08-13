@@ -112,7 +112,15 @@
         #painel-cadastro-produto select,
         #painel-cadastro-produto textarea { padding: 6px 8px; margin-bottom: 6px; font-size: 0.85rem; }
         #painel-cadastro-produto label { margin-bottom: 2px; display: inline-block; }
-        #painel-cadastro-produto .row-inputs { gap: 8px; }
+        /* Sobrescreve o ".row-inputs { flex-direction: column }" do bloco de
+           responsividade geral (@media max-width:900px, mais abaixo) — aqui
+           dentro precisa continuar lado a lado até telas bem estreitas de
+           celular, senão Nome+Status, Ingredientes+Foto e Preço+Estoque
+           empilham e o formulário volta a ficar alto em tablet. */
+        #painel-cadastro-produto .row-inputs { gap: 8px; flex-direction: row; }
+        @media (max-width: 480px) {
+            #painel-cadastro-produto .row-inputs { flex-direction: column; }
+        }
 
         /* Contraste zebrado só entra em linhas SEM background próprio (ex:
            produto inativo já tem fundo vermelho claro inline, que continua
