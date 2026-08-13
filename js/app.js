@@ -848,9 +848,17 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
             const tagAtiva = document.activeElement.tagName;
             if (tagAtiva === 'INPUT' || tagAtiva === 'TEXTAREA' || tagAtiva === 'SELECT') {
-                if (e.key === 'Enter' && document.getElementById('modal-obs').style.display === 'flex') {
-                    salvarObsModal();
-                    e.preventDefault();
+                // Precisa checar aqui também (não só lá embaixo) porque o
+                // <select> de trocar produto fica focado — sem isso, Enter
+                // com foco no select não confirmava a troca de jeito nenhum.
+                if (e.key === 'Enter') {
+                    if (document.getElementById('modal-obs').style.display === 'flex') {
+                        salvarObsModal();
+                        e.preventDefault();
+                    } else if (document.getElementById('modal-troca-item').style.display === 'flex') {
+                        confirmarTrocaItemBalcao();
+                        e.preventDefault();
+                    }
                 }
                 return;
             }
@@ -892,19 +900,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     e.preventDefault();
                 }
                 else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-                    if (cardAtual) {
-                        const elementosFocaveis = Array.from(cardAtual.querySelectorAll('button, select, input, [tabindex="0"]'));
-                        if (elementosFocaveis.length > 0) {
-                            let indexFocoAtual = elementosFocaveis.indexOf(document.activeElement);
-                            if (e.key === 'ArrowDown') {
-                                indexFocoAtual = (indexFocoAtual + 1) % elementosFocaveis.length;
-                            } else {
-                                indexFocoAtual = (indexFocoAtual - 1 + elementosFocaveis.length) % elementosFocaveis.length;
-                            }
-                            elementosFocaveis[indexFocoAtual].focus();
-                            e.preventDefault();
-                        }
-                    }
+                    focarProximoElementoNoCard(cardAtual, e.key === 'ArrowDown');
+                    e.preventDefault();
                 }
                 else if (tecla === atalhosConfig.chamar) {
                     if (cardAtual) {
@@ -929,14 +926,18 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 const cardsCozinha = Array.from(document.querySelectorAll('#fila-cozinha .card-pedido'));
                 if (cardsCozinha.length === 0) return;
                 if (indexPedidoSelecionadoCozinha >= cardsCozinha.length) indexPedidoSelecionadoCozinha = 0;
+                const cardAtualCozinha = cardsCozinha[indexPedidoSelecionadoCozinha];
 
-                if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                if (e.key === 'ArrowRight') {
                     indexPedidoSelecionadoCozinha = (indexPedidoSelecionadoCozinha + 1) % cardsCozinha.length;
                     destacarCardTeclado(cardsCozinha, indexPedidoSelecionadoCozinha);
                     e.preventDefault();
-                } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                } else if (e.key === 'ArrowLeft') {
                     indexPedidoSelecionadoCozinha = (indexPedidoSelecionadoCozinha - 1 + cardsCozinha.length) % cardsCozinha.length;
                     destacarCardTeclado(cardsCozinha, indexPedidoSelecionadoCozinha);
+                    e.preventDefault();
+                } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    focarProximoElementoNoCard(cardAtualCozinha, e.key === 'ArrowDown');
                     e.preventDefault();
                 }
                 return;
@@ -947,14 +948,18 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 const cardsPausa = Array.from(document.querySelectorAll('#fila-agendados .card-pedido'));
                 if (cardsPausa.length === 0) return;
                 if (indexPedidoSelecionadoPausa >= cardsPausa.length) indexPedidoSelecionadoPausa = 0;
+                const cardAtualPausa = cardsPausa[indexPedidoSelecionadoPausa];
 
-                if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                if (e.key === 'ArrowRight') {
                     indexPedidoSelecionadoPausa = (indexPedidoSelecionadoPausa + 1) % cardsPausa.length;
                     destacarCardTeclado(cardsPausa, indexPedidoSelecionadoPausa);
                     e.preventDefault();
-                } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                } else if (e.key === 'ArrowLeft') {
                     indexPedidoSelecionadoPausa = (indexPedidoSelecionadoPausa - 1 + cardsPausa.length) % cardsPausa.length;
                     destacarCardTeclado(cardsPausa, indexPedidoSelecionadoPausa);
+                    e.preventDefault();
+                } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    focarProximoElementoNoCard(cardAtualPausa, e.key === 'ArrowDown');
                     e.preventDefault();
                 }
             }
@@ -971,13 +976,41 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 cardTarget.classList.add('card-selecionado-teclado');
                 cardTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
-                const primeiroBotao = cardTarget.querySelector('button');
-                if (primeiroBotao) primeiroBotao.focus();
+                // Prioriza o botão de ação principal do card (Chamar Painel /
+                // Retirado / Enviar p/ Cozinha) em vez de literalmente o
+                // primeiro botão em ordem no HTML — senão, quando o primeiro
+                // item do card tinha um botão "Trocar" antes dele, o foco
+                // caía ali em vez do botão principal, de forma inconsistente
+                // entre um card e outro.
+                // "Retirado" tem prioridade sobre "Re-chamar"/"Chamar Painel"
+                // quando os dois existem no card (pedido já chamado, esperando
+                // ser retirado) — depois de chamar, a próxima ação mais comum
+                // é confirmar a retirada, não chamar de novo.
+                const botaoPrincipal = cardTarget.querySelector("button[onclick*='finalizarEntrega']")
+                    || cardTarget.querySelector("button[onclick*='chamarNoPainel']")
+                    || cardTarget.querySelector("button[onclick*='moverParaAgora']")
+                    || cardTarget.querySelector('button');
+                if (botaoPrincipal) botaoPrincipal.focus();
             }
         }
 
         function destacarCardBalcao(cards) {
             destacarCardTeclado(cards, indexPedidoSelecionadoBalcao);
+        }
+
+        // Cima/baixo dentro do card atual (Balcão, Cozinha, Pausa) — cicla
+        // entre os botões/campos focáveis daquele card específico (ex: nos
+        // itens de balcão, passa pelos "Trocar" de cada item até chegar no
+        // botão de ação principal, ou vice-versa).
+        function focarProximoElementoNoCard(card, avancar) {
+            if (!card) return;
+            const elementosFocaveis = Array.from(card.querySelectorAll('button, select, input, [tabindex="0"]'));
+            if (elementosFocaveis.length === 0) return;
+            let indexFocoAtual = elementosFocaveis.indexOf(document.activeElement);
+            indexFocoAtual = avancar
+                ? (indexFocoAtual + 1) % elementosFocaveis.length
+                : (indexFocoAtual - 1 + elementosFocaveis.length) % elementosFocaveis.length;
+            elementosFocaveis[indexFocoAtual].focus();
         }
 
         function abrirModalTodosPedidos() {
@@ -1025,10 +1058,12 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                         <button onclick="baixarPDFPedido(${p.id})" class="btn" style="background:#b91c1c; color:white; padding: 4px 8px; font-size: 0.8rem; margin-right: 4px;" title="Baixar Pedido em PDF">📄</button>
                     `;
                     if (p.statusPainel !== 'cancelado') {
-                        acoes += `
-                            <button onclick="editarPedido(${p.id}); fecharModalTodosPedidos();" class="btn btn-warning" style="padding: 4px 8px; font-size: 0.8rem; margin-right: 4px;">✏️ Alterar</button>
-                            <button onclick="cancelarPedido(${p.id}); renderizarTabelaModalTodosPedidos();" class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem;">🗑️</button>
-                        `;
+                        acoes += `<button onclick="editarPedido(${p.id}); fecharModalTodosPedidos();" class="btn btn-warning" style="padding: 4px 8px; font-size: 0.8rem; margin-right: 4px;">✏️ Alterar</button>`;
+                        // Cancelar/apagar pedido é só pro Master — atendente
+                        // comum nem vê o botão aqui na tela de Pedido.
+                        if (usuarioAtual && usuarioAtual.isMaster) {
+                            acoes += `<button onclick="cancelarPedido(${p.id}); renderizarTabelaModalTodosPedidos();" class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem;">🗑️</button>`;
+                        }
                     } else {
                         acoes += `<span style="color:gray; font-size: 0.8rem;">Bloqueado</span>`;
                     }
@@ -2014,6 +2049,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             }
 
             document.getElementById('modal-troca-item').style.display = 'flex';
+            // Foca o select assim que o modal abre — daí as setas já mudam o
+            // produto escolhido (comportamento nativo do <select>) e o Enter
+            // confirma, sem precisar tocar no mouse.
+            select.focus();
         }
 
         function fecharModalTroca() {
@@ -2814,16 +2853,23 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         function falarChamadaPedido(numeroPedido, nomeCliente) {
             try {
                 if (!('speechSynthesis' in window)) return;
-                const utter = new SpeechSynthesisUtterance(`Pedido número ${numeroPedido}, ${nomeCliente}`);
-                utter.lang = 'pt-BR';
-                utter.rate = 0.95;
+                const fator = fatorVolumeAnuncio();
+                const texto = `Pedido número ${numeroPedido}, ${nomeCliente}`;
                 // O navegador só aceita volume entre 0 e 1 (100%) pra fala
-                // sintetizada — valores do slider acima de 100% não têm
-                // efeito aqui (só no bipe, que é gerado por osciladores e
-                // pode ser amplificado de verdade).
-                utter.volume = Math.min(fatorVolumeAnuncio(), 1);
+                // sintetizada — não tem como aumentar isso de verdade (só o
+                // bipe, que é gerado por osciladores, pode ser amplificado).
+                // Como compensação, quando o slider passa de 100% a frase
+                // repete (até 3x) — não aumenta o volume, mas aumenta a
+                // chance de ser percebida no meio do barulho do evento.
+                const repeticoes = Math.min(3, Math.max(1, Math.round(fator)));
                 speechSynthesis.cancel();
-                speechSynthesis.speak(utter);
+                for (let i = 0; i < repeticoes; i++) {
+                    const utter = new SpeechSynthesisUtterance(texto);
+                    utter.lang = 'pt-BR';
+                    utter.rate = 0.95;
+                    utter.volume = Math.min(fator, 1);
+                    speechSynthesis.speak(utter);
+                }
             } catch (e) {
                 console.log('Fala por voz não suportada neste dispositivo:', e);
             }
@@ -2994,6 +3040,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         }
 
         async function cancelarPedido(id) {
+            if (!usuarioAtual || !usuarioAtual.isMaster) return exibirAviso("Só o usuário Master pode cancelar/apagar pedidos.");
             if(await pedirConfirmacao(`Tem certeza que deseja CANCELAR o Pedido #${id}?`, { titulo: '🗑️ Cancelar Pedido' })) {
                 const p = pedidosGerais.find(x => x.id === id);
                 if (p && p.statusPainel !== 'cancelado') {
@@ -3357,18 +3404,22 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 let statusHtml = ''; let acoesHtml = '';
                 let btnImprimir = `<button onclick="reimprimirPedido(${p.id})" class="btn" style="background:#3b82f6; color:white; padding: 4px 8px; font-size: 0.8rem; margin-right: 5px;" title="Reimprimir">🖨️</button><button onclick="baixarPDFPedido(${p.id})" class="btn" style="background:#b91c1c; color:white; padding: 4px 8px; font-size: 0.8rem; margin-right: 5px;" title="Baixar em PDF">📄</button>`;
 
-                if (p.statusPainel === 'entregue') { 
-                    statusHtml = '<span class="status-badge" style="background:var(--success);">✅ Finalizado</span>'; 
-                    acoesHtml = btnImprimir + `<button onclick="editarPedido(${p.id})" class="btn btn-warning" style="padding: 4px 8px; font-size: 0.8rem; margin-right: 5px;">✏️</button> <button onclick="cancelarPedido(${p.id})" class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem;">🗑️</button>`; 
-                } else if (p.statusPainel === 'cancelado') { 
-                    statusHtml = '<span class="status-badge" style="background:var(--danger);">❌ Cancelado</span>'; 
-                    acoesHtml = btnImprimir + '<span style="color:gray; font-size: 0.8rem;">Bloqueado</span>'; 
+                // Cancelar/apagar pedido é só pro Master (mesma regra da tela
+                // de Pedido) — atendente comum não vê o botão de lixeira aqui.
+                const btnCancelarGestao = (usuarioAtual && usuarioAtual.isMaster) ? `<button onclick="cancelarPedido(${p.id})" class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem;">🗑️</button>` : '';
+
+                if (p.statusPainel === 'entregue') {
+                    statusHtml = '<span class="status-badge" style="background:var(--success);">✅ Finalizado</span>';
+                    acoesHtml = btnImprimir + `<button onclick="editarPedido(${p.id})" class="btn btn-warning" style="padding: 4px 8px; font-size: 0.8rem; margin-right: 5px;">✏️</button> ${btnCancelarGestao}`;
+                } else if (p.statusPainel === 'cancelado') {
+                    statusHtml = '<span class="status-badge" style="background:var(--danger);">❌ Cancelado</span>';
+                    acoesHtml = btnImprimir + '<span style="color:gray; font-size: 0.8rem;">Bloqueado</span>';
                 } else {
                     if (p.statusPainel === 'pronto') statusHtml = '<span class="status-badge" style="background:var(--primary);">📺 Pronto TV</span>';
                     else if (p.statusPainel === 'preparando') statusHtml = '<span class="status-badge" style="background:var(--warning); color:black;">👨‍🍳 Cozinha</span>';
                     else statusHtml = '<span class="status-badge" style="background:var(--info);">📦 P/ Depois</span>';
-                    
-                    acoesHtml = btnImprimir + `<button onclick="editarPedido(${p.id})" class="btn btn-warning" style="padding: 4px 8px; font-size: 0.8rem; margin-right: 5px;">✏️</button> <button onclick="cancelarPedido(${p.id})" class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem;">🗑️</button>`;
+
+                    acoesHtml = btnImprimir + `<button onclick="editarPedido(${p.id})" class="btn btn-warning" style="padding: 4px 8px; font-size: 0.8rem; margin-right: 5px;">✏️</button> ${btnCancelarGestao}`;
                 }
                 const resumoItens = p.itens.map(i => `1x ${i.nome}`).join(', ');
                 const tempoPreparo = calcularDiferencaMinutos(p.horaEntradaCozinha || p.hora, p.horaEntrega);
