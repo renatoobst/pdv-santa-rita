@@ -192,6 +192,7 @@
                 <div class="dropdown-inner">
                     <button id="btn-sub-dash" onclick="mudarAba('tela-relatorio', this)">📈 Dashboard Analytics</button>
                     <button id="btn-sub-dash-geral" onclick="mudarAba('tela-dashboard-geral', this)">🏬 Dashboard Geral (Todas as Barracas)</button>
+                    <button onclick="mudarAba('tela-produtos-periodo', this)">📦 Produtos Vendidos por Período</button>
                 </div>
             </div>
         </div>
@@ -1256,6 +1257,65 @@
                         </tr>
                     </thead>
                     <tbody id="tabela-historico-caixas"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TELA: PRODUTOS VENDIDOS POR PERÍODO -->
+        <div id="tela-produtos-periodo" class="tab-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+                <h2 style="border: none; padding: 0; margin: 0;">📦 Produtos Vendidos por Período</h2>
+                <div style="display:flex; gap:10px; flex-wrap: wrap;">
+                    <button class="btn btn-success" style="background:#2563eb;" onclick="gerarPDFProdutosPeriodo()">📄 PDF</button>
+                    <button class="btn btn-success" style="background:#7c3aed;" onclick="gerarJPG('tela-produtos-periodo', 'Produtos_Por_Periodo.jpg')">🖼️ JPG</button>
+                </div>
+            </div>
+            <p style="color: gray; margin-bottom: 15px;">Soma de todos os fechamentos de caixa (de qualquer operador) dentro do período — não inclui caixas ainda abertos agora.</p>
+
+            <div style="background: white; padding: 15px 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 15px;">
+                <div class="row-inputs" style="align-items:flex-end;">
+                    <div>
+                        <label style="font-size: 0.8rem; font-weight: bold; display:block;">Data Início:</label>
+                        <input type="date" id="filtro-produtos-periodo-inicio" onchange="renderizarProdutosPorPeriodo()" style="margin-bottom:0;">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.8rem; font-weight: bold; display:block;">Data Fim:</label>
+                        <input type="date" id="filtro-produtos-periodo-fim" onchange="renderizarProdutosPorPeriodo()" style="margin-bottom:0;">
+                    </div>
+                    <div style="flex:1; min-width:150px;">
+                        <label style="font-size: 0.8rem; font-weight: bold; display:block;">Buscar produto:</label>
+                        <input type="text" id="filtro-produtos-periodo-nome" placeholder="Nome do produto..." oninput="renderizarProdutosPorPeriodo()" style="margin-bottom:0;" spellcheck="false">
+                    </div>
+                    <button class="btn btn-neutro" onclick="document.getElementById('filtro-produtos-periodo-inicio').value=''; document.getElementById('filtro-produtos-periodo-fim').value=''; document.getElementById('filtro-produtos-periodo-nome').value=''; renderizarProdutosPorPeriodo();">🧹 Limpar Filtro</button>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
+                <div style="background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; min-width: 150px; text-align: center; border-bottom: 4px solid var(--primary);">
+                    <h3 style="margin-top: 0; color: gray; font-size: 0.85rem;">Qtd Vendida no Filtro</h3>
+                    <p style="color: var(--primary); font-size: 1.6rem; font-weight: 900; margin:0;" id="pp-total-qtd">0</p>
+                </div>
+                <div style="background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; min-width: 150px; text-align: center; border-bottom: 4px solid #ef4444;">
+                    <h3 style="margin-top: 0; color: gray; font-size: 0.85rem;">Qtd Bonificada no Filtro</h3>
+                    <p style="color: #dc2626; font-size: 1.6rem; font-weight: 900; margin:0;" id="pp-total-bonificada">0</p>
+                </div>
+                <div style="background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; min-width: 150px; text-align: center; border-bottom: 4px solid var(--success);">
+                    <h3 style="margin-top: 0; color: gray; font-size: 0.85rem;">Valor Total Vendido</h3>
+                    <p style="color: var(--success); font-size: 1.6rem; font-weight: 900; margin:0;">R$ <span id="pp-total-valor">0.00</span></p>
+                </div>
+            </div>
+
+            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-height: 60vh; overflow-y: auto; overflow-x: auto;">
+                <table style="width: 100%; min-width: 600px; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid #e5e7eb; background: #f8fafc;">
+                            <th style="padding: 12px;">Produto</th>
+                            <th style="text-align:center;">Qtd Vendida</th>
+                            <th style="text-align:center;">Qtd Bonificada</th>
+                            <th style="text-align:right;">Valor Total (R$)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabela-produtos-periodo"></tbody>
                 </table>
             </div>
         </div>

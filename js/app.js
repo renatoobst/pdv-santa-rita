@@ -944,6 +944,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if(idAba === 'tela-gestao-usuarios') renderizarTelaGestaoUsuarios();
             if(idAba === 'tela-dashboard-geral') carregarDashboardGeral();
             if(idAba === 'tela-configuracoes') aplicarConfiguracoesImpressaoRedeNaTela();
+            if(idAba === 'tela-produtos-periodo') renderizarProdutosPorPeriodo();
         }
 
         function calcularDiferencaMinutos(horaInicio, horaFim) {
@@ -3957,6 +3958,92 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             return c.pedidosDetalhados.filter(p => p.statusPainel !== 'cancelado' && p.pagamento && p.pagamento.startsWith('Bonificação'));
         }
 
+        // Soma, produto a produto, tudo que foi vendido + bonificado em todos
+        // os fechamentos de caixa (historicoCaixasDB) dentro do período —
+        // mesma filtragem por data de renderizarHistoricoCaixas(), só que
+        // agrupado por PRODUTO em vez de por fechamento. Não inclui caixas
+        // ainda abertos (só o que já foi fechado tem produtosVendidos
+        // consolidado). Combo já entra pelo nome do sub-item escolhido, igual
+        // ao resto do app (ver fecharCaixaPrompt).
+        function calcularResumoProdutosPorPeriodo(dataInicio, dataFim) {
+            const resumo = {};
+            const garantir = nome => resumo[nome] || (resumo[nome] = { qtdVendida: 0, qtdBonificada: 0, valorVendido: 0 });
+
+            let lista = [...historicoCaixasDB];
+            if (dataInicio) {
+                const dtInicio = new Date(dataInicio + 'T00:00:00');
+                lista = lista.filter(c => { const d = parseDataFechamentoBR(c.dataFechamento); return d && d >= dtInicio; });
+            }
+            if (dataFim) {
+                const dtFim = new Date(dataFim + 'T23:59:59');
+                lista = lista.filter(c => { const d = parseDataFechamentoBR(c.dataFechamento); return d && d <= dtFim; });
+            }
+
+            lista.forEach(c => {
+                Object.entries(c.produtosVendidos || {}).forEach(([nome, qtd]) => { garantir(nome).qtdVendida += qtd; });
+                Object.entries(c.valorProdutosVendidos || {}).forEach(([nome, valor]) => { garantir(nome).valorVendido += valor; });
+                extrairBonificacoesDoFechamento(c).forEach(pedido => {
+                    (pedido.itens || []).forEach(item => {
+                        if (item.isCombo && Array.isArray(item.itensComboEscolhidos) && item.itensComboEscolhidos.length > 0) {
+                            item.itensComboEscolhidos.forEach(sub => { garantir(sub.nome).qtdBonificada += 1; });
+                        } else {
+                            garantir(item.nome).qtdBonificada += item.qtd;
+                        }
+                    });
+                });
+            });
+
+            return resumo;
+        }
+
+        function renderizarProdutosPorPeriodo() {
+            const tbody = document.getElementById('tabela-produtos-periodo');
+            if (!tbody) return;
+
+            const inicio = document.getElementById('filtro-produtos-periodo-inicio').value;
+            const fim = document.getElementById('filtro-produtos-periodo-fim').value;
+            const busca = document.getElementById('filtro-produtos-periodo-nome').value.trim().toLowerCase();
+
+            const resumo = calcularResumoProdutosPorPeriodo(inicio, fim);
+            let linhas = Object.entries(resumo);
+            if (busca) linhas = linhas.filter(([nome]) => nome.toLowerCase().includes(busca));
+            linhas.sort((a, b) => b[1].qtdVendida - a[1].qtdVendida);
+
+            let totalQtd = 0, totalBonificada = 0, totalValor = 0;
+            linhas.forEach(([, d]) => { totalQtd += d.qtdVendida; totalBonificada += d.qtdBonificada; totalValor += d.valorVendido; });
+
+            document.getElementById('pp-total-qtd').innerText = totalQtd;
+            document.getElementById('pp-total-bonificada').innerText = totalBonificada;
+            document.getElementById('pp-total-valor').innerText = totalValor.toFixed(2);
+
+            if (linhas.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" style="padding: 20px; text-align: center; color: gray;">${historicoCaixasDB.length === 0 ? 'Nenhum caixa foi fechado ainda.' : 'Nenhum produto no período/busca filtrado.'}</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = linhas.map(([nome, d]) => `
+                <tr style="border-bottom: 1px solid #e5e7eb;">
+                    <td style="padding: 10px; font-weight: bold;">${nome}</td>
+                    <td style="text-align:center; font-weight: bold; color: var(--primary);">${d.qtdVendida}</td>
+                    <td style="text-align:center; font-weight: bold; color: ${d.qtdBonificada > 0 ? '#dc2626' : '#9ca3af'};">${d.qtdBonificada}</td>
+                    <td style="text-align:right; font-weight: bold; color: var(--success);">R$ ${d.valorVendido.toFixed(2)}</td>
+                </tr>
+            `).join('');
+        }
+
+        function gerarPDFProdutosPeriodo() {
+            const el = document.getElementById('tela-produtos-periodo');
+            if (!el || typeof html2pdf !== 'function') return;
+            const restaurar = expandirRolaveisParaCaptura(el);
+            html2pdf().set({
+                margin: 10,
+                filename: `Produtos_Por_Periodo_${new Date().toISOString().slice(0,10)}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2 },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            }).from(el).save().then(restaurar).catch(restaurar);
+        }
+
         // Monta "94 un. — R$ 2.350,00" pra lista de Produtos Vendidos. Usa o
         // valor já calculado na hora do fechamento (mapaValor); fechamentos
         // salvos antes dessa função existir não têm esse campo, então cai
@@ -4720,6 +4807,8 @@ window.toggleMenuMobile = toggleMenuMobile;
 window.toggleStatusAtivoProduto = toggleStatusAtivoProduto;
 window.verDetalhesCaixa = verDetalhesCaixa;
 window.renderizarHistoricoCaixas = renderizarHistoricoCaixas;
+window.renderizarProdutosPorPeriodo = renderizarProdutosPorPeriodo;
+window.gerarPDFProdutosPeriodo = gerarPDFProdutosPeriodo;
 
 // PWA: registra o service worker (sw.js) só cuida do "shell" do app pra ele
 // abrir mesmo sem internet — os dados de verdade continuam vindo do

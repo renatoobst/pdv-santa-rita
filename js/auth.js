@@ -44,7 +44,8 @@ const TELAS_DISPONIVEIS = [
     { id: 'tela-gestao', label: '📋 Gestão de Pedidos' },
     { id: 'tela-relatorio', label: '📈 Dashboard Analytics' },
     { id: 'tela-dashboard-geral', label: '🏬 Dashboard Geral' },
-    { id: 'tela-fechamento-caixa', label: '📜 Fechamentos de Caixa' }
+    { id: 'tela-fechamento-caixa', label: '📜 Fechamentos de Caixa' },
+    { id: 'tela-produtos-periodo', label: '📦 Produtos Vendidos por Período' }
 ];
 
 async function hashSenhaBruta(senha) {
