@@ -25,6 +25,17 @@
 </head>
 <body>
 
+    <!-- Cortina de carregamento inicial — cobre a tela inteira ANTES de
+         qualquer outra coisa aparecer, enquanto app.js checa se já existe
+         sessão salva (sessionStorage) ou se precisa mostrar login/criar
+         Master. Sem isso, dava pra ver um flash da tela de Pedido "pelada"
+         (sem login nenhum) por uma fração de segundo antes do modal de login
+         entrar. Some assim que resolverSessaoAtiva() decide o que mostrar —
+         ver ocultarCortinaInicial() em auth.js. -->
+    <div id="cortina-carregamento-inicial" style="position:fixed; top:0; left:0; right:0; bottom:0; z-index:6000000; background:#0f172a; display:flex; align-items:center; justify-content:center; color:white; font-weight:bold; font-size:1.1rem;">
+        🔒 Carregando…
+    </div>
+
     <div id="indicador-offline" style="display:none; position:fixed; top:0; left:0; right:0; z-index:2000000; background:#dc2626; color:white; text-align:center; padding:6px; font-weight:bold; font-size:0.85rem;">
         📡 Sem conexão com o servidor — salvando só neste dispositivo até a conexão voltar
     </div>

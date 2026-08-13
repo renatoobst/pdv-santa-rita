@@ -20,6 +20,9 @@
 import { supabaseClient, PDV_CLIENT_ID } from './config.js';
 import { registroBarracas, carregarRegistroBarracas } from './barracas.js';
 
+// Fica em sessionStorage (não localStorage) de propósito: precisa pedir
+// senha de novo toda vez que o navegador/PWA for fechado e reaberto, mas sem
+// forçar login a cada F5/recarregada dentro do mesmo uso contínuo.
 const CHAVE_SESSAO_LOCAL = 'pdv_sessao_usuario_id';
 
 export let usuarioAtual = null; // { id, nome, isMaster, telasPermitidas, podeAbrirFecharCaixa }
@@ -44,10 +47,20 @@ const TELAS_DISPONIVEIS = [
     { id: 'tela-fechamento-caixa', label: '📜 Fechamentos de Caixa' }
 ];
 
-async function hashSenha(senha) {
+async function hashSenhaBruta(senha) {
     const dados = new TextEncoder().encode(senha);
     const hashBuffer = await crypto.subtle.digest('SHA-256', dados);
     return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Maiúscula ou minúscula não deve importar na hora de digitar a senha —
+// normaliza pra minúsculo antes de gerar o hash (usada sempre que uma senha
+// é CRIADA/TROCADA: conta Master, novo usuário, reset de senha). Senhas
+// salvas ANTES dessa mudança usam hashSenhaBruta() da string original
+// (sensível a maiúscula/minúscula) — ver fazerLogin() e
+// confirmarSenhaUsuarioAtual() pra como isso é migrado sem travar ninguém.
+async function hashSenha(senha) {
+    return hashSenhaBruta(senha.toLowerCase());
 }
 
 function mapearPerfil(linha) {
@@ -68,10 +81,20 @@ function mapearPerfil(linha) {
 export async function confirmarSenhaUsuarioAtual(senhaDigitada) {
     if (!usuarioAtual) return false;
     try {
-        const hash = await hashSenha(senhaDigitada);
         const { data, error } = await supabaseClient.from('pdv_perfis').select('senha_hash').eq('id', usuarioAtual.id).maybeSingle();
         if (error || !data) return false;
-        return data.senha_hash === hash;
+
+        const hashNormalizado = await hashSenha(senhaDigitada);
+        if (data.senha_hash === hashNormalizado) return true;
+
+        // Mesma migração silenciosa de fazerLogin() — ver comentário lá.
+        const hashOriginal = await hashSenhaBruta(senhaDigitada);
+        if (data.senha_hash === hashOriginal) {
+            supabaseClient.from('pdv_perfis').update({ senha_hash: hashNormalizado }).eq('id', usuarioAtual.id)
+                .then(({ error: erroMigracao }) => { if (erroMigracao) console.error('Falha ao migrar hash de senha:', erroMigracao); });
+            return true;
+        }
+        return false;
     } catch (erro) {
         console.error('Falha ao confirmar senha:', erro);
         return false;
@@ -104,6 +127,15 @@ window.atualizarVisibilidadeChkCaixa = atualizarVisibilidadeChkCaixa;
 function avisar(mensagem, titulo) {
     if (window.exibirAviso) window.exibirAviso(mensagem, titulo);
     else alert(mensagem);
+}
+
+// Some com a cortina de carregamento inicial (ver index.html) assim que já
+// se sabe o que mostrar em seguida — login, criar Master, aviso de
+// configuração pendente, ou (sessão válida) o app direto. Chamada nos 4
+// desfechos possíveis de resolverSessaoAtiva().
+function ocultarCortinaInicial() {
+    const cortina = document.getElementById('cortina-carregamento-inicial');
+    if (cortina) cortina.remove();
 }
 
 // Único ponto de checagem de permissão — usado tanto pra esconder botões
@@ -169,14 +201,15 @@ export async function resolverSessaoAtiva() {
         return new Promise(resolve => renderizarTelaBootstrap(resolve));
     }
 
-    const idSalvo = localStorage.getItem(CHAVE_SESSAO_LOCAL);
+    const idSalvo = sessionStorage.getItem(CHAVE_SESSAO_LOCAL);
     if (idSalvo) {
         const perfil = await carregarPerfilPorId(idSalvo);
         if (perfil) {
             usuarioAtual = perfil;
+            ocultarCortinaInicial();
             return perfil;
         }
-        localStorage.removeItem(CHAVE_SESSAO_LOCAL); // usuário removido por um Master nesse meio tempo
+        sessionStorage.removeItem(CHAVE_SESSAO_LOCAL); // usuário removido por um Master nesse meio tempo
     }
 
     return new Promise(resolve => renderizarTelaLogin(resolve));
@@ -185,6 +218,7 @@ export async function resolverSessaoAtiva() {
 function renderizarErroConfiguracao() {
     const tela = document.getElementById('tela-login');
     tela.style.display = 'flex';
+    ocultarCortinaInicial();
     tela.querySelector('.modal-content').innerHTML = `
         <h2 style="margin-top:0; color: var(--danger);">⚠️ Configuração pendente</h2>
         <p style="color:#374151;">Não foi possível encontrar a tabela de usuários no Supabase. Rode o script
@@ -195,6 +229,7 @@ function renderizarErroConfiguracao() {
 function renderizarTelaBootstrap(aoConcluir) {
     const tela = document.getElementById('tela-master-bootstrap');
     tela.style.display = 'flex';
+    ocultarCortinaInicial();
 
     window.criarContaMaster = async () => {
         const nome = document.getElementById('input-master-nome').value.trim();
@@ -212,7 +247,7 @@ function renderizarTelaBootstrap(aoConcluir) {
             if (error) throw error;
 
             usuarioAtual = mapearPerfil(data);
-            localStorage.setItem(CHAVE_SESSAO_LOCAL, data.id);
+            sessionStorage.setItem(CHAVE_SESSAO_LOCAL, data.id);
             tela.style.display = 'none';
             aoConcluir(usuarioAtual);
         } catch (erro) {
@@ -227,6 +262,7 @@ function renderizarTelaBootstrap(aoConcluir) {
 function renderizarTelaLogin(aoConcluir) {
     const tela = document.getElementById('tela-login');
     tela.style.display = 'flex';
+    ocultarCortinaInicial();
 
     window.fazerLogin = async () => {
         const nome = document.getElementById('input-login-nome').value.trim();
@@ -236,15 +272,33 @@ function renderizarTelaLogin(aoConcluir) {
         const botao = document.getElementById('btn-fazer-login');
         botao.disabled = true;
         try {
-            const senha_hash = await hashSenha(senha);
             const { data, error } = await supabaseClient.from('pdv_perfis').select('*').eq('nome', nome).maybeSingle();
             if (error) throw error;
-            if (!data || data.senha_hash !== senha_hash) {
+
+            const hashNormalizado = await hashSenha(senha);
+            let autenticado = !!data && data.senha_hash === hashNormalizado;
+
+            // Compatibilidade com senhas salvas antes da normalização
+            // maiúscula/minúscula: se bater com o hash "cru" (sensível a
+            // caixa) da senha exatamente como foi digitada, aceita e já
+            // regrava o hash no formato novo — assim da próxima vez qualquer
+            // combinação de maiúscula/minúscula funciona, sem exigir que o
+            // usuário troque a senha manualmente.
+            if (!autenticado && data) {
+                const hashOriginal = await hashSenhaBruta(senha);
+                if (data.senha_hash === hashOriginal) {
+                    autenticado = true;
+                    supabaseClient.from('pdv_perfis').update({ senha_hash: hashNormalizado }).eq('id', data.id)
+                        .then(({ error: erroMigracao }) => { if (erroMigracao) console.error('Falha ao migrar hash de senha:', erroMigracao); });
+                }
+            }
+
+            if (!autenticado) {
                 avisar('Usuário ou senha incorretos.');
                 return;
             }
             usuarioAtual = mapearPerfil(data);
-            localStorage.setItem(CHAVE_SESSAO_LOCAL, data.id);
+            sessionStorage.setItem(CHAVE_SESSAO_LOCAL, data.id);
             tela.style.display = 'none';
             document.getElementById('input-login-senha').value = '';
             aoConcluir(usuarioAtual);
@@ -258,7 +312,7 @@ function renderizarTelaLogin(aoConcluir) {
 }
 
 export function fazerLogout() {
-    localStorage.removeItem(CHAVE_SESSAO_LOCAL);
+    sessionStorage.removeItem(CHAVE_SESSAO_LOCAL);
     location.reload();
 }
 
