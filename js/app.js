@@ -298,11 +298,23 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         function abrirTecladoNumerico(input) {
             inputTecladoNumericoAtivo = input;
             document.getElementById('teclado-numerico-flutuante').style.display = 'block';
+            atualizarPreviewTecladoNumerico();
         }
 
         function fecharTecladoNumerico() {
             document.getElementById('teclado-numerico-flutuante').style.display = 'none';
             inputTecladoNumericoAtivo = null;
+        }
+
+        // O teclado flutuante fica por cima do campo de verdade (às vezes até
+        // cobrindo ele, dependendo de onde o campo está na tela) — esse mini
+        // visor mostra o valor digitado até agora sem precisar ver o campo
+        // original por trás.
+        function atualizarPreviewTecladoNumerico() {
+            const preview = document.getElementById('preview-teclado-numerico');
+            const input = inputTecladoNumericoAtivo;
+            if (!preview || !input) return;
+            preview.innerText = input.value || '';
         }
 
         function digitarTecladoNumerico(tecla) {
@@ -316,6 +328,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 input.value += tecla;
             }
             input.dispatchEvent(new Event('input', { bubbles: true }));
+            atualizarPreviewTecladoNumerico();
         }
 
         // --- Teclado de texto próprio em tablet/celular — mesma ideia do
@@ -349,11 +362,25 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             inputTecladoTextoAtivo = input;
             document.getElementById('teclado-texto-flutuante').style.display = 'block';
             atualizarTeclasTexto();
+            atualizarPreviewTecladoTexto();
         }
 
         function fecharTecladoTexto() {
             document.getElementById('teclado-texto-flutuante').style.display = 'none';
             inputTecladoTextoAtivo = null;
+        }
+
+        // Mesma ideia do preview do teclado numérico — mostra o que foi
+        // digitado até agora sem depender de ver o campo de verdade, que o
+        // teclado flutuante às vezes cobre. Em campo de senha mantém mascarado
+        // (●●●) igual ao campo original, só respeitando o botão 👁️ de
+        // mostrar/ocultar senha quando ele muda o type do campo pra "text".
+        function atualizarPreviewTecladoTexto() {
+            const preview = document.getElementById('preview-teclado-texto');
+            const input = inputTecladoTextoAtivo;
+            if (!preview || !input) return;
+            const valor = input.value || '';
+            preview.innerText = input.type === 'password' ? '●'.repeat(valor.length) : valor;
         }
 
         function digitarTecladoTexto(tecla) {
@@ -371,6 +398,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 input.value += shiftAtivoTecladoTexto ? tecla.toUpperCase() : tecla;
             }
             input.dispatchEvent(new Event('input', { bubbles: true }));
+            atualizarPreviewTecladoTexto();
         }
 
         function atualizarTeclasTexto() {
