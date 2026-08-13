@@ -3746,6 +3746,16 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             });
         }
 
+        // Usado nos relatórios de fechamento (modal de detalhes e impressão) —
+        // c.pedidosDetalhados guarda o snapshot completo dos pedidos daquele
+        // caixa, incluindo os pagos como bonificação (que já ficam fora de
+        // "Produtos Vendidos"/faturamento). Extrai só esses pra mostrar em
+        // separado: quantidade, descrição do que saiu e pra quem foi.
+        function extrairBonificacoesDoFechamento(c) {
+            if (!c.pedidosDetalhados) return [];
+            return c.pedidosDetalhados.filter(p => p.statusPainel !== 'cancelado' && p.pagamento && p.pagamento.startsWith('Bonificação'));
+        }
+
         function renderizarDetalhesCaixaNoModal(c) {
             document.getElementById('titulo-detalhe-caixa').innerText = `Caixa #${c.id} - ${c.campanha || 'Fechamento'}`;
             const corpo = document.getElementById('corpo-detalhes-caixa');
@@ -3760,6 +3770,17 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             }
 
             const topProdutosCaixa = Object.entries(c.produtosVendidos || {}).sort((a, b) => b[1] - a[1]).slice(0, 8);
+
+            const bonificacoesFechamento = extrairBonificacoesDoFechamento(c);
+            let htmlBono = '';
+            if (bonificacoesFechamento.length > 0) {
+                htmlBono = bonificacoesFechamento.map(b => {
+                    const resumo = b.itens.map(i => `${i.qtd}x ${i.nome}`).join(', ');
+                    return `<div style="font-size:0.85rem; margin-bottom:6px; padding-bottom:6px; border-bottom:1px dashed #fecaca;"><b>#${b.id} ${b.cliente}:</b> ${resumo}<br><small style="color:#991b1b;">${b.pagamento}</small></div>`;
+                }).join('');
+            } else {
+                htmlBono = '<p style="color:gray; font-size:0.85rem;">Nenhuma bonificação neste caixa.</p>';
+            }
 
             corpo.innerHTML = `
                 <div style="background:#f8fafc; padding:12px; border-radius:8px; margin-bottom:15px; font-size:0.9rem;">
@@ -3799,6 +3820,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 <h4 style="margin:10px 0 5px 0; color:#1f2937;">📦 Produtos Vendidos</h4>
                 <div style="background:white; border:1px solid #e5e7eb; padding:10px; border-radius:8px; max-height:150px; overflow-y:auto; margin-bottom:15px;">
                     ${htmlProds}
+                </div>
+
+                <h4 style="margin:10px 0 5px 0; color:#dc2626;">🎁 Itens Bonificados (Cortesias)</h4>
+                <div style="background:#fef2f2; border:1px solid #fecaca; padding:10px; border-radius:8px; max-height:180px; overflow-y:auto;">
+                    ${htmlBono}
                 </div>
             `;
 
@@ -3842,6 +3868,12 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 });
             }
 
+            let htmlBonoPrint = '';
+            extrairBonificacoesDoFechamento(c).forEach(b => {
+                const resumo = b.itens.map(i => `${i.qtd}x ${i.nome}`).join(', ');
+                htmlBonoPrint += `<div style="font-size:11px; margin-bottom:3px; font-weight:bold;"><b>#${b.id} ${b.cliente}:</b> ${resumo} (${b.pagamento})</div>`;
+            });
+
             const areaPrint = document.getElementById('area-impressao');
             areaPrint.innerHTML = `
                 <div class="print-center print-bold" style="font-size: 18px;">SANTUÁRIO SANTA RITA</div>
@@ -3871,6 +3903,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 <div class="print-divider"></div>
                 <div class="print-row print-bold" style="font-size: 15px;"><span>TOTAL GAVETA:</span><span>R$ ${c.totalGaveta.toFixed(2)}</span></div>
                 ${htmlProdsPrint ? `<div class="print-divider"></div><div class="print-center print-bold" style="margin-bottom:5px;">PRODUTOS VENDIDOS</div>${htmlProdsPrint}` : ''}
+                ${htmlBonoPrint ? `<div class="print-divider"></div><div class="print-center print-bold" style="margin-bottom:5px;">🎁 BONIFICAÇÕES / CORTESIAS</div>${htmlBonoPrint}` : ''}
                 <div class="print-divider"></div>
                 <div class="print-center print-bold" style="margin-top: 10px; font-size: 11px;">
                     Relatório emitido para conferência interna.
