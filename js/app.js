@@ -3141,6 +3141,24 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 optSemCozinha.style.display = 'block';
             }
 
+            // Editando um pedido, quem decide se ele vai pra Cozinha é o
+            // campo manual "Status do Pedido" (ver editarPedido) — ele NÃO
+            // se atualiza sozinho quando o carrinho muda. Bug real: alguém
+            // adiciona um item de cozinha (ex: hambúrguer) num pedido que
+            // já estava como "Balcão Pendente" e esquece de mudar esse
+            // campo — o item nunca aparece na tela da Cozinha, mesmo
+            // aparecendo certo no Balcão. Corrige sozinho só nesse sentido
+            // (nunca tira automaticamente de "Na Cozinha", só põe quando
+            // precisa) — o operador ainda pode reverter na mão se for de
+            // propósito.
+            if (pedidoEmEdicaoId !== null) {
+                const selectStatusEdicao = document.getElementById('status-pedido-edicao');
+                if (selectStatusEdicao && temItemCozinha && selectStatusEdicao.value === 'nenhum') {
+                    selectStatusEdicao.value = 'preparando';
+                    exibirAviso('Esse pedido tem item de cozinha agora — mudei o "Status do Pedido" pra "Na Cozinha (Em Preparo)" automaticamente, senão a Cozinha não veria esse item.', '👨‍🍳 Status Atualizado');
+                }
+            }
+
             document.getElementById('total-carrinho').innerText = total.toFixed(2);
             const qtdItens = carrinho.reduce((a, i) => a + i.qtd, 0);
             document.getElementById('qtd-itens-carrinho').innerText = `${qtdItens} ${qtdItens === 1 ? 'item' : 'itens'}`;
@@ -4820,34 +4838,85 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         // @media print) — pra tirar JPG/PDF precisa deixar visível
         // temporariamente antes do html2canvas capturar, e esconder de novo
         // depois (independente de sucesso ou erro).
+        // Monta um objeto no MESMO formato de um item de historicoCaixasDB,
+        // só que com os totais somados de vários fechamentos — permite
+        // reaproveitar renderizarDetalhesCaixaNoModal (com os gráficos e
+        // tudo) sem duplicar template nenhum. Mesma ideia de
+        // verMeuRelatorioCaixa (que já monta um objeto sintético parecido
+        // pro caixa ainda aberto).
+        function montarObjetoFechamentoCombinado(fechamentos) {
+            const resumo = montarResumoCombinado(fechamentos);
+            return {
+                id: fechamentos.map(f => f.id).join(' + '),
+                campanha: `${fechamentos.length} fechamentos combinados`,
+                dataAbertura: fechamentos[0].dataAbertura,
+                dataFechamento: fechamentos[fechamentos.length - 1].dataFechamento,
+                fundoInicial: resumo.fundoInicial,
+                totalVendas: resumo.totalVendas,
+                pix: resumo.pix,
+                pixDireto: resumo.pixDireto,
+                credito: resumo.credito,
+                debito: resumo.debito,
+                dinheiroVendas: resumo.dinheiroVendas,
+                totalGaveta: resumo.totalGaveta,
+                qtdPedidos: resumo.qtdPedidos,
+                produtosVendidos: resumo.produtosVendidos,
+                valorProdutosVendidos: resumo.valorProdutosVendidos,
+                pedidosDetalhados: fechamentos.flatMap(f => f.pedidosDetalhados || [])
+            };
+        }
+
+        // "Ver Combinado" abre o MESMO modal rico (com gráficos) que "Ver
+        // Detalhes" de um fechamento só — só muda o objeto que alimenta ele.
+        function verDetalhesCombinado() {
+            const fechamentos = obterFechamentosSelecionados();
+            if (fechamentos.length === 0) return exibirAviso('Selecione pelo menos um fechamento pra ver combinado.');
+            if (fechamentos.length === 1) return verDetalhesCaixa(fechamentos[0].id);
+            renderizarDetalhesCaixaNoModal(montarObjetoFechamentoCombinado(fechamentos));
+        }
+
+        // JPG/PDF do combinado agora reaproveita o mesmo modal de "Ver
+        // Detalhes" (igual gerarJPGFechamento/gerarPDFFechamento fazem pra
+        // um fechamento só) em vez do template estreito de impressora
+        // térmica — ficava com visual bem diferente dos outros relatórios.
         function gerarJPGRelatorioCombinado() {
             const fechamentos = obterFechamentosSelecionados();
             if (fechamentos.length === 0) return exibirAviso('Selecione pelo menos um fechamento pra gerar o relatório combinado.');
-            const area = document.getElementById('area-impressao');
-            area.innerHTML = montarHtmlRelatorioCombinado(fechamentos);
-            area.style.display = 'block';
-            html2canvas(area, { scale: 2 }).then(canvas => {
-                area.style.display = 'none';
-                const link = document.createElement('a');
-                link.download = `Relatorio_Combinado_${fechamentos.length}_caixas.jpg`;
-                link.href = canvas.toDataURL('image/jpeg', 0.92);
-                link.click();
-            }).catch(() => { area.style.display = 'none'; });
+            verDetalhesCombinado();
+            setTimeout(() => {
+                const el = document.querySelector('#modal-detalhes-caixa .modal-content');
+                if (!el || typeof html2canvas !== 'function') return;
+                const restaurar = expandirRolaveisParaCaptura(el);
+                html2canvas(el, { scale: 2 }).then(canvas => {
+                    restaurar();
+                    const link = document.createElement('a');
+                    link.download = `Relatorio_Combinado_${fechamentos.length}_caixas.jpg`;
+                    link.href = canvas.toDataURL('image/jpeg', 0.92);
+                    link.click();
+                    fecharModalDetalhesCaixa();
+                }).catch(restaurar);
+            }, 150);
         }
 
         function gerarPDFRelatorioCombinado() {
             const fechamentos = obterFechamentosSelecionados();
             if (fechamentos.length === 0) return exibirAviso('Selecione pelo menos um fechamento pra gerar o relatório combinado.');
-            const area = document.getElementById('area-impressao');
-            area.innerHTML = montarHtmlRelatorioCombinado(fechamentos);
-            area.style.display = 'block';
-            html2pdf().set({
-                margin: 5,
-                filename: `Relatorio_Combinado_${fechamentos.length}_caixas.pdf`,
-                image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2 },
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-            }).from(area).save().then(() => { area.style.display = 'none'; }).catch(() => { area.style.display = 'none'; });
+            verDetalhesCombinado();
+            setTimeout(() => {
+                const el = document.querySelector('#modal-detalhes-caixa .modal-content');
+                if (!el || typeof html2pdf !== 'function') return;
+                const restaurar = expandirRolaveisParaCaptura(el);
+                html2pdf().set({
+                    margin: 10,
+                    filename: `Relatorio_Combinado_${fechamentos.length}_caixas.pdf`,
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2 },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                }).from(el).save().then(() => {
+                    restaurar();
+                    fecharModalDetalhesCaixa();
+                }).catch(restaurar);
+            }, 150);
         }
 
         function verDetalhesCaixa(idCaixa) {
@@ -5775,6 +5844,7 @@ window.gerarJPGFechamento = gerarJPGFechamento;
 window.gerarPDFFechamento = gerarPDFFechamento;
 window.alternarSelecaoFechamento = alternarSelecaoFechamento;
 window.limparSelecaoFechamentos = limparSelecaoFechamentos;
+window.verDetalhesCombinado = verDetalhesCombinado;
 window.imprimirRelatorioCombinado = imprimirRelatorioCombinado;
 window.gerarJPGRelatorioCombinado = gerarJPGRelatorioCombinado;
 window.gerarPDFRelatorioCombinado = gerarPDFRelatorioCombinado;
