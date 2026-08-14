@@ -4350,6 +4350,18 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (cardsBalcaoVisiveis.length > 0) {
                 destacarCardBalcao(cardsBalcaoVisiveis, false);
             }
+
+            // "Produtos Vendidos por Período" agora inclui venda AO VIVO dos
+            // caixas abertos (ver calcularResumoProdutosPorPeriodo) — atualiza
+            // sozinho aqui, se a tela estiver aberta, pra não parecer "parado"
+            // enquanto o dia inteiro de vendas acontece. atualizarTelas() já
+            // roda tanto em toda ação local (novo pedido, chamar painel...)
+            // quanto em todo estado recebido de outro dispositivo (via
+            // aplicarEstado), então cobre os dois casos sem duplicar a chamada.
+            const telaProdutosPeriodo = document.getElementById('tela-produtos-periodo');
+            if (telaProdutosPeriodo && telaProdutosPeriodo.classList.contains('active')) {
+                renderizarProdutosPorPeriodo();
+            }
         }
 
         function atualizarFiltrosGestao() {
@@ -5022,6 +5034,34 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     });
                 });
             });
+
+            // Além dos caixas já FECHADOS (acima), soma também o que está
+            // sendo vendido AGORA nos caixas ainda abertos — senão a venda
+            // só aparecia aqui depois de alguém fechar o caixa, e a tela
+            // parecia "parada" o dia inteiro. Só entra se o filtro de data
+            // não exclui hoje (filtrar só um período passado não deveria
+            // trazer venda de agora).
+            const agora = new Date();
+            const inicioDoDia = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
+            const incluiHoje = (!dataInicio || new Date(dataInicio + 'T00:00:00') <= agora)
+                && (!dataFim || new Date(dataFim + 'T23:59:59') >= inicioDoDia);
+            if (incluiHoje) {
+                const dadosAoVivo = obterDadosRelatorioCaixa(null);
+                Object.entries(dadosAoVivo.resumoProdutosVendidos).forEach(([nome, qtd]) => {
+                    const registro = garantir(nome);
+                    registro.qtdVendida += qtd;
+                    registro.valorVendido += (dadosAoVivo.valorProdutosVendidos[nome] || 0);
+                });
+                dadosAoVivo.bonificacoesLista.forEach(pedido => {
+                    (pedido.itens || []).forEach(item => {
+                        if (item.isCombo && Array.isArray(item.itensComboEscolhidos) && item.itensComboEscolhidos.length > 0) {
+                            item.itensComboEscolhidos.forEach(sub => { garantir(sub.nome).qtdBonificada += 1; });
+                        } else {
+                            garantir(item.nome).qtdBonificada += item.qtd;
+                        }
+                    });
+                });
+            }
 
             return resumo;
         }
