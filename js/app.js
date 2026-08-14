@@ -1272,8 +1272,15 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
         function filtrarProdutosPorTipo(tipo, botao) {
             tipoFiltroTabelaProdutos = tipo;
+            // Mantém o form de cadastro (se estiver aberto criando um
+            // produto novo) em sincronia com a aba — senão o campo Preço
+            // continuaria visível mesmo depois de trocar pra Insumos.
+            // Só quando NÃO está editando: editar preserva o tipo original
+            // do produto (ver salvarProduto), não teria sentido mudar os
+            // campos visíveis no meio de uma edição por causa da aba.
+            if (modoCadastroAtivo === 'simples' && produtoEmEdicaoId === null) atualizarCamposInsumo();
             mudarAba('tela-produtos', botao);
-        } 
+        }
         
         let chartVendas, chartHorarios, chartCategorias, chartRetirada;
         let chartPagamentoCaixa, chartProdutosCaixa;
@@ -1971,8 +1978,6 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 // sempre vendido, e o custo dele viria da soma dos itens
                 // escolhidos (não é uma ficha técnica fixa igual produto
                 // simples).
-                document.getElementById('box-insumo-checkbox').style.display = 'none';
-                document.getElementById('novo-prod-insumo').checked = false;
                 document.getElementById('box-ficha-tecnica').style.display = 'none';
                 document.getElementById('box-preco-simples').style.display = 'block';
                 // Combo já é a categoria "Combos" por definição — não faz
@@ -1985,17 +1990,19 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 document.getElementById('box-estoque-simples').style.display = 'block';
                 document.getElementById('box-itens-combo').style.display = 'none';
                 document.getElementById('box-categoria-subcategoria').style.display = 'block';
-                document.getElementById('box-insumo-checkbox').style.display = 'block';
                 atualizarCamposInsumo();
                 document.getElementById('titulo-form-produto').innerText = "Cadastrar Produto";
             }
         }
 
-        // Esconde Preço/Cozinha-Balcão quando "É um insumo" está marcado —
+        // Esconde Preço/Cozinha-Balcão quando o cadastro é de um insumo —
         // insumo é matéria-prima (farinha, embalagem...), nunca vendido
-        // direto, então essas duas perguntas não fazem sentido pra ele.
+        // direto, então essas duas perguntas não fazem sentido pra ele. Não
+        // existe mais um checkbox "é insumo" separado: já tem uma aba só
+        // pra Insumos (ver filtrarProdutosPorTipo), então é ISSO que decide
+        // — cadastrar estando na aba Insumos já cadastra como insumo.
         function atualizarCamposInsumo() {
-            const ehInsumo = document.getElementById('novo-prod-insumo').checked;
+            const ehInsumo = tipoFiltroTabelaProdutos === 'insumo';
             document.getElementById('box-preco-simples').style.display = ehInsumo ? 'none' : 'block';
             document.getElementById('box-cozinha-simples').style.display = ehInsumo ? 'none' : 'block';
             // Ficha técnica (custo de produção) só faz sentido pra quem é
@@ -2586,10 +2593,6 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 document.getElementById('preview-foto-container').style.display = 'none';
             }
 
-            // Precisa vir ANTES de mudarModoCadastro() — no modo "simples"
-            // ela chama atualizarCamposInsumo(), que lê esse checkbox pra
-            // decidir se esconde Preço/Cozinha-Balcão.
-            document.getElementById('novo-prod-insumo').checked = p.tipo === 'insumo';
             mudarModoCadastro(p.isCombo ? 'combo' : 'simples');
 
             if(p.isCombo) {
@@ -2625,7 +2628,6 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             document.getElementById('novo-prod-ativo').value = "true";
             document.getElementById('novo-prod-ingredientes').value = '';
             document.getElementById('novo-prod-subcategoria').value = '';
-            document.getElementById('novo-prod-insumo').checked = false;
             document.getElementById('preview-foto-container').style.display = 'none';
             renderizarChecklistBarracasProduto();
 
@@ -2650,8 +2652,14 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             let barracasMarcadas = Array.from(document.querySelectorAll('.chk-barraca-produto:checked')).map(chk => chk.value);
 
             let isCombo = (modoCadastroAtivo === 'combo');
-            // Insumo (matéria-prima, nunca vendida direto) não existe pra combo.
-            let ehInsumo = !isCombo && document.getElementById('novo-prod-insumo').checked;
+            // Insumo (matéria-prima, nunca vendida direto) não existe pra
+            // combo. Sem checkbox separado — já tem uma aba só pra Insumos
+            // (ver filtrarProdutosPorTipo), essa é a fonte da verdade pra
+            // produto NOVO. Editar um produto existente preserva o tipo
+            // original dele, não a aba atual — evita que trocar de aba no
+            // meio de uma edição converta o tipo do produto sem querer.
+            const produtoOriginal = produtoEmEdicaoId !== null ? produtosDB.find(pr => pr.id === produtoEmEdicaoId) : null;
+            let ehInsumo = !isCombo && (produtoOriginal ? produtoOriginal.tipo === 'insumo' : tipoFiltroTabelaProdutos === 'insumo');
             let preco = ehInsumo ? 0 : parseFloat(document.getElementById('novo-prod-preco').value);
 
             if (!nome || !categoria || (!ehInsumo && (isNaN(preco) || preco <= 0))) return exibirAviso("Preencha todos os campos do produto corretamente.");
@@ -6694,7 +6702,6 @@ window.adicionarCategoria = adicionarCategoria;
 window.adicionarEstoqueManual = adicionarEstoqueManual;
 window.apagarProduto = apagarProduto;
 window.filtrarProdutosPorTipo = filtrarProdutosPorTipo;
-window.atualizarCamposInsumo = atualizarCamposInsumo;
 window.addItemFichaTecnica = addItemFichaTecnica;
 window.alternarBoxFichaTecnica = alternarBoxFichaTecnica;
 window.removerItemFichaTecnica = removerItemFichaTecnica;
