@@ -557,7 +557,24 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 }
                 if (mesmaEntrada(itemLocal, noServidor)) {
                     const idx = resultado.findIndex(item => item.id === itemLocal.id);
-                    if (idx !== -1) resultado[idx] = itemLocal;
+                    // BUG REAL encontrado e corrigido: aqui sempre vencia o
+                    // local, assumindo que "local" = "intenção mais
+                    // recente". Errado com múltiplos dispositivos ativos —
+                    // se ESTE aparelho estava com uma cópia desatualizada
+                    // do pedido (ex: não viu ainda que outro aparelho já
+                    // marcou "Entregue"), ele sobrescrevia o servidor de
+                    // volta pro status antigo só por salvar depois. Isso
+                    // fazia pedido já entregue "voltar" a pendente sozinho.
+                    // Agora compara atualizadoEm (carimbado em toda
+                    // mudança de status/edição) e quem for mais recente de
+                    // verdade vence — não importa de qual lado. Pedido sem
+                    // esse campo (legado, de antes desta correção) cai no
+                    // comportamento antigo (local vence), pra não quebrar
+                    // nada que já estava em andamento.
+                    if (idx !== -1) {
+                        const localMaisNovo = !noServidor.atualizadoEm || (itemLocal.atualizadoEm && itemLocal.atualizadoEm >= noServidor.atualizadoEm);
+                        resultado[idx] = localMaisNovo ? itemLocal : noServidor;
+                    }
                 } else {
                     houveColisao = true;
                     resultado.push({ ...itemLocal, id: proximoIdLivre, numeroOriginalAntesDaColisao: itemLocal.id });
@@ -3521,6 +3538,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             // preço fixo) — só produtos trocados fora de combo herdam o preço
             // do novo produto.
             if (trocaItemSubIndex === null) item.preco = novoProduto.preco;
+            pedido.atualizadoEm = Date.now();
 
             if (catalogoAlteradoPorEstoque) salvarCatalogo();
             salvarNoBancoLocal();
@@ -4140,6 +4158,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 veioDePausa: veioDePausaPedido,
                 numeroProvisorio: numeroProvisorioPedido,
                 letraDispositivo: letraDispositivoPedido,
+                // Carimbo de "agora" em toda criação/edição — usado pela
+                // mescla (mesclarPorIdComColisao) pra saber qual versão de
+                // um pedido é mais recente de verdade quando dois
+                // dispositivos salvam o mesmo pedido por perto um do outro.
+                atualizadoEm: Date.now(),
                 itens: itensSnapshot
             };
 
@@ -4583,6 +4606,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             p.statusPainel = 'preparando';
             p.veioDePausa = true;
             if (!p.horaEntradaCozinha) p.horaEntradaCozinha = horaAtual;
+            p.atualizadoEm = Date.now();
 
             salvarNoBancoLocal();
             atualizarTelas(); 
@@ -4677,18 +4701,20 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         function chamarNoPainel(id) {
             const p = pedidosGerais.find(x => x.id === id);
             p.statusPainel = 'pronto';
+            p.atualizadoEm = Date.now();
             dispararAvisoSonoro(rotuloPedido(p), p.cliente);
             salvarNoBancoLocal();
             atualizarTelas();
         }
-        
-        function finalizarEntrega(id) { 
+
+        function finalizarEntrega(id) {
             const p = pedidosGerais.find(x => x.id === id);
             const horaAtual = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-            
+
             p.itens.forEach(i => { if(i.fase !== 'mais_tarde') i.fase = 'entregue'; });
             p.statusPainel = 'entregue';
             p.horaEntrega = horaAtual;
+            p.atualizadoEm = Date.now();
 
             salvarNoBancoLocal();
             atualizarTelas(); 
@@ -4725,6 +4751,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             });
             p.statusPainel = 'cancelado';
             p.motivoCancelamento = motivo;
+            p.atualizadoEm = Date.now();
             return catalogoAlteradoPorEstoque;
         }
 
