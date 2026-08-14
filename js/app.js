@@ -248,6 +248,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (estado.configPadroes && typeof estado.configPadroes === 'object') {
                 configPadroes = { ...configPadroes, ...estado.configPadroes };
                 aplicarVisibilidadeBalcaoDoces();
+                atualizarBotoesChamarAtivo();
             }
 
             ultimaAtualizacaoRemota = estado.salvoEm || null;
@@ -1092,6 +1093,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 chamarAtivoBalcaoDoces: document.getElementById('cfg-chamar-ativo-balcao-doces').checked
             };
             aplicarVisibilidadeBalcaoDoces();
+            atualizarBotoesChamarAtivo();
             // Precisa ir pro Supabase (não só no cache local deste navegador) —
             // senão some ao abrir em outra aba/dispositivo ou depois de limpar
             // dados do navegador.
@@ -1105,6 +1107,46 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         function aplicarVisibilidadeBalcaoDoces() {
             const btn = document.getElementById('btn-nav-balcao-doces');
             if (btn) btn.style.display = configPadroes.separarBalcaoDoces ? '' : 'none';
+        }
+
+        // Atalho de "Chamar antes de Entregar" direto no cabeçalho de cada
+        // Balcão — mais rápido que ir em Configurações pra ligar/desligar no
+        // meio do corre. Sincroniza com todos os dispositivos (é
+        // configPadroes) igual o toggle de Separar Balcão Doces.
+        function alternarChamarAtivo(qual) {
+            const chave = qual === 'balcaoDoces' ? 'chamarAtivoBalcaoDoces' : 'chamarAtivoBalcao01';
+            const novoValor = !(configPadroes[chave] !== false);
+            configPadroes = { ...configPadroes, [chave]: novoValor };
+            atualizarBotoesChamarAtivo();
+            atualizarTelas();
+            salvarNoBancoLocal();
+        }
+
+        // Mantém em sincronia os dois lugares que mostram/mexem nesse toggle
+        // (o botão de atalho no cabeçalho do Balcão e o checkbox em
+        // Configurações) — chamado ao alternar aqui, ao salvar em
+        // Configurações, e ao chegar configPadroes atualizado de outro
+        // dispositivo (aplicarEstado).
+        function atualizarBotoesChamarAtivo() {
+            const ativo01 = configPadroes.chamarAtivoBalcao01 !== false;
+            const btn01 = document.getElementById('btn-toggle-chamar-balcao01');
+            if (btn01) {
+                btn01.innerText = ativo01 ? '🔔 Chamar Ligado' : '⚡ Chamar Desligado';
+                btn01.classList.toggle('btn-success', ativo01);
+                btn01.classList.toggle('btn-warning', !ativo01);
+            }
+            const chk01 = document.getElementById('cfg-chamar-ativo-balcao01');
+            if (chk01) chk01.checked = ativo01;
+
+            const ativoDoces = configPadroes.chamarAtivoBalcaoDoces !== false;
+            const btnDoces = document.getElementById('btn-toggle-chamar-doces');
+            if (btnDoces) {
+                btnDoces.innerText = ativoDoces ? '🔔 Chamar Ligado' : '⚡ Chamar Desligado';
+                btnDoces.classList.toggle('btn-success', ativoDoces);
+                btnDoces.classList.toggle('btn-warning', !ativoDoces);
+            }
+            const chkDoces = document.getElementById('cfg-chamar-ativo-balcao-doces');
+            if (chkDoces) chkDoces.checked = ativoDoces;
         }
 
         function iniciarGravaçãoAtalho(acao) {
@@ -5084,6 +5126,7 @@ window.pedirConfirmacao = pedirConfirmacao;
 window.verMeuRelatorioCaixa = verMeuRelatorioCaixa;
 window.limparCarrinhoComConfirmacao = limparCarrinhoComConfirmacao;
 window.alternarVozAnuncio = alternarVozAnuncio;
+window.alternarChamarAtivo = alternarChamarAtivo;
 window.ajustarVolumeAnuncio = ajustarVolumeAnuncio;
 window.ajustarZoomTela = ajustarZoomTela;
 window.fecharTecladoNumerico = fecharTecladoNumerico;
