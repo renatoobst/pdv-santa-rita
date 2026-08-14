@@ -25,6 +25,59 @@ import { registroBarracas, carregarRegistroBarracas } from './barracas.js';
 // forçar login a cada F5/recarregada dentro do mesmo uso contínuo.
 const CHAVE_SESSAO_LOCAL = 'pdv_sessao_usuario_id';
 
+// --- Log de eventos do sistema (login, queda/volta de internet, erro) ---
+// Cada chamada é uma LINHA NOVA em pdv_logs (ver supabase/pdv_logs.sql) —
+// nunca um update/overwrite, então não tem como um dispositivo apagar o log
+// de outro. Fica aqui (não em app.js) porque fazerLogin() precisa chamar
+// isso e este módulo não pode importar de app.js (import circular) — app.js
+// importa essas duas funções DAQUI pra logar offline/online/erro.
+const CHAVE_FILA_LOGS = 'pdv_fila_logs_pendentes';
+
+function lerFilaLogs() {
+    try { return JSON.parse(localStorage.getItem(CHAVE_FILA_LOGS)) || []; }
+    catch { return []; }
+}
+function salvarFilaLogs(fila) {
+    localStorage.setItem(CHAVE_FILA_LOGS, JSON.stringify(fila.slice(-200)));
+}
+
+export async function registrarLog(tipo, detalhe, { tela = null, barracaId = null } = {}) {
+    const entrada = {
+        barraca_id: barracaId,
+        usuario_id: usuarioAtual ? usuarioAtual.id : null,
+        usuario_nome: usuarioAtual ? usuarioAtual.nome : null,
+        tipo,
+        tela,
+        detalhe,
+        client_id: PDV_CLIENT_ID
+    };
+    try {
+        const { error } = await supabaseClient.from('pdv_logs').insert(entrada);
+        if (error) throw error;
+    } catch (erro) {
+        // Sem internet bem na hora de logar (irônico, mas comum — é
+        // exatamente quando mais queremos registrar "caiu a conexão") —
+        // guarda numa fila local e tenta de novo quando a conexão voltar
+        // (ver tentarEnviarFilaDeLogs, chamado no definirSupabaseDisponivel).
+        salvarFilaLogs([...lerFilaLogs(), entrada]);
+    }
+}
+
+export async function tentarEnviarFilaDeLogs() {
+    const fila = lerFilaLogs();
+    if (fila.length === 0) return;
+    const restantes = [];
+    for (const entrada of fila) {
+        try {
+            const { error } = await supabaseClient.from('pdv_logs').insert(entrada);
+            if (error) throw error;
+        } catch {
+            restantes.push(entrada);
+        }
+    }
+    salvarFilaLogs(restantes);
+}
+
 export let usuarioAtual = null; // { id, nome, isMaster, telasPermitidas, podeAbrirFecharCaixa }
 let perfisCache = [];
 
@@ -35,7 +88,8 @@ const TELAS_DISPONIVEIS = [
     { id: 'tela-pedido', label: '🛒 Pedido' },
     { id: 'tela-agendados', label: '🎫 Pedidos em Pausa' },
     { id: 'tela-preparo', label: '🍳 Cozinha' },
-    { id: 'tela-entrega', label: '🛍️ Balcão/Entrega' },
+    { id: 'tela-entrega', label: '🛍️ Balcão 01' },
+    { id: 'tela-entrega-doces', label: '🍬 Balcão 02 (Doces)' },
     { id: 'tela-tv', label: '📺 TV Senha' },
     { id: 'tela-produtos', label: '📦 Produtos & Estoque' },
     { id: 'tela-atalhos', label: '⌨️ Teclas de Atalho' },
@@ -144,7 +198,7 @@ function ocultarCortinaInicial() {
 export function usuarioTemAcesso(idAba) {
     if (!usuarioAtual) return false;
     if (usuarioAtual.isMaster) return true;
-    if (idAba === 'tela-gestao-usuarios') return false; // sempre exclusiva do Master
+    if (idAba === 'tela-gestao-usuarios' || idAba === 'tela-logs-sistema') return false; // sempre exclusivas do Master
     return (usuarioAtual.telasPermitidas || []).includes(idAba);
 }
 
@@ -208,6 +262,7 @@ export async function resolverSessaoAtiva() {
         if (perfil) {
             usuarioAtual = perfil;
             ocultarCortinaInicial();
+            registrarLog('login', 'Sessão retomada (recarregou a página sem fechar o navegador)');
             return perfil;
         }
         sessionStorage.removeItem(CHAVE_SESSAO_LOCAL); // usuário removido por um Master nesse meio tempo
@@ -249,6 +304,7 @@ function renderizarTelaBootstrap(aoConcluir) {
 
             usuarioAtual = mapearPerfil(data);
             sessionStorage.setItem(CHAVE_SESSAO_LOCAL, data.id);
+            registrarLog('login', 'Conta Master criada agora');
             tela.style.display = 'none';
             aoConcluir(usuarioAtual);
         } catch (erro) {
@@ -300,6 +356,7 @@ function renderizarTelaLogin(aoConcluir) {
             }
             usuarioAtual = mapearPerfil(data);
             sessionStorage.setItem(CHAVE_SESSAO_LOCAL, data.id);
+            registrarLog('login', null);
             tela.style.display = 'none';
             document.getElementById('input-login-senha').value = '';
             aoConcluir(usuarioAtual);

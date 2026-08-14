@@ -9,7 +9,7 @@
 import { supabaseClient, PDV_CLIENT_ID } from './config.js';
 import { categoriasPadrao, produtosPadrao } from './data.js';
 import { resolverBarracaAtiva, calcularResumoPedidos, chaveCacheEstado, chaveCacheAtalhos, renderizarPainelBarracas, carregarDashboardGeral, iniciarRealtimeRegistroBarracas, registroBarracas } from './barracas.js';
-import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderizarTelaGestaoUsuarios, confirmarSenhaUsuarioAtual, usuarioAtual } from './auth.js';
+import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderizarTelaGestaoUsuarios, confirmarSenhaUsuarioAtual, usuarioAtual, registrarLog, tentarEnviarFilaDeLogs } from './auth.js';
 
         // Id da barraca ativa neste dispositivo (linha correspondente na tabela
         // `pdv_state` do Supabase). Só é conhecido depois que resolverBarracaAtiva()
@@ -53,15 +53,58 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         let supabaseDisponivel = true;
         let carregandoEstadoRemoto = false;
         let ultimaAtualizacaoRemota = null;
+        let intervaloTentativaReconexao = null;
+        let offlineDesde = null;
+
+        function telaAtual() {
+            const el = document.querySelector('.tab-content.active');
+            return el ? el.id : null;
+        }
 
         // Mostra/esconde a faixa vermelha fixa no topo — único lugar que
         // escreve em supabaseDisponivel, pra garantir que o indicador visual
-        // nunca fique dessincronizado do valor real.
+        // nunca fique dessincronizado do valor real. Também é o único lugar
+        // que loga queda/volta de conexão (pdv_logs) e liga/desliga a
+        // tentativa automática de reconexão — funciona mesmo pra quedas que o
+        // canal de tempo real nem avisa (ele pode cair em silêncio), porque
+        // isso aqui só depende de uma leitura/escrita real ter falhado.
         function definirSupabaseDisponivel(valor) {
+            const mudou = supabaseDisponivel !== valor;
             supabaseDisponivel = valor;
             const indicador = document.getElementById('indicador-offline');
-            if (indicador) indicador.style.display = valor ? 'none' : 'block';
+            if (indicador) indicador.style.display = valor ? 'none' : 'flex';
+
+            if (!mudou) return;
+
+            if (!valor) {
+                offlineDesde = Date.now();
+                registrarLog('offline', null, { tela: telaAtual(), barracaId: barracaStateId });
+                if (!intervaloTentativaReconexao) {
+                    intervaloTentativaReconexao = setInterval(() => {
+                        resincronizarSeNecessario('tentativa automática de reconexão');
+                    }, 10000);
+                }
+            } else {
+                const detalhe = offlineDesde ? `Ficou offline por ${Math.round((Date.now() - offlineDesde) / 1000)}s` : null;
+                registrarLog('online', detalhe, { tela: telaAtual(), barracaId: barracaStateId });
+                tentarEnviarFilaDeLogs();
+                if (intervaloTentativaReconexao) { clearInterval(intervaloTentativaReconexao); intervaloTentativaReconexao = null; }
+                offlineDesde = null;
+            }
         }
+
+        // Captura qualquer erro JS não tratado (e Promise rejeitada sem
+        // .catch) e manda pra pdv_logs — junto com qual tela estava ativa e
+        // qual usuário estava logado, pra dar pra investigar "o sistema
+        // bugou" depois sem precisar reproduzir na hora. Não interfere em
+        // nada da UI (não mostra nada pro usuário, só registra).
+        window.addEventListener('error', (evento) => {
+            registrarLog('erro', `${evento.message} (${evento.filename}:${evento.lineno})`, { tela: telaAtual(), barracaId: barracaStateId });
+        });
+        window.addEventListener('unhandledrejection', (evento) => {
+            const motivo = evento.reason && evento.reason.message ? evento.reason.message : String(evento.reason);
+            registrarLog('erro', `Promise rejeitada: ${motivo}`, { tela: telaAtual(), barracaId: barracaStateId });
+        });
 
         // TECLAS DE ATALHO PADRÃO
         let atalhosConfig = {
@@ -82,7 +125,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         let configPadroes = {
             formaPagto: '',
             tipoAtendimento: '',
-            tipoRetiradaGlobal: ''
+            tipoRetiradaGlobal: '',
+            // Pedido sem NENHUM item de cozinha (doce, refri...) vai pro
+            // Balcão 02 em vez do Balcão 01 — ver atualizarTelas().
+            separarBalcaoDoces: false
         };
 
         function exibirAviso(mensagem, titulo = "Aviso do Sistema") {
@@ -197,6 +243,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
             if (estado.configPadroes && typeof estado.configPadroes === 'object') {
                 configPadroes = { ...configPadroes, ...estado.configPadroes };
+                aplicarVisibilidadeBalcaoDoces();
             }
 
             ultimaAtualizacaoRemota = estado.salvoEm || null;
@@ -331,82 +378,6 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             atualizarPreviewTecladoNumerico();
         }
 
-        // --- Teclado de texto próprio em tablet/celular — mesma ideia do
-        // numérico, mas para nome, busca, senha etc. Cobre tanto os campos
-        // type="text" quanto type="password" (a senha continua mascarada
-        // normalmente, só quem digita é o teclado próprio em vez do nativo). ---
-        let inputTecladoTextoAtivo = null;
-        let shiftAtivoTecladoTexto = false;
-
-        function configurarTecladoTexto(input) {
-            if (input.dataset.tecladoTextoConfigurado) return;
-            input.dataset.tecladoTextoConfigurado = '1';
-            input.setAttribute('inputmode', 'none');
-            input.readOnly = true;
-            input.style.cursor = 'pointer';
-            input.addEventListener('focus', () => abrirTecladoTexto(input));
-            input.addEventListener('click', () => abrirTecladoTexto(input));
-        }
-
-        function ativarTecladoTextoSeTablet() {
-            if (!ehDispositivoDeToque()) return;
-            document.querySelectorAll('input').forEach(input => {
-                const tipo = input.type;
-                if (tipo === 'text' || tipo === 'password' || tipo === 'search' || tipo === '') {
-                    configurarTecladoTexto(input);
-                }
-            });
-        }
-
-        function abrirTecladoTexto(input) {
-            inputTecladoTextoAtivo = input;
-            document.getElementById('teclado-texto-flutuante').style.display = 'block';
-            atualizarTeclasTexto();
-            atualizarPreviewTecladoTexto();
-        }
-
-        function fecharTecladoTexto() {
-            document.getElementById('teclado-texto-flutuante').style.display = 'none';
-            inputTecladoTextoAtivo = null;
-        }
-
-        // Mesma ideia do preview do teclado numérico — mostra o que foi
-        // digitado até agora sem depender de ver o campo de verdade, que o
-        // teclado flutuante às vezes cobre. Em campo de senha mantém mascarado
-        // (●●●) igual ao campo original, só respeitando o botão 👁️ de
-        // mostrar/ocultar senha quando ele muda o type do campo pra "text".
-        function atualizarPreviewTecladoTexto() {
-            const preview = document.getElementById('preview-teclado-texto');
-            const input = inputTecladoTextoAtivo;
-            if (!preview || !input) return;
-            const valor = input.value || '';
-            preview.innerText = input.type === 'password' ? '●'.repeat(valor.length) : valor;
-        }
-
-        function digitarTecladoTexto(tecla) {
-            const input = inputTecladoTextoAtivo;
-            if (!input) return;
-            if (tecla === '⌫') {
-                input.value = input.value.slice(0, -1);
-            } else if (tecla === '⇧') {
-                shiftAtivoTecladoTexto = !shiftAtivoTecladoTexto;
-                atualizarTeclasTexto();
-                return;
-            } else if (tecla === '␣') {
-                input.value += ' ';
-            } else {
-                input.value += shiftAtivoTecladoTexto ? tecla.toUpperCase() : tecla;
-            }
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-            atualizarPreviewTecladoTexto();
-        }
-
-        function atualizarTeclasTexto() {
-            document.querySelectorAll('#grid-teclado-texto .tecla-letra').forEach(btn => {
-                btn.innerText = shiftAtivoTecladoTexto ? btn.dataset.tecla.toUpperCase() : btn.dataset.tecla;
-            });
-        }
-
         // --- Substitutos de prompt()/confirm() nativos (janela própria em
         // HTML, dá pra mascarar senha e não fica com a cara do navegador) ---
 
@@ -476,12 +447,106 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             return !!(usuarioAtual && (usuarioAtual.isMaster || usuarioAtual.podeAbrirFecharCaixa));
         }
 
+        // Duas entradas (pedido OU fechamento de caixa) são "a mesma coisa" só
+        // se a chaveUnica bater. Registros salvos ANTES dessa chave existir
+        // (de antes desta correção) caem no fallback: só considera igual se o
+        // conteúdo for IDÊNTICO — qualquer diferença já é tratada como
+        // colisão de verdade (mais seguro renumerar um registro antigo por
+        // engano do que misturar dois registros diferentes num só).
+        function mesmaEntrada(a, b) {
+            if (a.chaveUnica && b.chaveUnica) return a.chaveUnica === b.chaveUnica;
+            return JSON.stringify(a) === JSON.stringify(b);
+        }
+
+        // Mescla uma lista LOCAL com a lista que está agora no servidor, por
+        // id — nunca sobrescreve a lista inteira. Tudo que só existe de um
+        // lado entra. Quando os dois lados têm o mesmo id: se for a mesma
+        // entrada (chaveUnica igual), a versão local vence (é a intenção mais
+        // recente desta tela); se forem entradas DIFERENTES com o mesmo id
+        // (dois dispositivos calcularam o mesmo número "ao mesmo tempo" —
+        // colisão de verdade), a que já está no servidor fica com aquele
+        // número e a local ganha um número novo, nunca perde nenhuma das
+        // duas. Usado tanto pra pedidosGerais quanto historicoCaixasDB (os
+        // dois têm o mesmo formato de risco: id = contador local++).
+        function mesclarPorIdComColisao(locais, remotos) {
+            const mapaRemoto = new Map(remotos.map(item => [item.id, item]));
+            const resultado = [...remotos];
+            let proximoIdLivre = Math.max(0, ...remotos.map(p => Number(p.id) || 0), ...locais.map(p => Number(p.id) || 0)) + 1;
+            let houveColisao = false;
+
+            locais.forEach(itemLocal => {
+                const noServidor = mapaRemoto.get(itemLocal.id);
+                if (!noServidor) {
+                    resultado.push(itemLocal);
+                    return;
+                }
+                if (mesmaEntrada(itemLocal, noServidor)) {
+                    const idx = resultado.findIndex(item => item.id === itemLocal.id);
+                    if (idx !== -1) resultado[idx] = itemLocal;
+                } else {
+                    houveColisao = true;
+                    resultado.push({ ...itemLocal, id: proximoIdLivre, numeroOriginalAntesDaColisao: itemLocal.id });
+                    proximoIdLivre++;
+                }
+            });
+
+            return { lista: resultado, houveColisao };
+        }
+
+        // caixasAbertos já usa um id composto (usuarioId + timestamp — ver
+        // abrirCaixaPrompt), praticamente impossível de colidir entre
+        // dispositivos diferentes — só precisa de união simples por id, sem
+        // a lógica de renumeração.
+        function mesclarPorUniao(locais, remotos) {
+            const mapa = new Map();
+            remotos.forEach(item => mapa.set(item.id, item));
+            locais.forEach(item => mapa.set(item.id, item));
+            return Array.from(mapa.values());
+        }
+
         async function salvarNoBancoLocal() {
             salvarCacheLocal();
             if (carregandoEstadoRemoto) return;
 
-            const estado = montarEstadoAtual();
             try {
+                // Busca o que está no servidor NESTE INSTANTE, bem antes de
+                // gravar, e mescla por id em vez de sobrescrever o array
+                // inteiro — sem isso, dois dispositivos salvando perto um do
+                // outro (ou um dispositivo que ficou um tempo sem conexão e
+                // "acorda") apagavam pedido um do outro silenciosamente. Ver
+                // mesclarPorIdComColisao/mesclarPorUniao acima.
+                const { data: linhaAtual, error: erroLeitura } = await supabaseClient
+                    .from('pdv_state')
+                    .select('data')
+                    .eq('id', barracaStateId)
+                    .maybeSingle();
+                if (erroLeitura) throw erroLeitura;
+
+                const remoto = linhaAtual && linhaAtual.data;
+                let houveColisao = false;
+                if (remoto && remoto.origem !== PDV_CLIENT_ID) {
+                    const remotoPedidos = Array.isArray(remoto.pedidosGerais) ? remoto.pedidosGerais : [];
+                    const mescladoPedidos = mesclarPorIdComColisao(pedidosGerais, remotoPedidos);
+                    pedidosGerais = mescladoPedidos.lista;
+                    houveColisao = houveColisao || mescladoPedidos.houveColisao;
+
+                    const remotoHistorico = Array.isArray(remoto.historicoCaixasDB) ? remoto.historicoCaixasDB : [];
+                    const mescladoHistorico = mesclarPorIdComColisao(historicoCaixasDB, remotoHistorico);
+                    historicoCaixasDB = mescladoHistorico.lista;
+                    houveColisao = houveColisao || mescladoHistorico.houveColisao;
+
+                    const remotoCaixasAbertos = Array.isArray(remoto.caixasAbertos) ? remoto.caixasAbertos : [];
+                    caixasAbertos = mesclarPorUniao(caixasAbertos, remotoCaixasAbertos);
+
+                    const remotoContador = Number(remoto.contadorPedidos) || 0;
+                    contadorPedidos = Math.max(contadorPedidos, remotoContador);
+
+                    if (houveColisao) {
+                        exibirAviso('⚠️ Dois dispositivos criaram um pedido ou fechamento com o mesmo número quase ao mesmo tempo — o sistema corrigiu sozinho, sem apagar nenhum dos dois, mas um deles pode ter ganhado um número novo. Confira "Ver Todos os Pedidos" se algo parecer com número trocado.', 'Sincronização');
+                    }
+                }
+
+                const estado = montarEstadoAtual();
                 const { error } = await supabaseClient
                     .from('pdv_state')
                     .upsert({ id: barracaStateId, data: estado, updated_at: new Date().toISOString() }, { onConflict: 'id' });
@@ -493,7 +558,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             }
         }
 
-        async function carregarEstadoSupabase() {
+        async function carregarEstadoSupabase(mostrarAvisoSeFalhar = true) {
             try {
                 const { data, error } = await supabaseClient
                     .from('pdv_state')
@@ -513,9 +578,24 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             } catch (erro) {
                 definirSupabaseDisponivel(false);
                 console.error('Não foi possível carregar o Supabase. Usando cache local:', erro);
-                exibirAviso('Supabase não disponível. O PDV abriu usando apenas o cache local.');
+                if (mostrarAvisoSeFalhar) exibirAviso('Supabase não disponível. O PDV abriu usando apenas o cache local.');
                 return false;
             }
+        }
+
+        // Ver comentário no window.onload (perto de iniciarRealtimeSupabase)
+        // pra entender por que isso existe: o realtime pode ficar quieto sem
+        // avisar nada quando o dispositivo volta de segundo plano/reconecta.
+        // debounce de 3s evita refetch duplicado quando visibilitychange e
+        // online disparam quase juntos.
+        let ultimoResyncCompleto = 0;
+        async function resincronizarSeNecessario(motivo) {
+            if (!barracaStateId || carregandoEstadoRemoto) return;
+            const agora = Date.now();
+            if (agora - ultimoResyncCompleto < 3000) return;
+            ultimoResyncCompleto = agora;
+            console.log('Ressincronizando estado completo —', motivo);
+            await carregarEstadoSupabase(false);
         }
 
         function iniciarRealtimeSupabase() {
@@ -945,6 +1025,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if(idAba === 'tela-dashboard-geral') carregarDashboardGeral();
             if(idAba === 'tela-configuracoes') aplicarConfiguracoesImpressaoRedeNaTela();
             if(idAba === 'tela-produtos-periodo') renderizarProdutosPorPeriodo();
+            if(idAba === 'tela-logs-sistema') carregarLogsSistema();
         }
 
         function calcularDiferencaMinutos(horaInicio, horaFim) {
@@ -975,6 +1056,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             document.getElementById('cfg-padrao-forma-pagto').value = configPadroes.formaPagto || '';
             document.getElementById('cfg-padrao-tipo-atendimento').value = configPadroes.tipoAtendimento || '';
             document.getElementById('cfg-padrao-tipo-retirada-global').value = configPadroes.tipoRetiradaGlobal || '';
+            document.getElementById('cfg-separar-balcao-doces').checked = !!configPadroes.separarBalcaoDoces;
         }
 
         function abrirModalConfigPedido() {
@@ -990,12 +1072,23 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             configPadroes = {
                 formaPagto: document.getElementById('cfg-padrao-forma-pagto').value,
                 tipoAtendimento: document.getElementById('cfg-padrao-tipo-atendimento').value,
-                tipoRetiradaGlobal: document.getElementById('cfg-padrao-tipo-retirada-global').value
+                tipoRetiradaGlobal: document.getElementById('cfg-padrao-tipo-retirada-global').value,
+                separarBalcaoDoces: document.getElementById('cfg-separar-balcao-doces').checked
             };
+            aplicarVisibilidadeBalcaoDoces();
             // Precisa ir pro Supabase (não só no cache local deste navegador) —
             // senão some ao abrir em outra aba/dispositivo ou depois de limpar
             // dados do navegador.
             salvarNoBancoLocal();
+        }
+
+        // Só mostra o botão "Balcão 02" no menu quando o toggle está ligado —
+        // senão fica um botão morto/confuso pra quem nunca vai usar essa
+        // separação. Chamada sempre que configPadroes muda (salvar aqui, ou
+        // aplicarEstado recebendo de outro dispositivo).
+        function aplicarVisibilidadeBalcaoDoces() {
+            const btn = document.getElementById('btn-nav-balcao-doces');
+            if (btn) btn.style.display = configPadroes.separarBalcaoDoces ? '' : 'none';
         }
 
         function iniciarGravaçãoAtalho(acao) {
@@ -2676,6 +2769,12 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             let horaEntradaCozinhaCalculada = null;
             let horaEntregaCalculada = null;
             let caixaIdPedido = meuCaixaAtual.id;
+            // Identidade estável do pedido, gerada 1x na criação e preservada
+            // em toda edição — não é o número que aparece no recibo (esse
+            // pode precisar mudar se colidir com outro dispositivo, ver
+            // mesclarPedidosPorId), é o que permite reconhecer "esse pedido
+            // aqui é o mesmo que aquele lá" mesmo se o número mudar.
+            let chaveUnicaPedido = `${PDV_CLIENT_ID}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
             if (pedidoEmEdicaoId !== null) {
                 statusPainelCalculado = document.getElementById('status-pedido-edicao').value;
@@ -2687,6 +2786,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     // qualquer usuário com acesso a caixa pode alterar o pedido
                     // de outro operador sem "roubar" a venda pro próprio caixa.
                     caixaIdPedido = pedidoExistente.caixaId || meuCaixaAtual.id;
+                    chaveUnicaPedido = pedidoExistente.chaveUnica || chaveUnicaPedido;
                 }
             } else {
                 const itensAgora = carrinho.filter(i => i.fase === 'agora');
@@ -2718,6 +2818,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
             const novoPedido = {
                 id: pedidoEmEdicaoId !== null ? pedidoEmEdicaoId : contadorPedidos++,
+                chaveUnica: chaveUnicaPedido,
                 cliente: cliente, pagamento: formaPagto, tipoAtendimento: tipoAtendimento,
                 total: ehBonificacao ? 0 : total, data: dataAtual, hora: horaAtual,
                 detalhesMisto: detalhesMisto,
@@ -2784,7 +2885,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             gerarHTMLImpressao(novoPedido);
             dispararImpressao();
 
-            limparCarrinho(); 
+            if (pedidoEmEdicaoId === null && configPadroes.separarBalcaoDoces && !pedidoTemAlgoDeCozinha(novoPedido.itens)) {
+                exibirAviso(`Pedido #${novoPedido.id} não tem nada de cozinha — foi direcionado pro Balcão 02 (Doces).`, '🍬 Balcão 02 (Doces)');
+            }
+
+            limparCarrinho();
             renderizarMenu(categoriaFiltroAtual); 
             renderizarTabelaProdutos(); 
             atualizarTelas();
@@ -3208,7 +3313,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         }
 
         function aplicarTodosZoomsSalvos() {
-            ['conteudo-zoom-pedido', 'conteudo-zoom-preparo', 'conteudo-zoom-entrega'].forEach(aplicarZoomSalvo);
+            ['conteudo-zoom-pedido', 'conteudo-zoom-preparo', 'conteudo-zoom-entrega', 'conteudo-zoom-entrega-doces'].forEach(aplicarZoomSalvo);
         }
 
         function atualizarBotoesVozAnuncio() {
@@ -3295,16 +3400,29 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             }
         }
 
+        // Usado pra decidir se um pedido vai pro Balcão 01 ou pro Balcão 02
+        // (Doces) quando configPadroes.separarBalcaoDoces está ligado —
+        // "tem algo de cozinha" olha tanto item simples quanto sub-item
+        // escolhido dentro de combo.
+        function pedidoTemAlgoDeCozinha(itens) {
+            return itens.some(item => item.isCombo
+                ? (item.itensComboEscolhidos || []).some(sub => sub.cozinha)
+                : item.cozinha);
+        }
+
         // Único critério pra "tem item de verdade na cozinha agora": fase
         function atualizarTelas() {
-            let htmlCozinha = '', htmlBalcao = '', htmlAgenda = '', htmlPrepTV = '';
-            let countCoz = 0, countBalc = 0, countAgend = 0;
+            let htmlCozinha = '', htmlBalcao = '', htmlBalcaoDoces = '', htmlAgenda = '', htmlPrepTV = '';
+            let countCoz = 0, countBalc = 0, countBalcDoces = 0, countAgend = 0;
             let prontos = [], entregues = [];
 
             // MAPAS PARA AS SIDEBARS EM FORMATO DE TABELA
             let resumoBalcaoCozinha = {};
             let resumoBalcaoFicha = {};
             let resumoProducaoCozinha = {};
+            // Só usado quando configPadroes.separarBalcaoDoces está ligado —
+            // ver bloco do Balcão logo abaixo.
+            let resumoBalcaoDoces = {};
 
             pedidosGerais.forEach(p => {
                 if(p.statusPainel === 'cancelado') return;
@@ -3365,8 +3483,14 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 }
 
                 if((p.statusPainel === 'preparando' || p.statusPainel === 'pronto' || p.statusPainel === 'nenhum') && iAgoraPendentes.length > 0) {
-                    countBalc++;
-                    
+                    // Toggle em Configurações (⚙️ na tela de Pedido) — pedido
+                    // sem NADA de cozinha vai pro Balcão 02 (Doces) em vez do
+                    // Balcão 01. Desligado = tudo cai no Balcão 01, como
+                    // sempre foi (ver pedidoTemAlgoDeCozinha acima).
+                    const vaiPraBalcaoDoces = configPadroes.separarBalcaoDoces && !pedidoTemAlgoDeCozinha(iAgoraPendentes);
+                    const resumoAlvo = vaiPraBalcaoDoces ? resumoBalcaoDoces : resumoBalcaoCozinha;
+                    if (vaiPraBalcaoDoces) countBalcDoces++; else countBalc++;
+
                     let btn = (p.statusPainel === 'preparando' || p.statusPainel === 'nenhum') ? `
                         <div style="display:flex; gap:5px;">
                             <button class="btn btn-warning" style="width:100%;" onclick="chamarNoPainel(${p.id})">🔔 Chamar Painel</button>
@@ -3383,10 +3507,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                         // real (ex: Hamburguer), e os dois resumos não batem.
                         if (item.isCombo) {
                             item.itensComboEscolhidos.forEach(sub => {
-                                resumoBalcaoCozinha[sub.nome] = (resumoBalcaoCozinha[sub.nome] || 0) + 1;
+                                resumoAlvo[sub.nome] = (resumoAlvo[sub.nome] || 0) + 1;
                             });
                         } else {
-                            resumoBalcaoCozinha[item.nome] = (resumoBalcaoCozinha[item.nome] || 0) + item.qtd;
+                            resumoAlvo[item.nome] = (resumoAlvo[item.nome] || 0) + item.qtd;
                         }
 
                         if (item.isCombo) {
@@ -3412,12 +3536,13 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                         }
                     }).join('');
 
-                    htmlBalcao += `
+                    const cardHtmlBalcao = `
                         <div class="card-pedido"><div class="status-bar ${p.statusPainel === 'preparando' ? 'bg-warning' : 'bg-pronto'}"></div>
                         <div style="display:flex; justify-content:space-between;"><h3>#${p.id} - ${p.cliente}</h3><span>Entrada: ${p.hora}</span></div>
                         <div style="font-size: 0.85rem; font-weight: bold; color: var(--primary); margin-top: -5px; margin-bottom: 5px;">[ ${p.tipoAtendimento || 'Levar (Viagem)'} ]</div>
                         <div class="lista-itens" style="margin-top:0;">${itensDetalhadosBalcao}</div>
                         ${btn}</div>`;
+                    if (vaiPraBalcaoDoces) htmlBalcaoDoces += cardHtmlBalcao; else htmlBalcao += cardHtmlBalcao;
                 }
 
                 if(iDepois.length > 0) {
@@ -3571,22 +3696,59 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 }
             }
 
+            // MONTA A SIDEBAR DO BALCÃO 02 (DOCES) — mais simples que a do
+            // Balcão 01 (não tem "ficha" separado, só quantidade ativa
+            // mesmo), ajuda quem está lá a saber o que já pode levar pro
+            // Balcão 01 se precisar.
+            const corpoResumoBalcaoDoces = document.getElementById('corpo-resumo-balcao-doces');
+            if (corpoResumoBalcaoDoces) {
+                const nomesDoces = Object.keys(resumoBalcaoDoces);
+                if (nomesDoces.length === 0) {
+                    corpoResumoBalcaoDoces.innerHTML = '<p style="color:gray; font-size:0.8rem;">Nenhum item ativo.</p>';
+                } else {
+                    let htmlTabelaDoces = `
+                        <table class="tabela-resumo-canto">
+                            <thead><tr><th style="text-align:left;">Item / Produto</th><th>qtd</th></tr></thead>
+                            <tbody>
+                    `;
+                    nomesDoces.sort((a, b) => resumoBalcaoDoces[b] - resumoBalcaoDoces[a]).forEach(nome => {
+                        htmlTabelaDoces += `
+                            <tr>
+                                <td><b>${nome}</b></td>
+                                <td style="text-align:center; font-weight:900; background:#dcfce7; color:#15803d;">${resumoBalcaoDoces[nome]}</td>
+                            </tr>
+                        `;
+                    });
+                    htmlTabelaDoces += '</tbody></table>';
+                    corpoResumoBalcaoDoces.innerHTML = htmlTabelaDoces;
+                }
+            }
+
             document.getElementById('fila-cozinha').innerHTML = htmlCozinha || '<p style="color:gray;">Livre.</p>';
             document.getElementById('fila-entrega').innerHTML = htmlBalcao || '<p style="color:gray;">Livre.</p>';
             document.getElementById('fila-agendados').innerHTML = htmlAgenda || '<p style="color:gray;">Nenhum retido.</p>';
-            
+            const filaEntregaDoces = document.getElementById('fila-entrega-doces');
+            if (filaEntregaDoces) filaEntregaDoces.innerHTML = htmlBalcaoDoces || '<p style="color:gray;">Livre.</p>';
+
             document.getElementById('badge-cozinha').innerText = countCoz;
             document.getElementById('badge-cozinha').style.display = countCoz ? 'inline-block' : 'none';
             document.getElementById('badge-entrega').innerText = countBalc;
             document.getElementById('badge-entrega').style.display = countBalc ? 'inline-block' : 'none';
             document.getElementById('badge-agendados').innerText = countAgend;
             document.getElementById('badge-agendados').style.display = countAgend ? 'inline-block' : 'none';
+            const badgeEntregaDoces = document.getElementById('badge-entrega-doces');
+            if (badgeEntregaDoces) {
+                badgeEntregaDoces.innerText = countBalcDoces;
+                badgeEntregaDoces.style.display = countBalcDoces ? 'inline-block' : 'none';
+            }
 
             // Mesmas contagens, só que escritas por extenso no cabeçalho de
             // cada tela (o badge do menu é pequeno demais pra bater o olho).
             document.getElementById('contagem-cozinha').innerText = `${countCoz} ${countCoz === 1 ? 'pedido' : 'pedidos'}`;
             document.getElementById('contagem-entrega').innerText = `${countBalc} ${countBalc === 1 ? 'pedido' : 'pedidos'}`;
             document.getElementById('contagem-agendados').innerText = `${countAgend} ${countAgend === 1 ? 'pedido' : 'pedidos'}`;
+            const contagemEntregaDoces = document.getElementById('contagem-entrega-doces');
+            if (contagemEntregaDoces) contagemEntregaDoces.innerText = `${countBalcDoces} ${countBalcDoces === 1 ? 'pedido' : 'pedidos'}`;
 
             document.getElementById('tv-lista-preparando').innerHTML = htmlPrepTV || '<div style="color:gray;text-align:center;width:100%;font-size:1.5vw;margin-top:20px;">Aguardando...</div>';
             
@@ -3788,6 +3950,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
             const registroFechamento = {
                 id: historicoCaixasDB.length + 1,
+                // Mesma ideia de chaveUnica dos pedidos (ver finalizarPedido) —
+                // identidade estável pra mesclarPedidosPorId reconhecer esse
+                // fechamento mesmo se o número "id" precisar mudar por ter
+                // colidido com um fechamento de outro dispositivo.
+                chaveUnica: `${PDV_CLIENT_ID}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
                 usuarioNome: caixa.usuarioNome,
                 campanha: nomeCampanha.trim(),
                 dataAbertura: dataHoraAbertura,
@@ -4008,7 +4175,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         // ao resto do app (ver fecharCaixaPrompt).
         function calcularResumoProdutosPorPeriodo(dataInicio, dataFim) {
             const resumo = {};
-            const garantir = nome => resumo[nome] || (resumo[nome] = { qtdVendida: 0, qtdBonificada: 0, valorVendido: 0 });
+            const garantir = nome => resumo[nome] || (resumo[nome] = { qtdVendida: 0, qtdBonificada: 0, valorVendido: 0, valorAproximado: false });
 
             let lista = [...historicoCaixasDB];
             if (dataInicio) {
@@ -4021,8 +4188,23 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             }
 
             lista.forEach(c => {
-                Object.entries(c.produtosVendidos || {}).forEach(([nome, qtd]) => { garantir(nome).qtdVendida += qtd; });
-                Object.entries(c.valorProdutosVendidos || {}).forEach(([nome, valor]) => { garantir(nome).valorVendido += valor; });
+                Object.entries(c.produtosVendidos || {}).forEach(([nome, qtd]) => {
+                    const registro = garantir(nome);
+                    registro.qtdVendida += qtd;
+                    const valorHistorico = (c.valorProdutosVendidos || {})[nome];
+                    if (valorHistorico !== undefined) {
+                        registro.valorVendido += valorHistorico;
+                    } else {
+                        // Fechamento salvo antes do valor histórico por produto
+                        // existir (ou registro antigo sem esse campo) — aproxima
+                        // pelo preço ATUAL do catálogo, mesmo fallback já usado
+                        // em formatarLinhaProdutoVendido pros outros relatórios.
+                        // Sem isso, todo fechamento antigo contava 0 aqui mesmo
+                        // tendo vendido de verdade.
+                        const prod = produtosDB.find(p => p.nome === nome);
+                        if (prod) { registro.valorVendido += prod.preco * qtd; registro.valorAproximado = true; }
+                    }
+                });
                 extrairBonificacoesDoFechamento(c).forEach(pedido => {
                     (pedido.itens || []).forEach(item => {
                         if (item.isCombo && Array.isArray(item.itensComboEscolhidos) && item.itensComboEscolhidos.length > 0) {
@@ -4063,15 +4245,16 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 return;
             }
 
+            const temValorAproximado = linhas.some(([, d]) => d.valorAproximado);
             tbody.innerHTML = linhas.map(([nome, d]) => `
                 <tr style="border-bottom: 1px solid #e5e7eb;">
                     <td style="padding: 10px; font-weight: bold;">${nome}</td>
                     <td style="text-align:center; font-weight: bold; color: var(--primary);">${d.qtdVendida}</td>
                     <td style="text-align:center; font-weight: bold; color: ${d.qtdBonificada > 0 ? '#dc2626' : '#9ca3af'};">${d.qtdBonificada}</td>
                     <td style="text-align:center; font-weight: 900; color: #7c3aed;">${d.qtdVendida + d.qtdBonificada}</td>
-                    <td style="text-align:right; font-weight: bold; color: var(--success);">R$ ${d.valorVendido.toFixed(2)}</td>
+                    <td style="text-align:right; font-weight: bold; color: var(--success);">R$ ${d.valorVendido.toFixed(2)}${d.valorAproximado ? '*' : ''}</td>
                 </tr>
-            `).join('');
+            `).join('') + (temValorAproximado ? `<tr><td colspan="5" style="padding:6px 10px; font-size:0.7rem; color:gray;">* valor estimado pelo preço atual do produto (fechamento salvo antes do valor histórico ser guardado, ou produto removido do catálogo)</td></tr>` : '');
         }
 
         function gerarPDFProdutosPeriodo() {
@@ -4085,6 +4268,66 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 html2canvas: { scale: 2 },
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
             }).from(el).save().then(restaurar).catch(restaurar);
+        }
+
+        const ROTULOS_TIPO_LOG = {
+            login: { texto: '🔑 Login', cor: '#2563eb' },
+            offline: { texto: '🔴 Ficou offline', cor: '#dc2626' },
+            online: { texto: '🟢 Voltou online', cor: '#16a34a' },
+            erro: { texto: '⚠️ Erro', cor: '#d97706' }
+        };
+
+        function renderizarTabelaLogs(linhas) {
+            const tbody = document.getElementById('tabela-logs-sistema');
+            if (!tbody) return;
+            if (linhas.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="padding:20px; text-align:center; color:gray;">Nenhum evento encontrado.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = linhas.map(l => {
+                const rotulo = ROTULOS_TIPO_LOG[l.tipo] || { texto: l.tipo, cor: '#374151' };
+                const dataHora = new Date(l.criado_em).toLocaleString('pt-BR');
+                return `
+                    <tr style="border-bottom: 1px solid #e5e7eb;">
+                        <td style="padding: 8px; white-space:nowrap;">${dataHora}</td>
+                        <td style="font-weight:bold; color:${rotulo.cor};">${rotulo.texto}</td>
+                        <td>${l.usuario_nome || '-'}</td>
+                        <td>${l.tela || '-'}</td>
+                        <td style="max-width:320px;">${l.detalhe || '-'}</td>
+                        <td style="font-size:0.75rem; color:gray;" title="${l.client_id || ''}">${l.client_id ? l.client_id.slice(0, 8) : '-'}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Busca direto no Supabase (pdv_logs) — não faz parte de
+        // pedidosGerais/pdv_state, então não passa por
+        // montarEstadoAtual/aplicarEstado nem pelo cache local; é sempre uma
+        // consulta fresca. Exclusiva do Master (ver usuarioTemAcesso).
+        async function carregarLogsSistema() {
+            const tbody = document.getElementById('tabela-logs-sistema');
+            if (!tbody) return;
+            tbody.innerHTML = '<tr><td colspan="6" style="padding:20px; text-align:center; color:gray;">Carregando...</td></tr>';
+
+            const tipo = document.getElementById('filtro-logs-tipo').value;
+            const usuarioBusca = document.getElementById('filtro-logs-usuario').value.trim();
+            const inicio = document.getElementById('filtro-logs-data-inicio').value;
+            const fim = document.getElementById('filtro-logs-data-fim').value;
+
+            let consulta = supabaseClient.from('pdv_logs').select('*').order('criado_em', { ascending: false }).limit(500);
+            if (tipo) consulta = consulta.eq('tipo', tipo);
+            if (usuarioBusca) consulta = consulta.ilike('usuario_nome', `%${usuarioBusca}%`);
+            if (inicio) consulta = consulta.gte('criado_em', `${inicio}T00:00:00`);
+            if (fim) consulta = consulta.lte('criado_em', `${fim}T23:59:59`);
+
+            try {
+                const { data, error } = await consulta;
+                if (error) throw error;
+                renderizarTabelaLogs(data || []);
+            } catch (erro) {
+                console.error('Falha ao carregar logs do sistema:', erro);
+                tbody.innerHTML = '<tr><td colspan="6" style="padding:20px; text-align:center; color:var(--danger);">Não foi possível carregar os logs. A tabela pdv_logs existe no Supabase? (ver supabase/pdv_logs.sql)</td></tr>';
+            }
         }
 
         // Monta "94 un. — R$ 2.350,00" pra lista de Produtos Vendidos. Usa o
@@ -4650,11 +4893,6 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 const btn = e.target.closest('.tecla-num');
                 if (btn) digitarTecladoNumerico(btn.dataset.tecla);
             });
-            ativarTecladoTextoSeTablet();
-            document.getElementById('grid-teclado-texto').addEventListener('click', e => {
-                const btn = e.target.closest('.tecla-texto');
-                if (btn) digitarTecladoTexto(btn.dataset.tecla);
-            });
 
             // Antes de qualquer coisa: quem está usando este dispositivo? Mostra
             // a tela de login (ou de criar a conta Master, na primeiríssima vez)
@@ -4690,6 +4928,22 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             iniciarRealtimeSupabase();
             iniciarRealtimeRegistroBarracas();
             iniciarRealtimeCatalogo();
+
+            // Realtime é ótimo enquanto a conexão fica de pé, mas se o
+            // dispositivo for pra segundo plano (tela apaga, troca de app) ou
+            // a internet cair por um tempo, o canal pode ficar quieto sem
+            // avisar nada — não é erro de leitura/escrita, então nem acende
+            // o indicador offline, e o dispositivo fica "dormindo" sem saber
+            // que perdeu atualizações de outros dispositivos. salvarNoBancoLocal
+            // já mescla em vez de sobrescrever (ver lá), mas só na PRÓXIMA vez
+            // que ESTE dispositivo salvar algo; isso aqui resolve mais cedo —
+            // assim que a tela volta a ficar visível ou a internet volta,
+            // busca o estado completo de novo sozinho.
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') resincronizarSeNecessario('tela voltou a ficar visível');
+            });
+            window.addEventListener('online', () => resincronizarSeNecessario('conexão de internet voltou'));
+
             // Reconecta sozinho se este dispositivo já tinha sido configurado
             // (numa sessão anterior) como impressora de rede ou como remetente
             // — senão só voltaria a funcionar depois de reabrir a tela de
@@ -4802,7 +5056,6 @@ window.alternarVozAnuncio = alternarVozAnuncio;
 window.ajustarVolumeAnuncio = ajustarVolumeAnuncio;
 window.ajustarZoomTela = ajustarZoomTela;
 window.fecharTecladoNumerico = fecharTecladoNumerico;
-window.fecharTecladoTexto = fecharTecladoTexto;
 window.tratarDragStartProduto = tratarDragStartProduto;
 window.tratarDragOverProduto = tratarDragOverProduto;
 window.tratarDropProduto = tratarDropProduto;
@@ -4867,6 +5120,7 @@ window.verDetalhesCaixa = verDetalhesCaixa;
 window.renderizarHistoricoCaixas = renderizarHistoricoCaixas;
 window.renderizarProdutosPorPeriodo = renderizarProdutosPorPeriodo;
 window.gerarPDFProdutosPeriodo = gerarPDFProdutosPeriodo;
+window.carregarLogsSistema = carregarLogsSistema;
 
 // PWA: registra o service worker (sw.js) só cuida do "shell" do app pra ele
 // abrir mesmo sem internet — os dados de verdade continuam vindo do

@@ -36,8 +36,8 @@
         🔒 Carregando…
     </div>
 
-    <div id="indicador-offline" style="display:none; position:fixed; top:0; left:0; right:0; z-index:2000000; background:#dc2626; color:white; text-align:center; padding:6px; font-weight:bold; font-size:0.85rem;">
-        📡 Sem conexão com o servidor — salvando só neste dispositivo até a conexão voltar
+    <div id="indicador-offline" class="indicador-offline-piscando" style="display:none; position:fixed; top:0; left:0; right:0; z-index:2000000; background:#dc2626; color:white; text-align:center; padding:12px; font-weight:900; font-size:1rem; box-shadow: 0 2px 12px rgba(220,38,38,0.6);">
+        🔴📡 SEM CONEXÃO COM O SERVIDOR — salvando só neste aparelho. Tentando reconectar sozinho...
     </div>
 
     <div id="modal-aviso" class="modal-geral">
@@ -159,7 +159,8 @@
         <button class="active" onclick="mudarAba('tela-pedido', this)">🛒 Pedido</button>
         <button onclick="mudarAba('tela-agendados', this)">🎫 Pedidos em Pausa <span id="badge-agendados" class="badge">0</span></button>
         <button onclick="mudarAba('tela-preparo', this)">🍳 Cozinha <span id="badge-cozinha" class="badge">0</span></button>
-        <button onclick="mudarAba('tela-entrega', this)">🛍️ Balcão/Entrega <span id="badge-entrega" class="badge">0</span></button>
+        <button onclick="mudarAba('tela-entrega', this)">🛍️ Balcão 01 <span id="badge-entrega" class="badge">0</span></button>
+        <button id="btn-nav-balcao-doces" onclick="mudarAba('tela-entrega-doces', this)" style="display:none;">🍬 Balcão 02 <span id="badge-entrega-doces" class="badge">0</span></button>
 
         <div class="nav-divider"></div>
 
@@ -193,6 +194,7 @@
                     <button id="btn-sub-dash" onclick="mudarAba('tela-relatorio', this)">📈 Dashboard Analytics</button>
                     <button id="btn-sub-dash-geral" onclick="mudarAba('tela-dashboard-geral', this)">🏬 Dashboard Geral (Todas as Barracas)</button>
                     <button onclick="mudarAba('tela-produtos-periodo', this)">📦 Produtos Vendidos por Período</button>
+                    <button onclick="mudarAba('tela-logs-sistema', this)">🪵 Logs do Sistema</button>
                 </div>
             </div>
         </div>
@@ -294,82 +296,6 @@
         <button type="button" class="btn btn-success" style="width:100%; display:block; margin:12px auto 0;" onclick="fecharTecladoNumerico()">OK</button>
     </div>
 
-    <!-- TECLADO DE TEXTO PRÓPRIO (só em tablet/celular — ver
-         ativarTecladoTextoSeTablet em app.js): mesmo raciocínio do teclado
-         numérico, mas pra qualquer campo de texto (nome, busca, senha...). -->
-    <div id="teclado-texto-flutuante" class="teclado-flutuante" style="display:none;">
-        <div class="teclado-flutuante-topo">
-            <b style="font-size:0.85rem; color:#374151;">Digite</b>
-            <button type="button" class="btn btn-neutro" style="padding:4px 10px;" onclick="fecharTecladoTexto()">✖️</button>
-        </div>
-        <div id="preview-teclado-texto" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:10px 12px; margin-bottom:10px; font-size:1.1rem; font-weight:bold; color:#1f2937; min-height:1.4em; letter-spacing:1px; word-break:break-all;"></div>
-        <div id="grid-teclado-texto" class="grid-teclado-texto">
-            <div class="linha-teclado-texto">
-                <button type="button" class="tecla-texto" data-tecla="1">1</button>
-                <button type="button" class="tecla-texto" data-tecla="2">2</button>
-                <button type="button" class="tecla-texto" data-tecla="3">3</button>
-                <button type="button" class="tecla-texto" data-tecla="4">4</button>
-                <button type="button" class="tecla-texto" data-tecla="5">5</button>
-                <button type="button" class="tecla-texto" data-tecla="6">6</button>
-                <button type="button" class="tecla-texto" data-tecla="7">7</button>
-                <button type="button" class="tecla-texto" data-tecla="8">8</button>
-                <button type="button" class="tecla-texto" data-tecla="9">9</button>
-                <button type="button" class="tecla-texto" data-tecla="0">0</button>
-                <button type="button" class="tecla-texto tecla-especial" data-tecla="⌫">⌫</button>
-            </div>
-            <div class="linha-teclado-texto">
-                <button type="button" class="tecla-texto" data-tecla="@">@</button>
-                <button type="button" class="tecla-texto" data-tecla="#">#</button>
-                <button type="button" class="tecla-texto" data-tecla="$">$</button>
-                <button type="button" class="tecla-texto" data-tecla="%">%</button>
-                <button type="button" class="tecla-texto" data-tecla="&amp;">&amp;</button>
-                <button type="button" class="tecla-texto" data-tecla="*">*</button>
-                <button type="button" class="tecla-texto" data-tecla="!">!</button>
-                <button type="button" class="tecla-texto" data-tecla="?">?</button>
-                <button type="button" class="tecla-texto" data-tecla="_">_</button>
-                <button type="button" class="tecla-texto" data-tecla=".">.</button>
-            </div>
-            <div class="linha-teclado-texto">
-                <button type="button" class="tecla-texto tecla-letra" data-tecla="q">q</button>
-                <button type="button" class="tecla-texto tecla-letra" data-tecla="w">w</button>
-                <button type="button" class="tecla-texto tecla-letra" data-tecla="e">e</button>
-                <button type="button" class="tecla-texto tecla-letra" data-tecla="r">r</button>
-                <button type="button" class="tecla-texto tecla-letra" data-tecla="t">t</button>
-                <button type="button" class="tecla-texto tecla-letra" data-tecla="y">y</button>
-                <button type="button" class="tecla-texto tecla-letra" data-tecla="u">u</button>
-                <button type="button" class="tecla-texto tecla-letra" data-tecla="i">i</button>
-                <button type="button" class="tecla-texto tecla-letra" data-tecla="o">o</button>
-                <button type="button" class="tecla-texto tecla-letra" data-tecla="p">p</button>
-            </div>
-            <div class="linha-teclado-texto">
-                <button type="button" class="tecla-texto tecla-letra" data-tecla="a">a</button>
-                <button type="button" class="tecla-texto tecla-letra" data-tecla="s">s</button>
-                <button type="button" class="tecla-texto tecla-letra" data-tecla="d">d</button>
-                <button type="button" class="tecla-texto tecla-letra" data-tecla="f">f</button>
-                <button type="button" class="tecla-texto tecla-letra" data-tecla="g">g</button>
-                <button type="button" class="tecla-texto tecla-letra" data-tecla="h">h</button>
-                <button type="button" class="tecla-texto tecla-letra" data-tecla="j">j</button>
-                <button type="button" class="tecla-texto tecla-letra" data-tecla="k">k</button>
-                <button type="button" class="tecla-texto tecla-letra" data-tecla="l">l</button>
-                <button type="button" class="tecla-texto tecla-letra" data-tecla="ç">ç</button>
-            </div>
-            <div class="linha-teclado-texto">
-                <button type="button" class="tecla-texto tecla-especial" data-tecla="⇧">⇧</button>
-                <button type="button" class="tecla-texto tecla-letra" data-tecla="z">z</button>
-                <button type="button" class="tecla-texto tecla-letra" data-tecla="x">x</button>
-                <button type="button" class="tecla-texto tecla-letra" data-tecla="c">c</button>
-                <button type="button" class="tecla-texto tecla-letra" data-tecla="v">v</button>
-                <button type="button" class="tecla-texto tecla-letra" data-tecla="b">b</button>
-                <button type="button" class="tecla-texto tecla-letra" data-tecla="n">n</button>
-                <button type="button" class="tecla-texto tecla-letra" data-tecla="m">m</button>
-                <button type="button" class="tecla-texto tecla-especial" data-tecla="-">-</button>
-            </div>
-            <div class="linha-teclado-texto">
-                <button type="button" class="tecla-texto tecla-espaco" data-tecla="␣">Espaço</button>
-            </div>
-        </div>
-        <button type="button" class="btn btn-success teclado-texto-ok" onclick="fecharTecladoTexto()">OK</button>
-    </div>
 
     <!-- MODAL: GERENCIAR CATEGORIAS -->
     <div id="modal-gerenciar-categorias" class="modal-geral">
@@ -658,7 +584,7 @@
         <!-- TELA 4: BALCÃO / ENTREGA COM SIDEBAR EM TABELA NO CANTO -->
         <div id="tela-entrega" class="tab-content">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
-                <h2 style="margin:0;">Painel de Entrega (Balcão/Entrega) <span id="contagem-entrega" class="contagem-tela">0 pedidos</span></h2>
+                <h2 style="margin:0;">Painel de Entrega (Balcão 01) <span id="contagem-entrega" class="contagem-tela">0 pedidos</span></h2>
                 <div style="display:flex; gap:8px; align-items:center;">
                     <button class="btn btn-success btn-toggle-voz" onclick="alternarVozAnuncio()">🗣️ Voz Ligada</button>
                     <div class="controle-zoom-tela" title="Volume do aviso (bipe fica realmente mais alto acima de 100%; a voz é limitada a 100% pelo navegador)">
@@ -682,6 +608,38 @@
                 <div class="sidebar-resumo-balcao">
                     <h3>📊 Resumo dos Itens</h3>
                     <div id="corpo-resumo-balcao">
+                        <p style="color:gray; font-size:0.8rem;">Nenhum item ativo.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TELA: BALCÃO 02 (DOCES) — mesma estrutura do Balcão 01, só que
+             recebe os pedidos que não têm NADA de cozinha (doces, refri
+             etc) quando o toggle "separar Balcão Doces" está ligado (ver
+             configPadroes.separarBalcaoDoces, configurado no ⚙️ da tela de
+             Pedido). Com o toggle desligado essa tela fica sempre vazia e
+             tudo continua indo pro Balcão 01, igual antes. -->
+        <div id="tela-entrega-doces" class="tab-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
+                <h2 style="margin:0;">🍬 Balcão 02 (Doces) <span id="contagem-entrega-doces" class="contagem-tela">0 pedidos</span></h2>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <button class="btn" style="background:#16a34a; color:white;" onclick="abrirModalPedidosEntregues()" title="Ver todos os pedidos já entregues">✅ Pedidos Já Entregues</button>
+                    <div class="controle-zoom-tela">
+                        <button onclick="ajustarZoomTela('conteudo-zoom-entrega-doces', -10)">➖</button>
+                        <span id="txt-zoom-conteudo-zoom-entrega-doces">100%</span>
+                        <button onclick="ajustarZoomTela('conteudo-zoom-entrega-doces', 10)">➕</button>
+                    </div>
+                </div>
+            </div>
+            <p style="color: gray; margin-top: -6px; margin-bottom: 12px; font-size: 0.85rem;">Pedidos sem nenhum item de cozinha (doces, bebidas etc). A tabela ao lado ajuda a saber o que já está pronto pra levar pro Balcão 01, se precisar.</p>
+            <div class="layout-balcao-container" id="conteudo-zoom-entrega-doces">
+                <div class="balcao-principal">
+                    <div class="grid-pedidos" id="fila-entrega-doces"></div>
+                </div>
+                <div class="sidebar-resumo-balcao">
+                    <h3>📊 Resumo dos Itens</h3>
+                    <div id="corpo-resumo-balcao-doces">
                         <p style="color:gray; font-size:0.8rem;">Nenhum item ativo.</p>
                     </div>
                 </div>
@@ -933,6 +891,15 @@
                         </select>
                     </div>
                 </div>
+
+                <div style="margin-top:18px; padding-top:14px; border-top: 2px solid #e5e7eb;">
+                    <label class="item-checkbox-ingrediente" style="font-size:0.9rem;">
+                        <input type="checkbox" id="cfg-separar-balcao-doces" onchange="salvarConfiguracoesPadrao()">
+                        🍬 Separar Balcão Doces: pedido sem NADA de cozinha (doce, refri...) vai pro Balcão 02 em vez do Balcão 01
+                    </label>
+                    <p style="font-size: 0.78rem; color: #6b7280; margin: 4px 0 0 24px;">Desligado = tudo continua no Balcão 01, como sempre foi.</p>
+                </div>
+
                 <button class="btn btn-neutro" style="width:100%; margin-top:15px;" onclick="fecharModalConfigPedido()">Fechar</button>
             </div>
         </div>
@@ -1321,6 +1288,59 @@
                         </tr>
                     </thead>
                     <tbody id="tabela-produtos-periodo"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TELA: LOGS DO SISTEMA (exclusiva do Master) -->
+        <div id="tela-logs-sistema" class="tab-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+                <h2 style="border: none; padding: 0; margin: 0;">🪵 Logs do Sistema</h2>
+                <button class="btn btn-neutro" onclick="carregarLogsSistema()">🔄 Atualizar</button>
+            </div>
+            <p style="color: gray; margin-bottom: 15px;">Login de usuários, quedas/voltas de conexão e erros do sistema, de todos os dispositivos — cada evento é um registro novo, nenhum sobrescreve o outro. Mostra os últimos 500 eventos que baterem com o filtro.</p>
+
+            <div style="background: white; padding: 15px 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 15px;">
+                <div class="row-inputs" style="align-items:flex-end; flex-wrap:wrap;">
+                    <div>
+                        <label style="font-size: 0.8rem; font-weight: bold; display:block;">Tipo:</label>
+                        <select id="filtro-logs-tipo" onchange="carregarLogsSistema()" style="margin-bottom:0;">
+                            <option value="">Todos</option>
+                            <option value="login">🔑 Login</option>
+                            <option value="offline">🔴 Ficou offline</option>
+                            <option value="online">🟢 Voltou online</option>
+                            <option value="erro">⚠️ Erro do sistema</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size: 0.8rem; font-weight: bold; display:block;">Usuário:</label>
+                        <input type="text" id="filtro-logs-usuario" placeholder="Nome do usuário..." oninput="carregarLogsSistema()" style="margin-bottom:0;" spellcheck="false">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.8rem; font-weight: bold; display:block;">Data Início:</label>
+                        <input type="date" id="filtro-logs-data-inicio" onchange="carregarLogsSistema()" style="margin-bottom:0;">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.8rem; font-weight: bold; display:block;">Data Fim:</label>
+                        <input type="date" id="filtro-logs-data-fim" onchange="carregarLogsSistema()" style="margin-bottom:0;">
+                    </div>
+                    <button class="btn btn-neutro" onclick="document.getElementById('filtro-logs-tipo').value=''; document.getElementById('filtro-logs-usuario').value=''; document.getElementById('filtro-logs-data-inicio').value=''; document.getElementById('filtro-logs-data-fim').value=''; carregarLogsSistema();">🧹 Limpar Filtro</button>
+                </div>
+            </div>
+
+            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-height: 65vh; overflow-y: auto; overflow-x: auto;">
+                <table style="width: 100%; min-width: 750px; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid #e5e7eb; background: #f8fafc;">
+                            <th style="padding: 10px;">Data/Hora</th>
+                            <th>Tipo</th>
+                            <th>Usuário</th>
+                            <th>Tela</th>
+                            <th>Detalhe</th>
+                            <th>Dispositivo</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabela-logs-sistema"><tr><td colspan="6" style="padding:20px; text-align:center; color:gray;">Carregando...</td></tr></tbody>
                 </table>
             </div>
         </div>

@@ -164,16 +164,6 @@
         .controle-zoom-tela button { border: none; background: white; border-radius: 6px; width: 26px; height: 26px; cursor: pointer; font-size: 0.85rem; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
         .controle-zoom-tela span { font-size: 0.75rem; font-weight: bold; color: #374151; min-width: 34px; text-align: center; }
 
-        .teclado-flutuante { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5000000; background: white; border-top: 2px solid #cbd5e1; box-shadow: 0 -4px 12px rgba(0,0,0,0.15); padding: 10px; }
-        .teclado-flutuante-topo { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-        .grid-teclado-texto { display: flex; flex-direction: column; gap: 6px; }
-        .linha-teclado-texto { display: flex; gap: 5px; justify-content: center; }
-        .tecla-texto { flex: 1; height: 42px; border: none; background: #e5e7eb; color: #1f2937; border-radius: 6px; font-size: 1rem; font-weight: bold; cursor: pointer; text-transform: none; }
-        .tecla-texto:active { background: #cbd5e1; }
-        .tecla-especial { background: #94a3b8; color: white; }
-        .tecla-espaco { flex: 3; }
-        .teclado-texto-ok { width: 100%; display: block; margin: 10px 0 0; }
-
         .coluna-produtos-pedido { display: flex; flex-direction: column; height: calc(100vh - 140px); }
         .scroll-produtos-pedido { flex: 1; min-height: 0; overflow-y: auto; padding-right: 8px; }
         .menu-grid { display: flex; flex-direction: column; gap: 12px; }
@@ -243,6 +233,12 @@
         .mc-destaque-name { font-size: 2.2vw; opacity: 0.95; margin-top: 10px; font-weight: bold; text-transform: uppercase; background: rgba(0,0,0,0.3); padding: 5px 20px; border-radius: 30px;}
         @keyframes blink-tv { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.95; transform: scale(1.02); } }
         .blinking { animation: blink-tv 1.5s infinite; }
+
+        /* Faixa de "sem conexão" precisa ser impossível de não notar — pisca
+           entre dois vermelhos bem diferentes (não só opacidade/escala, que
+           passa quase despercebido numa faixa fina no topo). */
+        @keyframes pulsar-offline { 0%, 100% { background-color: #dc2626; } 50% { background-color: #7f1d1d; } }
+        .indicador-offline-piscando { animation: pulsar-offline 1s infinite; }
 
         .cat-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #e5e7eb; transition: background 0.2s; cursor: grab; }
         .cat-item:hover { background: #f9fafb; }
