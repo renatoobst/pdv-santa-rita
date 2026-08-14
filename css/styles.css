@@ -105,7 +105,13 @@
            .grid-config-3col. As seções que precisam da linha inteira usam
            grid-column: 1 / -1 no HTML (span numérico fixo não funciona bem
            com número de colunas variável).  */
-        .cadastro-produto-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; align-items: start; }
+        /* Fixo em 5 colunas (não auto-fit) — antes o número de colunas por
+           linha mudava sozinho conforme a largura da tela/quais campos
+           estavam visíveis (modo Combo esconde alguns), fazendo os campos
+           quebrarem de linha em lugares diferentes toda hora e o botão
+           Salvar ficar "torto" (pulando de posição). Fixo, o Salvar sempre
+           cai no mesmo lugar. */
+        .cadastro-produto-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; align-items: start; }
 
         /* Cadastro de produto fica fixo no topo o tempo todo (ver
            .produtos-topo-fixo) — precisa ser bem mais compacto que um
@@ -296,6 +302,7 @@
             .grid-campos-pagamento { grid-template-columns: 1fr; }
             .charts-grid { grid-template-columns: 1fr; }
             .row-inputs { flex-direction: column; }
+            .cadastro-produto-grid { grid-template-columns: repeat(2, 1fr); }
         }
 
         @media (max-width: 768px) {
@@ -308,6 +315,7 @@
             /* Grades pensadas pra tela larga viram 1 coluna, evitando espremer
                cartões/formulários até ficarem ilegíveis. */
             .grid-config-3col, .grid-atalhos { grid-template-columns: 1fr; }
+            .cadastro-produto-grid { grid-template-columns: 1fr; }
 
             /* Evita zoom automático do iOS ao focar campos com font-size < 16px. */
             input, select, textarea { font-size: 16px; }

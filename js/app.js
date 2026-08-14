@@ -3284,6 +3284,13 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             let horaEntradaCozinhaCalculada = null;
             let horaEntregaCalculada = null;
             let caixaIdPedido = meuCaixaAtual.id;
+            // Marca se esse pedido já passou por "Pedidos em Pausa"
+            // (moverParaAgora) — usado só pra mostrar um ícone no card do
+            // Balcão, avisando quem está lá que não é um pedido novato.
+            // Preservado na edição igual chaveUnica/caixaId (não recalcula
+            // do zero, senão editar um pedido que veio de pausa "esqueceria"
+            // isso).
+            let veioDePausaPedido = false;
             // Identidade estável do pedido, gerada 1x na criação e preservada
             // em toda edição — não é o número que aparece no recibo (esse
             // pode precisar mudar se colidir com outro dispositivo, ver
@@ -3302,6 +3309,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     // de outro operador sem "roubar" a venda pro próprio caixa.
                     caixaIdPedido = pedidoExistente.caixaId || meuCaixaAtual.id;
                     chaveUnicaPedido = pedidoExistente.chaveUnica || chaveUnicaPedido;
+                    veioDePausaPedido = !!pedidoExistente.veioDePausa;
                 }
             } else {
                 const itensAgora = carrinho.filter(i => i.fase === 'agora');
@@ -3341,6 +3349,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 horaEntrega: horaEntregaCalculada,
                 statusPainel: statusPainelCalculado,
                 caixaId: caixaIdPedido,
+                veioDePausa: veioDePausaPedido,
                 itens: itensSnapshot
             };
 
@@ -3751,8 +3760,9 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             const p = pedidosGerais.find(x => x.id === id); 
             const horaAtual = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
             
-            p.itens.forEach(i => { if(i.fase==='mais_tarde') i.fase='agora'; }); 
-            p.statusPainel = 'preparando'; 
+            p.itens.forEach(i => { if(i.fase==='mais_tarde') i.fase='agora'; });
+            p.statusPainel = 'preparando';
+            p.veioDePausa = true;
             if (!p.horaEntradaCozinha) p.horaEntradaCozinha = horaAtual;
 
             salvarNoBancoLocal();
@@ -4091,7 +4101,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
                     const cardHtmlBalcao = `
                         <div class="card-pedido"><div class="status-bar ${p.statusPainel === 'preparando' ? 'bg-warning' : 'bg-pronto'}"></div>
-                        <div style="display:flex; justify-content:space-between;"><h3>#${p.id} - ${p.cliente}</h3><span>Entrada: ${p.hora}</span></div>
+                        <div style="display:flex; justify-content:space-between;"><h3>#${p.id} - ${p.cliente}${p.veioDePausa ? ' <span title="Veio de Pedidos em Pausa">⏸️</span>' : ''}</h3><span>Entrada: ${p.hora}</span></div>
                         <div style="font-size: 0.85rem; font-weight: bold; color: var(--primary); margin-top: -5px; margin-bottom: 5px;">[ ${p.tipoAtendimento || 'Levar (Viagem)'} ]</div>
                         <div class="lista-itens" style="margin-top:0;">${itensDetalhadosBalcao}</div>
                         ${btn}</div>`;
