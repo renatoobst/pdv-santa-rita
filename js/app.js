@@ -3734,7 +3734,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             atualizarCarrinhoUI();
         }
 
-        async function addCarrinho(idProduto) {
+        function addCarrinho(idProduto) {
             if (!caixaDoUsuarioAtual()) {
                 return exibirAviso("🔒 Abra o seu caixa (ícone 💰 ao lado do carrinho) antes de adicionar pedidos.", "Caixa Fechado");
             }
@@ -3750,20 +3750,13 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 return;
             }
 
-            // Item de Cozinha costuma ser pedido em quantidade (ex: "3
-            // X-Bacon") — clicar no card 3x pra virar 3 linhas separadas no
-            // carrinho é ruim tanto pra digitar quanto pra Cozinha ler
-            // depois (3 cards "1x" em vez de 1 card "3x"). Balcão/instantâneo
-            // continua 1 clique = 1 unidade, que já é rápido o bastante.
-            let quantidade = 1;
-            if (produto.cozinha) {
-                const qtdStr = await pedirTexto(`Quantidade de "${produto.nome}":`, { titulo: '👨‍🍳 Quantidade', valorInicial: '1' });
-                if (qtdStr === null) return;
-                quantidade = parseInt(qtdStr);
-                if (isNaN(quantidade) || quantidade <= 0) return exibirAviso("Quantidade inválida.");
-            }
-
-            if(!verificarEstoqueDisponivel(idProduto, quantidade)) return;
+            // Cada clique é 1 linha nova no carrinho (qtd:1), de propósito —
+            // pedido pra mesa que quer "1 sem cebola" + "1 bem passado" só
+            // dá pra descrever separado se forem linhas separadas (cada
+            // linha tem sua própria Observação). Um prompt de quantidade
+            // juntando tudo numa linha só (testado e revertido) quebrava
+            // isso — perdia a chance de dar obs diferente pra cada unidade.
+            if(!verificarEstoqueDisponivel(idProduto, 1)) return;
 
             let tipoGlobal = document.getElementById('tipo-retirada-global').value;
             let fase = tipoGlobal === 'mais_tarde' ? 'mais_tarde' : 'agora';
@@ -3772,7 +3765,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 cartId: Date.now().toString() + Math.floor(Math.random()*1000),
                 idProduto: produto.id, nome: produto.nome, preco: produto.preco,
                 categoria: produto.categoria, cozinha: produto.cozinha, entregaInstantanea: !!produto.entregaInstantanea,
-                isCombo: false, qtd: quantidade, obs: '', fase: fase
+                isCombo: false, qtd: 1, obs: '', fase: fase
             });
             atualizarCarrinhoUI();
             avisarItemAdicionadoMobile();
