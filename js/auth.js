@@ -93,6 +93,7 @@ const TELAS_DISPONIVEIS = [
     { id: 'tela-tv', label: '📺 TV Senha' },
     { id: 'tela-produtos', label: '📦 Produtos, Insumos & Estoque' },
     { id: 'tela-entrada-estoque', label: '📥 Entrada de Produtos' },
+    { id: 'tela-margem-lucro', label: '📊 Margem & Lucro' },
     { id: 'tela-atalhos', label: '⌨️ Teclas de Atalho' },
     { id: 'tela-configuracoes', label: '⚙️ Configurações & Parâmetros' },
     { id: 'tela-barracas', label: '🏪 Barracas' },

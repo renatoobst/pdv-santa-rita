@@ -196,6 +196,7 @@
                     <button id="btn-nav-produtos-venda" onclick="filtrarProdutosPorTipo('venda', this)">🛒 Produtos para Venda</button>
                     <button id="btn-nav-insumos" onclick="filtrarProdutosPorTipo('insumo', this)">🧪 Insumos</button>
                     <button id="btn-nav-entrada-estoque" onclick="mudarAba('tela-entrada-estoque', this)">📥 Entrada de Produtos</button>
+                    <button id="btn-nav-margem-lucro" onclick="mudarAba('tela-margem-lucro', this)">📊 Margem & Lucro</button>
                 </div>
             </div>
         </div>
@@ -734,6 +735,7 @@
                         <div class="campo-produto" style="grid-column: span 2;">
                             <label style="color:#0284c7;">Ingredientes / Itens Inclusos (vírgula):</label>
                             <input type="text" id="novo-prod-ingredientes" placeholder="Ex: Pão, Hamburguer, Queijo, Tomate, Alface" spellcheck="true" lang="pt-BR">
+                            <p style="font-size: 0.72rem; color: #6b7280; margin: 3px 0 0;">Isso aparece pro CLIENTE (recibo/pedido). Pra controle de custo interno, use "💰 Custo & Margem" mais abaixo.</p>
                         </div>
                         <div class="campo-produto">
                             <label>Status:</label>
@@ -822,15 +824,19 @@
                         </div>
 
                         <div id="box-ficha-tecnica" class="secao-form-produto" style="display:none; grid-column: 1 / -1; background: #ecfdf5;">
-                            <h4 style="color: #065f46;">💰 Custo de Produção (interno — nunca aparece pro cliente)</h4>
-                            <p style="font-size: 0.75rem; color: #065f46; margin: 0 0 10px 0;">Opcional. Quais insumos/produtos entram na produção de 1 unidade — usado só pra estimar custo e lucro, não muda o que aparece no pedido/recibo. Precisa que o insumo já tenha custo médio (uma Entrada de Estoque registrada) pra entrar na conta.</p>
-                            <div style="display: flex; gap: 5px; margin-bottom: 10px;">
-                                <select id="ficha-tecnica-add-select" style="margin-bottom:0; flex:1;"></select>
-                                <input type="number" id="ficha-tecnica-add-qtd" value="1" min="0.01" step="0.01" style="margin-bottom:0; width:70px;">
-                                <button class="btn btn-success" style="padding: 10px;" onclick="addItemFichaTecnica()">➕</button>
+                            <h4 style="color: #065f46; cursor:pointer; user-select:none; margin:0;" onclick="alternarBoxFichaTecnica()">
+                                <span id="seta-ficha-tecnica">▶</span> 💰 Custo & Margem (interno) — clique pra abrir
+                            </h4>
+                            <div id="conteudo-ficha-tecnica" style="display:none; margin-top:10px;">
+                                <p style="font-size: 0.75rem; color: #065f46; margin: 0 0 10px 0;">Opcional. Quais insumos/produtos entram na produção de 1 unidade — usado só pra estimar custo e lucro, não muda o que aparece no pedido/recibo (isso é o campo "Ingredientes" acima). Precisa que o insumo já tenha custo médio (uma Entrada de Estoque registrada) pra entrar na conta.</p>
+                                <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+                                    <select id="ficha-tecnica-add-select" style="margin-bottom:0; flex:1;"></select>
+                                    <input type="number" id="ficha-tecnica-add-qtd" value="1" min="0.01" step="0.01" style="margin-bottom:0; width:70px;">
+                                    <button class="btn btn-success" style="padding: 10px;" onclick="addItemFichaTecnica()">➕</button>
+                                </div>
+                                <ul id="lista-ficha-tecnica" style="margin:0 0 10px 0; padding-left:20px; font-size: 0.85rem; font-weight:bold;"></ul>
+                                <div id="resumo-custo-lucro-produto" style="font-size:0.85rem; font-weight:bold; color:#065f46;"></div>
                             </div>
-                            <ul id="lista-ficha-tecnica" style="margin:0 0 10px 0; padding-left:20px; font-size: 0.85rem; font-weight:bold;"></ul>
-                            <div id="resumo-custo-lucro-produto" style="font-size:0.85rem; font-weight:bold; color:#065f46;"></div>
                         </div>
                     </div>
                 </div>
@@ -846,6 +852,8 @@
                         </div>
                     </div>
                     <div style="font-size:0.78rem; color:#6b7280; font-weight:600; margin-bottom: 10px;" id="contagem-produtos-lista">Mostrando 0 produtos</div>
+
+                    <div id="alerta-cadastro-incompleto" style="display:none; background:#fffbeb; border:1px solid #fcd34d; color:#92400e; padding:8px 12px; border-radius:6px; font-size:0.82rem; font-weight:bold; margin-bottom:12px; cursor:pointer;" onclick="mudarAba('tela-margem-lucro', document.getElementById('btn-nav-margem-lucro'))" title="Clique pra ver a tela de Margem & Lucro"></div>
 
                     <div class="menu-categorias" id="abas-tabela-produtos-container" style="margin-bottom: 12px;"></div>
 
@@ -1284,6 +1292,27 @@
                 </div>
                 <p style="font-size: 0.78rem; color: #6b7280; margin: 4px 0 0;">Nome/cidade sem acento e sem caracteres especiais (regra do Banco Central para o QR Code) — o app ajusta sozinho ao gerar.</p>
             </div>
+
+            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); max-width: 700px; margin-top: 20px;">
+                <h3 style="margin-top:0;">💳 Taxas de Pagamento (Maquininha)</h3>
+                <p style="font-size:0.85rem; color:#4b5563;">
+                    Também sincroniza com todos os dispositivos. Usado só pra calcular o "Lucro Real" no Dashboard e no Fechamento de Caixa — desconta a taxa da maquininha do faturamento, além do custo de produção. Pix Direto (conta) e Dinheiro não têm taxa de maquininha, por isso não aparecem aqui.
+                </p>
+                <div class="row-inputs" style="margin-top: 10px;">
+                    <div style="flex:1;">
+                        <label style="font-size:0.8rem; font-weight:bold;">Cartão Crédito (%):</label>
+                        <input type="number" id="cfg-taxa-credito" min="0" max="100" step="0.01" placeholder="Ex: 3.5" onchange="salvarConfiguracoesPadrao()">
+                    </div>
+                    <div style="flex:1;">
+                        <label style="font-size:0.8rem; font-weight:bold;">Cartão Débito (%):</label>
+                        <input type="number" id="cfg-taxa-debito" min="0" max="100" step="0.01" placeholder="Ex: 1.5" onchange="salvarConfiguracoesPadrao()">
+                    </div>
+                    <div style="flex:1;">
+                        <label style="font-size:0.8rem; font-weight:bold;">Pix (Máquina) (%):</label>
+                        <input type="number" id="cfg-taxa-pix" min="0" max="100" step="0.01" placeholder="Ex: 0.99" onchange="salvarConfiguracoesPadrao()">
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- TELA: DASHBOARD GERAL (TODAS AS BARRACAS) -->
@@ -1387,6 +1416,22 @@
                     <p style="color: var(--info); font-size: 1.8rem; font-weight: 900; margin:0;">R$ <span id="rel-ticket">0.00</span></p>
                 </div>
             </div>
+
+            <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-top: 15px;">
+                <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; min-width: 150px; text-align: center; border-bottom: 4px solid #d97706;" title="Interno — calculado pela Ficha Técnica de cada produto">
+                    <h3 style="margin-top: 0; color: gray;">💰 Custo de Produção</h3>
+                    <p style="color: #d97706; font-size: 1.8rem; font-weight: 900; margin:0;">R$ <span id="rel-custo-producao">0.00</span></p>
+                </div>
+                <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; min-width: 150px; text-align: center; border-bottom: 4px solid #9333ea;" title="Interno — Cartão/Pix × taxa cadastrada em Configurações">
+                    <h3 style="margin-top: 0; color: gray;">💳 Custo de Taxas</h3>
+                    <p style="color: #9333ea; font-size: 1.8rem; font-weight: 900; margin:0;">R$ <span id="rel-custo-taxas">0.00</span></p>
+                </div>
+                <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; min-width: 150px; text-align: center; border-bottom: 4px solid #16a34a;" title="Faturamento − Custo de Produção − Custo de Taxas">
+                    <h3 style="margin-top: 0; color: gray;">📈 Lucro Real</h3>
+                    <p style="color: #16a34a; font-size: 1.8rem; font-weight: 900; margin:0;">R$ <span id="rel-lucro-real">0.00</span></p>
+                </div>
+            </div>
+            <p id="rel-aviso-custo-incompleto" style="display:none; color:#b45309; font-size:0.8rem; margin: 8px 0 0;">⚠️ <span id="rel-qtd-itens-sem-custo">0</span> item(ns) vendido(s) sem ficha técnica/custo médio cadastrado — o Lucro Real acima está subestimado.</p>
 
             <h3 style="margin-top: 30px; color: #1f2937;">Detalhamento por Forma de Pagamento</h3>
             <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
@@ -1516,6 +1561,59 @@
                         </tr>
                     </thead>
                     <tbody id="tabela-historico-caixas"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TELA: MARGEM & LUCRO (catálogo — não é histórico de vendas) -->
+        <div id="tela-margem-lucro" class="tab-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+                <h2 style="border: none; padding: 0; margin: 0;">📊 Margem & Lucro por Produto</h2>
+                <div style="display:flex; gap:10px; flex-wrap: wrap;">
+                    <button class="btn btn-success" style="background:#2563eb;" onclick="gerarPDFMargemLucro()">📄 PDF</button>
+                    <button class="btn btn-success" style="background:#7c3aed;" onclick="gerarJPG('tela-margem-lucro', 'Margem_Lucro.jpg')">🖼️ JPG</button>
+                </div>
+            </div>
+            <p style="color: gray; margin-bottom: 15px;">Interno — nunca aparece pro cliente. Mostra o preço, custo médio e margem de cada produto vendido AGORA no catálogo (não é histórico de vendas — pra isso, veja "Produtos Vendidos por Período"). Ordenado pela pior margem primeiro.</p>
+
+            <div style="background: white; padding: 15px 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 15px;">
+                <label style="font-size: 0.8rem; font-weight: bold; display:block;">Buscar produto:</label>
+                <input type="text" id="filtro-margem-lucro-nome" placeholder="Nome do produto..." oninput="renderizarMargemLucro()" style="margin-bottom:0;" spellcheck="false">
+            </div>
+
+            <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
+                <div style="background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; min-width: 150px; text-align: center; border-bottom: 4px solid var(--success);">
+                    <h3 style="margin-top: 0; color: gray; font-size: 0.85rem;">Com Margem Calculada</h3>
+                    <p style="color: var(--success); font-size: 1.6rem; font-weight: 900; margin:0;" id="ml-total-com-margem">0</p>
+                </div>
+                <div style="background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; min-width: 150px; text-align: center; border-bottom: 4px solid #d97706;">
+                    <h3 style="margin-top: 0; color: gray; font-size: 0.85rem;">Sem Ficha Técnica</h3>
+                    <p style="color: #d97706; font-size: 1.6rem; font-weight: 900; margin:0;" id="ml-total-sem-ficha">0</p>
+                </div>
+                <div style="background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; min-width: 150px; text-align: center; border-bottom: 4px solid var(--info);">
+                    <h3 style="margin-top: 0; color: gray; font-size: 0.85rem;">Margem Média</h3>
+                    <p style="color: var(--info); font-size: 1.6rem; font-weight: 900; margin:0;"><span id="ml-margem-media">0</span>%</p>
+                </div>
+                <div style="background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex: 1; min-width: 200px; text-align: center; border-bottom: 4px solid var(--danger);">
+                    <h3 style="margin-top: 0; color: gray; font-size: 0.85rem;">Pior Margem</h3>
+                    <p style="color: var(--danger); font-size: 1.1rem; font-weight: 900; margin:0;" id="ml-pior-produto">-</p>
+                </div>
+            </div>
+
+            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-height: 60vh; overflow-y: auto; overflow-x: auto;">
+                <table style="width: 100%; min-width: 700px; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid #e5e7eb; background: #f8fafc;">
+                            <th style="padding: 12px;">Produto</th>
+                            <th>Categoria</th>
+                            <th style="text-align:right;">Preço</th>
+                            <th style="text-align:right;">Custo Médio</th>
+                            <th style="text-align:right;">Margem (R$)</th>
+                            <th style="text-align:right;">Margem (%)</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabela-margem-lucro"></tbody>
                 </table>
             </div>
         </div>

@@ -142,7 +142,15 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             // cada barraca tem sua própria conta/chave.
             pixChave: '',
             pixNomeRecebedor: '',
-            pixCidadeRecebedor: ''
+            pixCidadeRecebedor: '',
+            // Taxa (%) que a maquininha desconta em cada forma — usado só
+            // pra calcular Lucro Real no Dashboard/Fechamento de Caixa (ver
+            // calcularCustoProducaoTotal/obterDadosRelatorioCaixa). Pix
+            // Direto (conta) e Dinheiro não têm taxa de maquininha, por
+            // isso não têm campo aqui.
+            taxaCredito: 0,
+            taxaDebito: 0,
+            taxaPix: 0
         };
 
         function exibirAviso(mensagem, titulo = "Aviso do Sistema") {
@@ -666,6 +674,14 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 qtdPedidos: row.qtd_pedidos || 0,
                 produtosVendidos: row.produtos_vendidos || {},
                 valorProdutosVendidos: row.valor_produtos_vendidos || {},
+                // Fechamento de ANTES desta coluna existir vem null do banco
+                // — fica null aqui também (não vira 0), pra
+                // renderizarDetalhesCaixaNoModal saber diferenciar "não
+                // calculado ainda" de "calculado e deu zero" e cair no
+                // fallback aproximado.
+                custoProducaoEstimado: row.custo_producao_estimado === null || row.custo_producao_estimado === undefined ? null : Number(row.custo_producao_estimado),
+                custoTaxasEstimado: row.custo_taxas_estimado === null || row.custo_taxas_estimado === undefined ? null : Number(row.custo_taxas_estimado),
+                lucroRealEstimado: row.lucro_real_estimado === null || row.lucro_real_estimado === undefined ? null : Number(row.lucro_real_estimado),
                 pedidosDetalhados: row.pedidos_detalhados || []
             };
         }
@@ -690,6 +706,9 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 qtd_pedidos: registro.qtdPedidos,
                 produtos_vendidos: registro.produtosVendidos,
                 valor_produtos_vendidos: registro.valorProdutosVendidos,
+                custo_producao_estimado: registro.custoProducaoEstimado,
+                custo_taxas_estimado: registro.custoTaxasEstimado,
+                lucro_real_estimado: registro.lucroRealEstimado,
                 pedidos_detalhados: registro.pedidosDetalhados
             };
         }
@@ -1380,6 +1399,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if(idAba === 'tela-fechamento-caixa') carregarHistoricoCaixas();
             if(idAba === 'tela-produtos') { renderizarCategoriasUI(); renderizarTabelaProdutos(); popularSelectsEntradaEstoque(); if (produtoEmEdicaoId === null) renderizarChecklistBarracasProduto(); }
             if(idAba === 'tela-entrada-estoque') { popularSelectsEntradaEstoque(); mudarModoEntradaEstoque('compra'); }
+            if(idAba === 'tela-margem-lucro') renderizarMargemLucro();
             if(idAba === 'tela-pedido') {
                 renderizarCategoriasUI();
                 renderizarMenu(categoriaFiltroAtual);
@@ -1433,6 +1453,9 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             document.getElementById('cfg-pix-chave').value = configPadroes.pixChave || '';
             document.getElementById('cfg-pix-nome').value = configPadroes.pixNomeRecebedor || '';
             document.getElementById('cfg-pix-cidade').value = configPadroes.pixCidadeRecebedor || '';
+            document.getElementById('cfg-taxa-credito').value = configPadroes.taxaCredito || 0;
+            document.getElementById('cfg-taxa-debito').value = configPadroes.taxaDebito || 0;
+            document.getElementById('cfg-taxa-pix').value = configPadroes.taxaPix || 0;
         }
 
         function abrirModalConfigPedido() {
@@ -1454,7 +1477,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 chamarAtivoBalcaoDoces: document.getElementById('cfg-chamar-ativo-balcao-doces').checked,
                 pixChave: document.getElementById('cfg-pix-chave').value.trim(),
                 pixNomeRecebedor: document.getElementById('cfg-pix-nome').value.trim(),
-                pixCidadeRecebedor: document.getElementById('cfg-pix-cidade').value.trim()
+                pixCidadeRecebedor: document.getElementById('cfg-pix-cidade').value.trim(),
+                taxaCredito: parseFloat(document.getElementById('cfg-taxa-credito').value) || 0,
+                taxaDebito: parseFloat(document.getElementById('cfg-taxa-debito').value) || 0,
+                taxaPix: parseFloat(document.getElementById('cfg-taxa-pix').value) || 0
             };
             aplicarVisibilidadeBalcaoDoces();
             atualizarBotoesChamarAtivo();
@@ -2059,6 +2085,62 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             return { custo, incompleto };
         }
 
+        // Soma o custo de produção (ficha técnica) de tudo que foi
+        // VENDIDO de verdade numa lista de pedidos — mesmo filtro
+        // (não-cancelado, não-bonificação) que já gera resumoProdutosVendidos
+        // em calcularResumoPedidos (js/barracas.js) e em fecharCaixaPrompt,
+        // pra "Lucro Real" bater com o mesmo faturamento mostrado ali do
+        // lado. Bonificação fica de fora de propósito: já teve seu custo
+        // "perdido" contabilizado à parte (é uma cortesia, não uma venda).
+        // itensSemCusto conta quantos itens vendidos não têm ficha técnica
+        // completa ainda — usado só pra avisar que o número está
+        // subestimado, não pra travar nada.
+        function calcularCustoProducaoTotal(listaPedidos) {
+            let custoTotal = 0;
+            let itensSemCusto = 0;
+            const validos = (listaPedidos || []).filter(p => p.statusPainel !== 'cancelado' && p.pagamento && !p.pagamento.startsWith('Bonificação'));
+            validos.forEach(p => {
+                (p.itens || []).forEach(item => {
+                    if (item.isCombo && Array.isArray(item.itensComboEscolhidos)) {
+                        item.itensComboEscolhidos.forEach(sub => {
+                            const prod = produtosDB.find(x => x.id === sub.idProduto);
+                            if (prod && Array.isArray(prod.fichaTecnica) && prod.fichaTecnica.length > 0) {
+                                const { custo, incompleto } = calcularCustoProducao(prod.fichaTecnica);
+                                custoTotal += custo;
+                                if (incompleto) itensSemCusto++;
+                            } else {
+                                itensSemCusto++;
+                            }
+                        });
+                    } else {
+                        const prod = produtosDB.find(x => x.id === item.idProduto);
+                        if (prod && Array.isArray(prod.fichaTecnica) && prod.fichaTecnica.length > 0) {
+                            const { custo, incompleto } = calcularCustoProducao(prod.fichaTecnica);
+                            custoTotal += custo * item.qtd;
+                            if (incompleto) itensSemCusto++;
+                        } else {
+                            itensSemCusto++;
+                        }
+                    }
+                });
+            });
+            return { custoTotal, itensSemCusto };
+        }
+
+        // Taxa de maquininha (Configurações > Taxas de Pagamento) + custo de
+        // produção = o que falta pro faturamento bruto virar Lucro Real.
+        // `dados` já vem de calcularResumoPedidos (fatCredito/fatDebito/fatPix
+        // e totalVendas) — essa função só soma o que falta em cima disso.
+        function calcularCustosOperacao(listaPedidos, dados) {
+            const { custoTotal: custoProducaoTotal, itensSemCusto } = calcularCustoProducaoTotal(listaPedidos);
+            const taxaCredito = configPadroes.taxaCredito || 0;
+            const taxaDebito = configPadroes.taxaDebito || 0;
+            const taxaPix = configPadroes.taxaPix || 0;
+            const custoTaxas = (dados.fatCredito * taxaCredito / 100) + (dados.fatDebito * taxaDebito / 100) + (dados.fatPix * taxaPix / 100);
+            const lucroReal = dados.totalVendas - custoProducaoTotal - custoTaxas;
+            return { custoProducaoTotal, custoTaxas, lucroReal, itensSemCustoProducao: itensSemCusto };
+        }
+
         function renderizarListaFichaTecnica() {
             const ul = document.getElementById('lista-ficha-tecnica');
             if (!ul) return;
@@ -2073,7 +2155,32 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                         <button class="btn" onclick="removerItemFichaTecnica(${i})" style="background:none; border:none; color:red; cursor:pointer; padding:0;">❌</button>
                     </li>`;
                 }).join('');
+            // Produto editado que já tem ficha técnica cadastrada não deve
+            // ficar escondido atrás do accordion fechado — abre sozinho pra
+            // não parecer que a informação sumiu.
+            if (fichaTecnicaTemporaria.length > 0) definirEstadoBoxFichaTecnica(true);
             atualizarResumoCustoLucro();
+        }
+
+        // Accordion do bloco de custo interno — fica fechado por padrão
+        // (a maioria só cadastra nome/preço/foto rápido) e só abre quando
+        // clicado ou quando já tem item cadastrado (ver renderizarListaFichaTecnica).
+        // Independente do display:none/block do PRÓPRIO #box-ficha-tecnica
+        // (esse é controlado por atualizarCamposInsumo/mudarModoCadastro —
+        // decide SE a seção existe pra esse tipo de produto; isto aqui só
+        // decide se está expandida ou recolhida).
+        function definirEstadoBoxFichaTecnica(aberto) {
+            const conteudo = document.getElementById('conteudo-ficha-tecnica');
+            const seta = document.getElementById('seta-ficha-tecnica');
+            if (!conteudo || !seta) return;
+            conteudo.style.display = aberto ? 'block' : 'none';
+            seta.innerText = aberto ? '▼' : '▶';
+        }
+
+        function alternarBoxFichaTecnica() {
+            const conteudo = document.getElementById('conteudo-ficha-tecnica');
+            if (!conteudo) return;
+            definirEstadoBoxFichaTecnica(conteudo.style.display === 'none');
         }
 
         function atualizarResumoCustoLucro() {
@@ -2149,6 +2256,24 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             const contadorEl = document.getElementById('contagem-produtos-lista');
             if (contadorEl) contadorEl.innerText = `Mostrando ${lista.length} ${lista.length === 1 ? 'produto' : 'produtos'}${produtosDB.length !== lista.length ? ` de ${produtosDB.length} no total` : ''}`;
 
+            // Alerta de cadastro incompleto — olha o catálogo INTEIRO (não só
+            // a aba/filtro atual), pra avisar mesmo se o produto sem ficha
+            // técnica estiver escondido atrás do filtro de Insumos agora.
+            const alertaEl = document.getElementById('alerta-cadastro-incompleto');
+            if (alertaEl) {
+                const semFichaTecnica = produtosDB.filter(p => !p.isCombo && (p.tipo || 'venda') === 'venda' && (!Array.isArray(p.fichaTecnica) || p.fichaTecnica.length === 0)).length;
+                const semCustoMedio = produtosDB.filter(p => p.tipo === 'insumo' && (p.custoMedio === undefined || p.custoMedio === null)).length;
+                if (semFichaTecnica > 0 || semCustoMedio > 0) {
+                    const partes = [];
+                    if (semFichaTecnica > 0) partes.push(`⚠️ ${semFichaTecnica} produto(s) sem ficha técnica`);
+                    if (semCustoMedio > 0) partes.push(`⚠️ ${semCustoMedio} insumo(s) sem custo médio ainda`);
+                    alertaEl.innerText = partes.join(' · ') + ' — clique pra ver Margem & Lucro';
+                    alertaEl.style.display = 'block';
+                } else {
+                    alertaEl.style.display = 'none';
+                }
+            }
+
             if (lista.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; padding: 20px; color: gray;">Nenhum produto ou combo encontrado.</td></tr>';
                 return;
@@ -2212,6 +2337,92 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                         </td>
                     </tr>`;
             });
+        }
+
+        // Visão dedicada de custo/margem — a tabela de Produtos (11 colunas,
+        // genérica) mostra Custo Médio/Lucro Est. mas não dá pra ordenar
+        // pelo pior caso nem ver resumo. Fonte é o CATÁLOGO agora
+        // (produtosDB), não histórico de vendas — isso é
+        // "Produtos Vendidos por Período".
+        function renderizarMargemLucro() {
+            const tbody = document.getElementById('tabela-margem-lucro');
+            if (!tbody) return;
+
+            const buscaInput = document.getElementById('filtro-margem-lucro-nome');
+            const termoBusca = buscaInput ? buscaInput.value.trim().toLowerCase() : '';
+
+            let lista = produtosDB.filter(p => !p.isCombo && (p.tipo || 'venda') === 'venda');
+            if (termoBusca) lista = lista.filter(p => p.nome.toLowerCase().includes(termoBusca));
+
+            const linhas = lista.map(p => {
+                const temCusto = p.custoMedio !== undefined && p.custoMedio !== null;
+                const temFicha = Array.isArray(p.fichaTecnica) && p.fichaTecnica.length > 0;
+                let margemReais = null, margemPct = null, incompleto = false;
+                if (temFicha) {
+                    const { custo, incompleto: inc } = calcularCustoProducao(p.fichaTecnica);
+                    margemReais = p.preco - custo;
+                    margemPct = p.preco > 0 ? (margemReais / p.preco * 100) : 0;
+                    incompleto = inc;
+                }
+                return { p, temCusto, temFicha, margemReais, margemPct, incompleto };
+            });
+
+            // Pior margem primeiro (quem mais precisa de atenção) — quem não
+            // tem ficha técnica ainda vai pro final (não dá pra saber se tá
+            // bom ou ruim, não é "urgente" da mesma forma que margem negativa).
+            linhas.sort((a, b) => {
+                if (a.temFicha && !b.temFicha) return -1;
+                if (!a.temFicha && b.temFicha) return 1;
+                if (!a.temFicha && !b.temFicha) return a.p.nome.localeCompare(b.p.nome);
+                return a.margemPct - b.margemPct;
+            });
+
+            const comMargem = linhas.filter(l => l.temFicha);
+            const semFicha = linhas.filter(l => !l.temFicha);
+            const margemMedia = comMargem.length ? comMargem.reduce((a, l) => a + l.margemPct, 0) / comMargem.length : 0;
+            const pior = comMargem.length ? comMargem[0] : null;
+
+            document.getElementById('ml-total-com-margem').innerText = comMargem.length;
+            document.getElementById('ml-total-sem-ficha').innerText = semFicha.length;
+            document.getElementById('ml-margem-media').innerText = margemMedia.toFixed(0);
+            document.getElementById('ml-pior-produto').innerText = pior ? `${pior.p.nome} (${pior.margemPct.toFixed(0)}%)` : '-';
+
+            if (linhas.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px; color: gray;">Nenhum produto de venda cadastrado.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = linhas.map(l => {
+                const { p, temCusto, temFicha, margemReais, margemPct, incompleto } = l;
+                let status, corStatus;
+                if (!temFicha) { status = '⚠️ Sem Ficha Técnica'; corStatus = '#d97706'; }
+                else if (margemReais < 0) { status = '🔴 Margem Negativa'; corStatus = 'var(--danger)'; }
+                else { status = incompleto ? '⚠️ Custo Incompleto' : '✅ OK'; corStatus = incompleto ? '#d97706' : '#16a34a'; }
+
+                return `
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                        <td style="padding: 10px; font-weight: bold;">${p.nome}</td>
+                        <td><span style="background:#e5e7eb; padding:2px 6px; border-radius:4px; font-size:0.8rem;">${p.categoria}</span></td>
+                        <td style="text-align:right; font-weight:bold;">R$ ${p.preco.toFixed(2)}</td>
+                        <td style="text-align:right;">${temCusto ? `R$ ${p.custoMedio.toFixed(2)}` : '<span style="color:gray;">—</span>'}</td>
+                        <td style="text-align:right; ${temFicha ? '' : 'color:gray;'}">${temFicha ? `R$ ${margemReais.toFixed(2)}` : '—'}</td>
+                        <td style="text-align:right; font-weight:bold; ${temFicha ? (margemPct >= 0 ? 'color:#16a34a;' : 'color:var(--danger);') : 'color:gray;'}">${temFicha ? `${margemPct.toFixed(0)}%` : '—'}</td>
+                        <td style="color:${corStatus}; font-weight:bold; white-space:nowrap;">${status}</td>
+                    </tr>`;
+            }).join('');
+        }
+
+        function gerarPDFMargemLucro() {
+            const el = document.getElementById('tela-margem-lucro');
+            if (!el || typeof html2pdf !== 'function') return;
+            const restaurar = expandirRolaveisParaCaptura(el);
+            html2pdf().set({
+                margin: 10,
+                filename: `Margem_Lucro_${new Date().toISOString().slice(0,10)}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2 },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            }).from(el).save().then(restaurar).catch(restaurar);
         }
 
         // Reordenar produtos arrastando — só dentro da mesma categoria (a
@@ -2420,6 +2631,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
             comboTemporario = []; renderizarListaComboTemporario();
             fichaTecnicaTemporaria = []; renderizarListaFichaTecnica();
+            definirEstadoBoxFichaTecnica(false);
             mudarModoCadastro('simples');
             document.getElementById('btn-salvar-produto').innerText = "Salvar 💾";
             document.getElementById('btn-salvar-produto').classList.replace('btn-warning', 'btn-primary');
@@ -4073,14 +4285,23 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         // função pura, para poder ser reaproveitado pelo Dashboard Geral com os
         // dados de QUALQUER barraca — aqui só repassamos o estado ao vivo desta.
         function obterDadosRelatorioCaixa(caixaId = caixaRelatorioSelecionado) {
+            let listaPedidos, dados;
             if (caixaId) {
                 const caixa = caixasAbertos.find(c => c.id === caixaId);
-                const pedidosDoCaixa = pedidosGerais.filter(p => p.caixaId === caixaId);
-                return calcularResumoPedidos(pedidosDoCaixa, !!caixa, caixa ? caixa.valorFundoCaixa : 0);
+                listaPedidos = pedidosGerais.filter(p => p.caixaId === caixaId);
+                dados = calcularResumoPedidos(listaPedidos, !!caixa, caixa ? caixa.valorFundoCaixa : 0);
+            } else {
+                // "Todos": soma de todos os caixas abertos agora nesta barraca.
+                listaPedidos = pedidosGerais;
+                const fundoTotal = caixasAbertos.reduce((a, c) => a + c.valorFundoCaixa, 0);
+                dados = calcularResumoPedidos(pedidosGerais, caixasAbertos.length > 0, fundoTotal);
             }
-            // "Todos": soma de todos os caixas abertos agora nesta barraca.
-            const fundoTotal = caixasAbertos.reduce((a, c) => a + c.valorFundoCaixa, 0);
-            return calcularResumoPedidos(pedidosGerais, caixasAbertos.length > 0, fundoTotal);
+            // Custo de produção + taxa de maquininha não fazem parte de
+            // calcularResumoPedidos (js/barracas.js) porque dependem do
+            // catálogo (produtosDB) e de configPadroes, que só existem aqui —
+            // mescla em cima do resumo pra Dashboard e prints do caixa atual
+            // ganharem "Lucro Real" de graça, sem duplicar cálculo.
+            return { ...dados, ...calcularCustosOperacao(listaPedidos, dados) };
         }
 
         function imprimirRelatorioCaixaAtual() {
@@ -4129,6 +4350,12 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 <div class="print-row"><span>📲 Pix Direto (Conta):</span><span class="print-bold">R$ ${dados.fatPixDireto.toFixed(2)}</span></div>
                 <div class="print-divider"></div>
                 <div class="print-row print-bold" style="font-size: 15px;"><span>TOTAL GAVETA:</span><span>R$ ${dados.totalGaveta.toFixed(2)}</span></div>
+                <div class="print-divider"></div>
+                <div class="print-center print-bold" style="margin-bottom:5px;">💰 CUSTO & LUCRO REAL (interno)</div>
+                <div class="print-row"><span>Custo de Produção:</span><span class="print-bold">R$ ${dados.custoProducaoTotal.toFixed(2)}</span></div>
+                <div class="print-row"><span>Custo de Taxas:</span><span class="print-bold">R$ ${dados.custoTaxas.toFixed(2)}</span></div>
+                <div class="print-row print-bold" style="font-size: 15px;"><span>LUCRO REAL:</span><span>R$ ${dados.lucroReal.toFixed(2)}</span></div>
+                ${dados.itensSemCustoProducao > 0 ? `<div style="font-size:9px; margin-top:3px;">⚠️ ${dados.itensSemCustoProducao} item(ns) sem ficha técnica — lucro subestimado.</div>` : ''}
                 ${htmlProdsPrint ? `<div class="print-divider"></div><div class="print-center print-bold" style="margin-bottom:5px;">PRODUTOS VENDIDOS</div>${htmlProdsPrint}` : ''}
                 ${htmlBonoPrint ? `<div class="print-divider"></div><div class="print-center print-bold" style="margin-bottom:5px;">🎁 BONIFICAÇÕES / CORTESIAS (${dados.qtdBonificacoes} ped)</div>${htmlBonoPrint}` : ''}
                 <div class="print-divider"></div>
@@ -4192,6 +4419,19 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     <div style="flex: 1; background: #e0f2fe; border: 2px solid #0284c7; border-radius: 8px; padding: 15px; text-align: center;">
                         <span style="font-size: 12px; font-weight: bold; color: #0369a1; text-transform: uppercase; display: block;">Total em Gaveta (Dinheiro + Fundo)</span>
                         <span style="font-size: 26px; font-weight: 900; color: #0284c7; display: block; margin-top: 5px;">R$ ${dados.totalGaveta.toFixed(2)}</span>
+                    </div>
+                    <div style="flex: 1; background: #f0fdf4; border: 2px solid #16a34a; border-radius: 8px; padding: 15px; text-align: center;">
+                        <span style="font-size: 12px; font-weight: bold; color: #166534; text-transform: uppercase; display: block;">Lucro Real (interno)</span>
+                        <span style="font-size: 26px; font-weight: 900; color: #15803d; display: block; margin-top: 5px;">R$ ${dados.lucroReal.toFixed(2)}</span>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 25px;">
+                    <h3 style="font-size: 14px; text-transform: uppercase; border-bottom: 2px solid #e5e7eb; padding-bottom: 5px; color: #111827; margin-top: 0;">Custo de Produção & Taxas (interno — nunca aparece pro cliente)</h3>
+                    <div style="display: flex; justify-content: space-between; background: #fffbeb; padding: 12px; border-radius: 6px; font-size: 13px; font-weight: bold;">
+                        <span>Custo de Produção: R$ ${dados.custoProducaoTotal.toFixed(2)}</span>
+                        <span>Custo de Taxas: R$ ${dados.custoTaxas.toFixed(2)}</span>
+                        ${dados.itensSemCustoProducao > 0 ? `<span style="color:#b45309;">⚠️ ${dados.itensSemCustoProducao} item(ns) sem custo</span>` : ''}
                     </div>
                 </div>
 
@@ -5060,6 +5300,13 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 });
             });
 
+            // Calculado e gravado como SNAPSHOT deste momento — se o
+            // catálogo (custo médio/ficha técnica) ou a taxa da maquininha
+            // mudarem depois, este fechamento continua mostrando o que era
+            // verdade na hora de fechar (mesmo raciocínio de
+            // valorProdutosVendidos, ver renderizarDetalhesCaixaNoModal).
+            const { custoProducaoTotal, custoTaxas, lucroReal } = calcularCustosOperacao(pedidosDoCaixa, { fatCredito, fatDebito, fatPix, totalVendas });
+
             const dataObjeto = new Date();
             const dataHoraFechamento = `${dataObjeto.toLocaleDateString('pt-BR')} ${dataObjeto.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
             const dataHoraAbertura = caixa.dataHoraAbertura || dataHoraFechamento;
@@ -5090,6 +5337,9 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 qtdPedidos: validos.length,
                 produtosVendidos: resumoProdutosVendidos,
                 valorProdutosVendidos: valorProdutosVendidos,
+                custoProducaoEstimado: custoProducaoTotal,
+                custoTaxasEstimado: custoTaxas,
+                lucroRealEstimado: lucroReal,
                 pedidosDetalhados: JSON.parse(JSON.stringify(pedidosDoCaixa))
             };
 
@@ -5732,6 +5982,24 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
             const topProdutosCaixa = Object.entries(c.produtosVendidos || {}).sort((a, b) => b[1] - a[1]).slice(0, 8);
 
+            // Fechamento de antes desta funcionalidade existir (ou o
+            // relatório combinado, que nunca grava snapshot próprio) não tem
+            // custoProducaoEstimado salvo — recalcula ao vivo com o catálogo
+            // e as taxas ATUAIS como estimativa, marcado como aproximado.
+            // Mesmo raciocínio de valorProdutosVendidos/aproximado acima.
+            let custoProducaoCaixa = c.custoProducaoEstimado;
+            let custoTaxasCaixa = c.custoTaxasEstimado;
+            let lucroRealCaixa = c.lucroRealEstimado;
+            let custoAproximado = false;
+            if (custoProducaoCaixa === null || custoProducaoCaixa === undefined) {
+                custoAproximado = true;
+                const { custoTotal } = calcularCustoProducaoTotal(c.pedidosDetalhados || []);
+                custoProducaoCaixa = custoTotal;
+                const taxaCredito = configPadroes.taxaCredito || 0, taxaDebito = configPadroes.taxaDebito || 0, taxaPix = configPadroes.taxaPix || 0;
+                custoTaxasCaixa = (c.credito || 0) * taxaCredito / 100 + (c.debito || 0) * taxaDebito / 100 + (c.pix || 0) * taxaPix / 100;
+                lucroRealCaixa = c.totalVendas - custoProducaoCaixa - custoTaxasCaixa;
+            }
+
             const bonificacoesFechamento = extrairBonificacoesDoFechamento(c);
             let htmlBono = '';
             if (bonificacoesFechamento.length > 0) {
@@ -5755,6 +6023,14 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     <div style="font-size:0.9rem; font-weight:bold; color:#14532d; text-transform:uppercase;">Faturamento Total de Vendas</div>
                     <div style="font-size:2.2rem; font-weight:900; color:#15803d;">R$ ${c.totalVendas.toFixed(2)}</div>
                 </div>
+
+                <h4 style="margin:10px 0 5px 0; color:#1f2937;">💰 Custo & Lucro Real (interno — nunca aparece pro cliente)</h4>
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; margin-bottom:6px; font-size:0.9rem;">
+                    <div style="background:#fffbeb; padding:10px; border-radius:6px; text-align:center;">💰 <b>Produção:</b><br>R$ ${custoProducaoCaixa.toFixed(2)}</div>
+                    <div style="background:#f3e8ff; padding:10px; border-radius:6px; text-align:center;">💳 <b>Taxas:</b><br>R$ ${custoTaxasCaixa.toFixed(2)}</div>
+                    <div style="background:#dcfce7; padding:10px; border-radius:6px; text-align:center; color:#15803d; font-weight:bold;">📈 <b>Lucro Real:</b><br>R$ ${lucroRealCaixa.toFixed(2)}</div>
+                </div>
+                <div style="font-size:0.7rem; color:gray; margin-bottom:15px;">${custoAproximado ? '* estimado com o catálogo/taxas atuais (fechamento salvo antes desse cálculo existir, ou relatório combinado)' : ''}</div>
 
                 <h4 style="margin:10px 0 5px 0; color:#1f2937;">💳 Formas de Pagamento Entradas</h4>
                 <div style="background:white; border:1px solid #e5e7eb; border-radius:8px; padding:10px; margin-bottom:10px;">
@@ -5822,6 +6098,20 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             const c = historicoCaixasDB.find(item => item.id === idFechamento);
             if (!c) return;
 
+            // Mesmo fallback aproximado de renderizarDetalhesCaixaNoModal —
+            // fechamento de antes desta funcionalidade existir recalcula ao
+            // vivo com o catálogo/taxas atuais.
+            let custoProducaoCaixa = c.custoProducaoEstimado;
+            let custoTaxasCaixa = c.custoTaxasEstimado;
+            let lucroRealCaixa = c.lucroRealEstimado;
+            if (custoProducaoCaixa === null || custoProducaoCaixa === undefined) {
+                const { custoTotal } = calcularCustoProducaoTotal(c.pedidosDetalhados || []);
+                custoProducaoCaixa = custoTotal;
+                const taxaCredito = configPadroes.taxaCredito || 0, taxaDebito = configPadroes.taxaDebito || 0, taxaPix = configPadroes.taxaPix || 0;
+                custoTaxasCaixa = (c.credito || 0) * taxaCredito / 100 + (c.debito || 0) * taxaDebito / 100 + (c.pix || 0) * taxaPix / 100;
+                lucroRealCaixa = c.totalVendas - custoProducaoCaixa - custoTaxasCaixa;
+            }
+
             let htmlProdsPrint = '';
             if (c.produtosVendidos && Object.keys(c.produtosVendidos).length > 0) {
                 Object.entries(c.produtosVendidos).sort((a, b) => b[1] - a[1]).forEach(([prod, qtd]) => {
@@ -5864,6 +6154,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 <div class="print-row"><span>📲 Pix Direto (Conta):</span><span class="print-bold">R$ ${(c.pixDireto || 0).toFixed(2)}</span></div>
                 <div class="print-divider"></div>
                 <div class="print-row print-bold" style="font-size: 15px;"><span>TOTAL GAVETA:</span><span>R$ ${c.totalGaveta.toFixed(2)}</span></div>
+                <div class="print-divider"></div>
+                <div class="print-center print-bold" style="margin-bottom:5px;">💰 CUSTO & LUCRO REAL (interno)</div>
+                <div class="print-row"><span>Custo de Produção:</span><span class="print-bold">R$ ${custoProducaoCaixa.toFixed(2)}</span></div>
+                <div class="print-row"><span>Custo de Taxas:</span><span class="print-bold">R$ ${custoTaxasCaixa.toFixed(2)}</span></div>
+                <div class="print-row print-bold" style="font-size: 15px;"><span>LUCRO REAL:</span><span>R$ ${lucroRealCaixa.toFixed(2)}</span></div>
                 ${htmlProdsPrint ? `<div class="print-divider"></div><div class="print-center print-bold" style="margin-bottom:5px;">PRODUTOS VENDIDOS</div>${htmlProdsPrint}` : ''}
                 ${htmlBonoPrint ? `<div class="print-divider"></div><div class="print-center print-bold" style="margin-bottom:5px;">🎁 BONIFICAÇÕES / CORTESIAS</div>${htmlBonoPrint}` : ''}
                 <div class="print-divider"></div>
@@ -6061,6 +6356,15 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             
             const qtdFinanceiras = dados.validosVendas.length;
             document.getElementById('rel-ticket').innerText = (qtdFinanceiras ? (dados.totalVendas / qtdFinanceiras) : 0).toFixed(2);
+
+            document.getElementById('rel-custo-producao').innerText = dados.custoProducaoTotal.toFixed(2);
+            document.getElementById('rel-custo-taxas').innerText = dados.custoTaxas.toFixed(2);
+            document.getElementById('rel-lucro-real').innerText = dados.lucroReal.toFixed(2);
+            const avisoIncompleto = document.getElementById('rel-aviso-custo-incompleto');
+            if (avisoIncompleto) {
+                avisoIncompleto.style.display = dados.itensSemCustoProducao > 0 ? 'block' : 'none';
+                document.getElementById('rel-qtd-itens-sem-custo').innerText = dados.itensSemCustoProducao;
+            }
 
             document.getElementById('rel-pix').innerText = dados.fatPix.toFixed(2);
             document.getElementById('rel-pix-direto').innerText = dados.fatPixDireto.toFixed(2);
@@ -6392,6 +6696,7 @@ window.apagarProduto = apagarProduto;
 window.filtrarProdutosPorTipo = filtrarProdutosPorTipo;
 window.atualizarCamposInsumo = atualizarCamposInsumo;
 window.addItemFichaTecnica = addItemFichaTecnica;
+window.alternarBoxFichaTecnica = alternarBoxFichaTecnica;
 window.removerItemFichaTecnica = removerItemFichaTecnica;
 window.atualizarResumoCustoLucro = atualizarResumoCustoLucro;
 window.mudarModoEntradaEstoque = mudarModoEntradaEstoque;
@@ -6516,6 +6821,8 @@ window.verDetalhesCaixa = verDetalhesCaixa;
 window.renderizarHistoricoCaixas = renderizarHistoricoCaixas;
 window.renderizarProdutosPorPeriodo = renderizarProdutosPorPeriodo;
 window.gerarPDFProdutosPeriodo = gerarPDFProdutosPeriodo;
+window.renderizarMargemLucro = renderizarMargemLucro;
+window.gerarPDFMargemLucro = gerarPDFMargemLucro;
 window.carregarLogsSistema = carregarLogsSistema;
 
 // PWA: registra o service worker (sw.js) só cuida do "shell" do app pra ele
