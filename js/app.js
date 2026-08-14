@@ -145,23 +145,52 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             document.getElementById('modal-aviso').style.display = 'none';
         }
 
-        function processarUploadFoto(input) {
-            if (input.files && input.files[0]) {
-                const file = input.files[0];
-                if (file.size > 2 * 1024 * 1024) {
-                    exibirAviso("A foto escolhida é muito grande! Escolha uma imagem de até 2MB.");
-                    input.value = "";
-                    return;
-                }
-                const reader = new FileReader();
-                reader.onload = function (e) {
-                    const base64Str = e.target.result;
-                    document.getElementById('novo-prod-foto').value = base64Str;
-                    document.getElementById('preview-foto-img').src = base64Str;
-                    document.getElementById('preview-foto-container').style.display = 'block';
-                };
-                reader.readAsDataURL(file);
+        // Antes a foto ia como base64 direto dentro do JSON do catálogo
+        // (pdv_state) — com muitos produtos com foto isso incha o blob que é
+        // lido/gravado inteiro a cada save, deixando tudo mais lento. Agora
+        // sobe pro Supabase Storage e só o link fica salvo no produto.
+        const BUCKET_FOTOS_PRODUTO = 'produtos-fotos';
+        let uploadFotoEmAndamento = false;
+
+        async function processarUploadFoto(input) {
+            if (!input.files || !input.files[0]) return;
+            const file = input.files[0];
+            if (file.size > 2 * 1024 * 1024) {
+                exibirAviso("A foto escolhida é muito grande! Escolha uma imagem de até 2MB.");
+                input.value = "";
+                return;
             }
+
+            const fotoAnterior = document.getElementById('novo-prod-foto').value;
+            const previewImg = document.getElementById('preview-foto-img');
+            const previewContainer = document.getElementById('preview-foto-container');
+            const status = document.getElementById('status-upload-foto');
+
+            // Preview local imediato (não espera a rede) — a URL real do
+            // Storage só substitui isso depois que o upload terminar.
+            previewImg.src = URL.createObjectURL(file);
+            previewContainer.style.display = 'block';
+            status.innerText = 'Enviando foto...';
+            status.style.display = 'inline';
+            uploadFotoEmAndamento = true;
+
+            const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+            const nomeArquivo = `foto_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+            const { error } = await supabaseClient.storage.from(BUCKET_FOTOS_PRODUTO).upload(nomeArquivo, file, { cacheControl: '3600', upsert: false });
+            uploadFotoEmAndamento = false;
+
+            if (error) {
+                exibirAviso("Não deu pra enviar a foto agora (sem internet, ou o bucket de fotos ainda não foi criado no Supabase). Tente de novo.");
+                status.style.display = 'none';
+                input.value = "";
+                if (fotoAnterior) { previewImg.src = fotoAnterior; } else { previewContainer.style.display = 'none'; }
+                return;
+            }
+
+            const { data } = supabaseClient.storage.from(BUCKET_FOTOS_PRODUTO).getPublicUrl(nomeArquivo);
+            document.getElementById('novo-prod-foto').value = data.publicUrl;
+            status.style.display = 'none';
         }
 
         // Estado desta barraca: pedidos, caixa, estoque. NÃO inclui mais
@@ -1938,6 +1967,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         }
 
         function salvarProduto() {
+            if (uploadFotoEmAndamento) return exibirAviso("A foto ainda está sendo enviada — aguarde um instante e tente salvar de novo.");
+
             let nome = document.getElementById('novo-prod-nome').value.trim();
             let preco = parseFloat(document.getElementById('novo-prod-preco').value);
             let categoria = document.getElementById('novo-prod-categoria').value;
