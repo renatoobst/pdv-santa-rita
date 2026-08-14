@@ -1006,6 +1006,21 @@
                 </label>
                 <p style="font-size: 0.78rem; color: #6b7280; margin: 6px 0 0 24px;">Desligado = tudo continua no Balcão 01, como sempre foi.</p>
             </div>
+
+            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); max-width: 700px; margin-top: 20px;">
+                <h3 style="margin-top:0;">🔔 Chamar antes de Entregar</h3>
+                <p style="font-size:0.85rem; color:#4b5563;">
+                    Também sincroniza com todos os dispositivos. <b>Ligado</b> (padrão): pedido pronto precisa de "🔔 Chamar Painel" (toca som) antes de liberar o botão de entrega. <b>Desligado</b>: pula direto pro botão "✅ Entregue", sem chamar/tocar som.
+                </p>
+                <label class="item-checkbox-ingrediente" style="margin-top: 10px;">
+                    <input type="checkbox" id="cfg-chamar-ativo-balcao01" onchange="salvarConfiguracoesPadrao()">
+                    Chamar ativo no Balcão 01
+                </label>
+                <label class="item-checkbox-ingrediente" style="margin-top: 8px;">
+                    <input type="checkbox" id="cfg-chamar-ativo-balcao-doces" onchange="salvarConfiguracoesPadrao()">
+                    Chamar ativo no Balcão 02 (Doces)
+                </label>
+            </div>
         </div>
 
         <!-- TELA: DASHBOARD GERAL (TODAS AS BARRACAS) -->

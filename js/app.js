@@ -128,7 +128,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             tipoRetiradaGlobal: '',
             // Pedido sem NENHUM item de cozinha (doce, refri...) vai pro
             // Balcão 02 em vez do Balcão 01 — ver atualizarTelas().
-            separarBalcaoDoces: false
+            separarBalcaoDoces: false,
+            // Desligado = pula direto pro botão "Entregue" (sem tocar som/
+            // exigir "Chamar Painel" antes) — ver atualizarTelas().
+            chamarAtivoBalcao01: true,
+            chamarAtivoBalcaoDoces: true
         };
 
         function exibirAviso(mensagem, titulo = "Aviso do Sistema") {
@@ -886,6 +890,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
             const chkBalcaoDoces = document.getElementById('cfg-separar-balcao-doces');
             if (chkBalcaoDoces) chkBalcaoDoces.checked = !!configPadroes.separarBalcaoDoces;
+
+            const chkChamarBalcao01 = document.getElementById('cfg-chamar-ativo-balcao01');
+            if (chkChamarBalcao01) chkChamarBalcao01.checked = configPadroes.chamarAtivoBalcao01 !== false;
+            const chkChamarBalcaoDoces = document.getElementById('cfg-chamar-ativo-balcao-doces');
+            if (chkChamarBalcaoDoces) chkChamarBalcaoDoces.checked = configPadroes.chamarAtivoBalcaoDoces !== false;
         }
 
         let carrinho = [];
@@ -1060,6 +1069,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             document.getElementById('cfg-padrao-tipo-atendimento').value = configPadroes.tipoAtendimento || '';
             document.getElementById('cfg-padrao-tipo-retirada-global').value = configPadroes.tipoRetiradaGlobal || '';
             document.getElementById('cfg-separar-balcao-doces').checked = !!configPadroes.separarBalcaoDoces;
+            document.getElementById('cfg-chamar-ativo-balcao01').checked = configPadroes.chamarAtivoBalcao01 !== false;
+            document.getElementById('cfg-chamar-ativo-balcao-doces').checked = configPadroes.chamarAtivoBalcaoDoces !== false;
         }
 
         function abrirModalConfigPedido() {
@@ -1076,7 +1087,9 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 formaPagto: document.getElementById('cfg-padrao-forma-pagto').value,
                 tipoAtendimento: document.getElementById('cfg-padrao-tipo-atendimento').value,
                 tipoRetiradaGlobal: document.getElementById('cfg-padrao-tipo-retirada-global').value,
-                separarBalcaoDoces: document.getElementById('cfg-separar-balcao-doces').checked
+                separarBalcaoDoces: document.getElementById('cfg-separar-balcao-doces').checked,
+                chamarAtivoBalcao01: document.getElementById('cfg-chamar-ativo-balcao01').checked,
+                chamarAtivoBalcaoDoces: document.getElementById('cfg-chamar-ativo-balcao-doces').checked
             };
             aplicarVisibilidadeBalcaoDoces();
             // Precisa ir pro Supabase (não só no cache local deste navegador) —
@@ -3494,14 +3507,29 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     const resumoAlvo = vaiPraBalcaoDoces ? resumoBalcaoDoces : resumoBalcaoCozinha;
                     if (vaiPraBalcaoDoces) countBalcDoces++; else countBalc++;
 
-                    let btn = (p.statusPainel === 'preparando' || p.statusPainel === 'nenhum') ? `
+                    // "Chamar" desligado (Configurações) = pula direto pro
+                    // botão de entregar, sem tocar som nem exigir o passo de
+                    // "Chamar Painel" antes.
+                    const chamarAtivo = vaiPraBalcaoDoces ? (configPadroes.chamarAtivoBalcaoDoces !== false) : (configPadroes.chamarAtivoBalcao01 !== false);
+
+                    let btn;
+                    if (!chamarAtivo) {
+                        btn = `
+                        <div style="display:flex; gap:5px;">
+                            <button class="btn btn-success" style="width:100%;" onclick="finalizarEntrega(${p.id})">✅ Entregue</button>
+                        </div>`;
+                    } else if (p.statusPainel === 'preparando' || p.statusPainel === 'nenhum') {
+                        btn = `
                         <div style="display:flex; gap:5px;">
                             <button class="btn btn-warning" style="width:100%;" onclick="chamarNoPainel(${p.id})">🔔 Chamar Painel</button>
-                        </div>` : `
+                        </div>`;
+                    } else {
+                        btn = `
                         <div style="display:flex; gap:5px;">
                             <button class="btn btn-warning" style="width:50%; padding:8px; font-size:0.8rem;" onclick="chamarNoPainel(${p.id})">🔔 Re-chamar</button>
                             <button class="btn btn-success" style="width:50%;" onclick="finalizarEntrega(${p.id})">✅ Retirado</button>
                         </div>`;
+                    }
                     
                     const itensDetalhadosBalcao = iAgoraPendentes.map(item => {
                         // Combo soma por item ESCOLHIDO dentro dele (sub.nome),
