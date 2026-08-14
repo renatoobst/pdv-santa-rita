@@ -2873,10 +2873,18 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             const despesas = parseFloat(document.getElementById('entrada-outras-despesas').value) || 0;
             const rateioTotal = frete + despesas;
             const subtotalGeral = itensEntradaEstoque.reduce((a, i) => a + i.qtd * i.custoUnitario, 0);
+            // Nota 100% doada (todo item custo R$0) não tem valor pra ratear
+            // o frete/despesas PROPORCIONALMENTE — mas o frete ainda existe
+            // e não pode simplesmente sumir. Cai pra ratear por QUANTIDADE
+            // em vez de valor nesse caso (só entra em jogo quando
+            // subtotalGeral é 0 mas ainda assim tem frete/despesa a diluir).
+            const qtdGeral = itensEntradaEstoque.reduce((a, i) => a + i.qtd, 0);
 
             const linhas = itensEntradaEstoque.map(item => {
                 const valorItem = item.qtd * item.custoUnitario;
-                const shareRateio = subtotalGeral > 0 ? (valorItem / subtotalGeral) * rateioTotal : 0;
+                const shareRateio = subtotalGeral > 0
+                    ? (valorItem / subtotalGeral) * rateioTotal
+                    : (qtdGeral > 0 ? (item.qtd / qtdGeral) * rateioTotal : 0);
                 const custoUnitarioFinal = item.custoUnitario + (shareRateio / item.qtd);
 
                 const estoqueAntes = estoquePorProduto[item.produtoId];
