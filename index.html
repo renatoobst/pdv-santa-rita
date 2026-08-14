@@ -1005,6 +1005,33 @@
             </div>
 
             <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); max-width: 700px; margin-top: 20px;">
+                <h3 style="margin-top:0;">🔊 Aviso Sonoro em Rede</h3>
+                <p style="font-size:0.85rem; color:#4b5563;">
+                    Mesma ideia da Impressão em Rede: aperta "🔔 Chamar Painel" num dispositivo (ex: tablet do Balcão) e o bipe/voz toca de verdade em <b>outro</b> computador (ex: uma máquina com caixa de som ligada perto da cozinha/retirada).
+                </p>
+
+                <label class="item-checkbox-ingrediente" style="margin-top: 10px;">
+                    <input type="checkbox" id="cfg-chamar-remoto-ativo" onchange="alternarChamarRemoto()">
+                    Tocar avisos deste dispositivo em outra máquina
+                </label>
+
+                <div id="linha-destino-chamar-remoto" style="display:none; margin-top: 12px;">
+                    <label style="font-size: 0.85rem; font-weight: bold; display:block; margin-bottom:4px;">Máquina/caixa de som de destino:</label>
+                    <select id="cfg-destino-chamar-remoto" onchange="salvarDestinoChamarRemoto()"></select>
+                    <small id="contagem-altofalantes-online" style="display:block; margin-top:6px; color:gray;">🔴 Nenhum dispositivo disponível no momento</small>
+                </div>
+
+                <hr style="margin: 18px 0; border: none; border-top: 1px solid #e5e7eb;">
+
+                <label class="item-checkbox-ingrediente">
+                    <input type="checkbox" id="cfg-sou-altofalante-rede" onchange="alternarSouAltoFalanteRede()">
+                    🔊 Este dispositivo toca os avisos sonoros de outras máquinas
+                </label>
+                <small style="display:block; margin-top:6px; color:gray;">Ative isso na máquina que tem a caixa de som de verdade. Ela vai tocar bipe/voz automaticamente sempre que outro dispositivo chamar um pedido — precisa deixar essa aba aberta e logada.</small>
+                <p id="status-altofalante-rede" style="font-weight:bold; margin-top:8px; color: #16a34a;"></p>
+            </div>
+
+            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); max-width: 700px; margin-top: 20px;">
                 <h3 style="margin-top:0;">🍬 Balcão 02 (Doces)</h3>
                 <p style="font-size:0.85rem; color:#4b5563;">
                     Diferente das opções acima, isso <b>sincroniza com todos os dispositivos</b> da barraca. Quando ligado, pedido sem NENHUM item de cozinha (doce, refri...) vai pro Balcão 02 em vez do Balcão 01, e o botão "🍬 Balcão 02" aparece no menu de todo mundo.

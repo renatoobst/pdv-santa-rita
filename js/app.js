@@ -1042,6 +1042,118 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             }
         }
 
+        // --- Aviso Sonoro em Rede ---
+        // Mesma ideia/mecanismo da Impressão em Rede acima (Broadcast +
+        // Presence, nada gravado no Supabase, preferência por dispositivo
+        // no localStorage) — só que pro bipe/voz de "Chamar Painel" em vez
+        // do recibo.
+        let canalChamarRede = null;
+        let dispositivosAltoFalanteOnline = {};
+
+        function chaveChamarRemotoAtivo() { return `pdv_chamar_remoto_ativo_${barracaStateId}`; }
+        function chaveChamarRemotoDestino() { return `pdv_chamar_remoto_destino_${barracaStateId}`; }
+        function chaveSouAltoFalanteRede() { return `pdv_sou_altofalante_rede_${barracaStateId}`; }
+
+        function chamarRemotoAtivo() { return localStorage.getItem(chaveChamarRemotoAtivo()) === '1'; }
+        function destinoChamarRemoto() { return localStorage.getItem(chaveChamarRemotoDestino()) || ''; }
+        function souAltoFalanteDeRede() { return localStorage.getItem(chaveSouAltoFalanteRede()) === '1'; }
+
+        function obterCanalChamarRede() {
+            if (!barracaStateId) return null;
+            if (canalChamarRede) return canalChamarRede;
+
+            canalChamarRede = supabaseClient.channel(`pdv-chamar-${barracaStateId}`, {
+                config: { presence: { key: usuarioAtual ? String(usuarioAtual.id) : PDV_CLIENT_ID } }
+            });
+
+            canalChamarRede
+                .on('broadcast', { event: 'chamar' }, ({ payload }) => {
+                    if (!souAltoFalanteDeRede() || !usuarioAtual) return;
+                    if (String(payload.destinoUsuarioId) !== String(usuarioAtual.id)) return;
+                    tocarBeep();
+                    if (vozAnuncioEstaAtiva()) setTimeout(() => falarChamadaPedido(payload.pedidoId, payload.clienteNome), 1700);
+                })
+                .on('presence', { event: 'sync' }, () => {
+                    const estado = canalChamarRede.presenceState();
+                    dispositivosAltoFalanteOnline = {};
+                    Object.keys(estado).forEach(chave => {
+                        const presencas = estado[chave];
+                        if (presencas && presencas[0]) dispositivosAltoFalanteOnline[chave] = presencas[0];
+                    });
+                    atualizarSelectDestinoChamarRede();
+                })
+                .subscribe(status => {
+                    if (status === 'SUBSCRIBED' && souAltoFalanteDeRede() && usuarioAtual) {
+                        canalChamarRede.track({ usuarioNome: usuarioAtual.nome });
+                    }
+                });
+
+            return canalChamarRede;
+        }
+
+        // Substitui o "tocarBeep + falarChamadaPedido" direto que chamarNoPainel
+        // fazia antes — se o aviso remoto estiver ligado E tiver destino
+        // escolhido e disponível agora, manda por broadcast pra máquina de
+        // destino tocar lá; senão, toca aqui mesmo como sempre foi.
+        async function dispararAvisoSonoro(pedidoId, clienteNome) {
+            if (chamarRemotoAtivo() && destinoChamarRemoto()) {
+                const canal = obterCanalChamarRede();
+                const destino = destinoChamarRemoto();
+                if (canal && dispositivosAltoFalanteOnline[destino]) {
+                    await canal.send({ type: 'broadcast', event: 'chamar', payload: { pedidoId, clienteNome, destinoUsuarioId: destino } });
+                    return;
+                }
+                // Sem popup de aviso aqui (diferente de dispararImpressao) —
+                // chamar painel acontece o tempo todo no corre do Balcão,
+                // um popup a cada vez que a máquina de destino cair
+                // atrapalharia mais do que ajudaria. Toca aqui mesmo.
+            }
+            tocarBeep();
+            if (vozAnuncioEstaAtiva()) setTimeout(() => falarChamadaPedido(pedidoId, clienteNome), 1700);
+        }
+
+        function alternarChamarRemoto() {
+            const ativo = document.getElementById('cfg-chamar-remoto-ativo').checked;
+            localStorage.setItem(chaveChamarRemotoAtivo(), ativo ? '1' : '0');
+            document.getElementById('linha-destino-chamar-remoto').style.display = ativo ? 'block' : 'none';
+            if (ativo) obterCanalChamarRede();
+        }
+
+        function salvarDestinoChamarRemoto() {
+            localStorage.setItem(chaveChamarRemotoDestino(), document.getElementById('cfg-destino-chamar-remoto').value);
+        }
+
+        function alternarSouAltoFalanteRede() {
+            const ativo = document.getElementById('cfg-sou-altofalante-rede').checked;
+            localStorage.setItem(chaveSouAltoFalanteRede(), ativo ? '1' : '0');
+            const canal = obterCanalChamarRede();
+            if (canal) {
+                if (ativo && usuarioAtual) canal.track({ usuarioNome: usuarioAtual.nome });
+                else canal.untrack();
+            }
+            document.getElementById('status-altofalante-rede').innerText = ativo
+                ? `🟢 Tocando avisos como "${usuarioAtual ? usuarioAtual.nome : ''}".`
+                : '';
+        }
+
+        function atualizarSelectDestinoChamarRede() {
+            const select = document.getElementById('cfg-destino-chamar-remoto');
+            if (!select) return;
+            const atual = select.value;
+            const entradas = Object.entries(dispositivosAltoFalanteOnline)
+                .filter(([id]) => !usuarioAtual || id !== String(usuarioAtual.id));
+            select.innerHTML = '<option value="">-- Selecione --</option>' +
+                entradas.map(([id, info]) => `<option value="${id}">${info.usuarioNome || ('Usuário ' + id)}</option>`).join('');
+            if (entradas.some(([id]) => id === atual)) select.value = atual;
+
+            const contagem = document.getElementById('contagem-altofalantes-online');
+            if (contagem) {
+                contagem.innerText = entradas.length > 0
+                    ? `🟢 ${entradas.length} dispositivo(s) disponível(is) agora`
+                    : '🔴 Nenhum dispositivo disponível no momento';
+            }
+        }
+
         function aplicarConfiguracoesImpressaoRedeNaTela() {
             const chkAtiva = document.getElementById('cfg-impressao-remota-ativa');
             const chkSou = document.getElementById('cfg-sou-impressora-rede');
@@ -1054,6 +1166,19 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 : '';
             if (chkAtiva.checked || chkSou.checked) obterCanalImpressaoRede();
             atualizarSelectDestinoImpressao();
+
+            const chkChamarRemotoAtivo = document.getElementById('cfg-chamar-remoto-ativo');
+            const chkSouAltoFalante = document.getElementById('cfg-sou-altofalante-rede');
+            if (chkChamarRemotoAtivo && chkSouAltoFalante) {
+                chkChamarRemotoAtivo.checked = chamarRemotoAtivo();
+                document.getElementById('linha-destino-chamar-remoto').style.display = chkChamarRemotoAtivo.checked ? 'block' : 'none';
+                chkSouAltoFalante.checked = souAltoFalanteDeRede();
+                document.getElementById('status-altofalante-rede').innerText = chkSouAltoFalante.checked
+                    ? `🟢 Tocando avisos como "${usuarioAtual ? usuarioAtual.nome : ''}".`
+                    : '';
+                if (chkChamarRemotoAtivo.checked || chkSouAltoFalante.checked) obterCanalChamarRede();
+                atualizarSelectDestinoChamarRede();
+            }
 
             const chkBalcaoDoces = document.getElementById('cfg-separar-balcao-doces');
             if (chkBalcaoDoces) chkBalcaoDoces.checked = !!configPadroes.separarBalcaoDoces;
@@ -3562,8 +3687,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         function chamarNoPainel(id) {
             const p = pedidosGerais.find(x => x.id === id);
             p.statusPainel = 'pronto';
-            tocarBeep();
-            if (vozAnuncioEstaAtiva()) setTimeout(() => falarChamadaPedido(p.id, p.cliente), 1700);
+            dispararAvisoSonoro(p.id, p.cliente);
             salvarNoBancoLocal();
             atualizarTelas();
         }
@@ -5215,6 +5339,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             // — senão só voltaria a funcionar depois de reabrir a tela de
             // Configurações manualmente a cada F5.
             if (souImpressoraDeRede() || impressaoRemotaAtiva()) obterCanalImpressaoRede();
+            if (souAltoFalanteDeRede() || chamarRemotoAtivo()) obterCanalChamarRede();
 
             // Suporte a abrir direto numa tela específica — usado por cada
             // quadrante do Multiview (iframe com ?abrirTela=X). Não chama
@@ -5313,6 +5438,9 @@ window.imprimirMeuCaixa = imprimirMeuCaixa;
 window.alternarImpressaoRemota = alternarImpressaoRemota;
 window.salvarDestinoImpressaoRemota = salvarDestinoImpressaoRemota;
 window.alternarSouImpressoraRede = alternarSouImpressoraRede;
+window.alternarChamarRemoto = alternarChamarRemoto;
+window.salvarDestinoChamarRemoto = salvarDestinoChamarRemoto;
+window.alternarSouAltoFalanteRede = alternarSouAltoFalanteRede;
 window.pedirTexto = pedirTexto;
 window.alternarMostrarSenha = alternarMostrarSenha;
 window.pedirConfirmacao = pedirConfirmacao;
