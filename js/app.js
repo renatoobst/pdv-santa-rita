@@ -273,6 +273,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 }
             }
             contadorPedidos = Number.isFinite(Number(estado.contadorPedidos)) ? Math.max(contadorPedidos, Number(estado.contadorPedidos)) : contadorPedidos;
+            garantirContadorPedidosAdiante();
 
             if (Array.isArray(estado.caixasAbertos)) {
                 caixasAbertos = mesclarPorUniao(caixasAbertos, estado.caixasAbertos);
@@ -570,6 +571,25 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             return Array.from(mapa.values());
         }
 
+        // Garante que contadorPedidos nunca fique atrás do maior id que já
+        // existe DE VERDADE em pedidosGerais. Sem isso: depois de uma
+        // colisão renumerada (ex: um pedido virou #7 pra não colidir com
+        // outro #3 de outro dispositivo), contadorPedidos podia continuar
+        // achando que o próximo pedido livre era #4 — o próximo pedido
+        // criado localmente colidia com um que JÁ estava no próprio array,
+        // e como salvarNoBancoLocal só mescla com o servidor quando
+        // `remoto.origem !== PDV_CLIENT_ID` (pula a checagem quando ESTE
+        // dispositivo foi o último a gravar, por otimização), essa colisão
+        // interna ia direto pro banco sem nenhuma detecção — bug real,
+        // confirmado por simulação (2 caixas vendendo simultaneamente por
+        // um tempo, um deles ficando offline no meio e voltando depois).
+        // Chamada sempre que pedidosGerais muda por causa de uma mesclagem
+        // vinda de fora (salvarNoBancoLocal e aplicarEstado).
+        function garantirContadorPedidosAdiante() {
+            const maiorId = pedidosGerais.reduce((max, p) => Math.max(max, Number(p.id) || 0), 0);
+            if (maiorId >= contadorPedidos) contadorPedidos = maiorId + 1;
+        }
+
         async function salvarNoBancoLocal() {
             salvarCacheLocal();
             if (carregandoEstadoRemoto) return;
@@ -601,6 +621,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
                     const remotoContador = Number(remoto.contadorPedidos) || 0;
                     contadorPedidos = Math.max(contadorPedidos, remotoContador);
+                    garantirContadorPedidosAdiante();
 
                     if (houveColisao) {
                         exibirAviso('⚠️ Dois dispositivos criaram um pedido com o mesmo número quase ao mesmo tempo — o sistema corrigiu sozinho, sem apagar nenhum dos dois, mas um deles pode ter ganhado um número novo. Confira "Ver Todos os Pedidos" se algo parecer com número trocado.', 'Sincronização');
