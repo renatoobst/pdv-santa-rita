@@ -3761,6 +3761,32 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 : item.cozinha);
         }
 
+        // Média de (horaEntrega - hora) em minutos, só dos pedidos que têm
+        // as duas horas ("HH:MM") — pedidos antigos sem horaEntrega
+        // preenchida ou ainda não entregues são ignorados, não contam como
+        // zero. Retorna "--" sem dado nenhum pra não parecer 0min de
+        // entrega quando na verdade é falta de informação.
+        function formatarTempoMedioEntrega(pedidosEntregues) {
+            const paraMinutos = (hhmm) => {
+                if (!hhmm || typeof hhmm !== 'string' || !hhmm.includes(':')) return null;
+                const [h, m] = hhmm.split(':').map(Number);
+                if (Number.isNaN(h) || Number.isNaN(m)) return null;
+                return h * 60 + m;
+            };
+            const duracoes = [];
+            pedidosEntregues.forEach(p => {
+                const inicio = paraMinutos(p.hora);
+                const fim = paraMinutos(p.horaEntrega);
+                if (inicio === null || fim === null) return;
+                let duracao = fim - inicio;
+                if (duracao < 0) duracao += 24 * 60; // virada de dia (raro, mas evita média negativa)
+                duracoes.push(duracao);
+            });
+            if (duracoes.length === 0) return '--';
+            const mediaMin = Math.round(duracoes.reduce((a, b) => a + b, 0) / duracoes.length);
+            return mediaMin >= 60 ? `${Math.floor(mediaMin / 60)}h ${mediaMin % 60}min` : `${mediaMin}min`;
+        }
+
         // Único critério pra "tem item de verdade na cozinha agora": fase
         function atualizarTelas() {
             let htmlCozinha = '', htmlBalcao = '', htmlBalcaoDoces = '', htmlAgenda = '', htmlPrepTV = '';
@@ -4004,6 +4030,27 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     htmlTabelaCozinha += '</tbody></table>';
                     corpoResumoCozinha.innerHTML = htmlTabelaCozinha;
                 }
+            }
+
+            // TEMPO MÉDIO DE ENTREGA — da hora que o pedido foi criado até
+            // a hora que foi marcado como entregue, média dos pedidos
+            // entregues que ainda estão em pedidosGerais (ou seja, do caixa
+            // aberto agora — some do cálculo quando o caixa fecha, igual o
+            // resto da tela). Balcão 01 e Balcão 02 usam a MESMA
+            // classificação de roteamento (pedidoTemAlgoDeCozinha +
+            // configPadroes.separarBalcaoDoces) que decide os cards no
+            // resto desta função.
+            const elTempoBalcao01 = document.querySelector('#tempo-medio-entrega-balcao .valor-tempo-medio-entrega');
+            const elTempoBalcaoDoces = document.querySelector('#tempo-medio-entrega-balcao-doces .valor-tempo-medio-entrega');
+            if (elTempoBalcao01 || elTempoBalcaoDoces) {
+                const entreguesBalcao01 = [], entreguesBalcaoDoces = [];
+                pedidosGerais.forEach(p => {
+                    if (p.statusPainel !== 'entregue') return;
+                    const vaiPraDoces = configPadroes.separarBalcaoDoces && !pedidoTemAlgoDeCozinha(p.itens);
+                    (vaiPraDoces ? entreguesBalcaoDoces : entreguesBalcao01).push(p);
+                });
+                if (elTempoBalcao01) elTempoBalcao01.innerText = formatarTempoMedioEntrega(entreguesBalcao01);
+                if (elTempoBalcaoDoces) elTempoBalcaoDoces.innerText = formatarTempoMedioEntrega(entreguesBalcaoDoces);
             }
 
             // MONTA A SIDEBAR DO BALCÃO

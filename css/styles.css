@@ -206,7 +206,11 @@
         .balcao-principal { flex: 1; }
         .sidebar-resumo-balcao { width: 280px; min-width: 250px; background: white; padding: 12px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); max-height: calc(100vh - 140px); overflow-y: auto; border: 1px solid #cbd5e1; box-sizing: border-box; }
         .sidebar-resumo-balcao h3 { margin-top: 0; font-size: 0.95rem; border-bottom: 2px solid #2563eb; padding-bottom: 6px; color: #1f2937; text-transform: uppercase; }
-        
+
+        .caixa-tempo-medio-entrega { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; text-align: center; }
+        .caixa-tempo-medio-entrega .rotulo-tempo-medio-entrega { font-size: 0.7rem; color: #1e40af; font-weight: bold; text-transform: uppercase; letter-spacing: 0.3px; }
+        .caixa-tempo-medio-entrega .valor-tempo-medio-entrega { font-size: 1.4rem; font-weight: 900; color: #1e40af; }
+
         .tabela-resumo-canto { width: 100%; border-collapse: collapse; font-size: 0.78rem; text-align: left; }
         .tabela-resumo-canto th { background: #f1f5f9; padding: 4px; border: 1px solid #cbd5e1; text-align: center; font-weight: bold; }
         .tabela-resumo-canto td { padding: 4px; border: 1px solid #e2e8f0; }
