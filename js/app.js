@@ -249,11 +249,29 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (!estado) return;
             carregandoEstadoRemoto = true;
 
-            pedidosGerais = Array.isArray(estado.pedidosGerais) ? estado.pedidosGerais : pedidosGerais;
-            contadorPedidos = Number.isFinite(Number(estado.contadorPedidos)) ? Number(estado.contadorPedidos) : contadorPedidos;
+            // MESCLA em vez de SOBRESCREVER — antes, chegar estado daqui
+            // (boot, push em tempo real de outro dispositivo, ou
+            // resincronizarSeNecessario reconectando) apagava qualquer
+            // alteração local ainda não salva (ex: clicou "Chamar" e
+            // "Entregue" num pedido offline, mas a internet voltou e um
+            // resync chegou ANTES do próximo salvarNoBancoLocal() — a baixa
+            // sumia, sem aviso nenhum). salvarNoBancoLocal() já mesclava
+            // nesse sentido só na GRAVAÇÃO; isso aqui fecha o mesmo buraco
+            // na LEITURA, usando os mesmos mesclarPorIdComColisao/
+            // mesclarPorUniao (local sempre vence quando é a mesma entrada
+            // ainda não sincronizada; se for colisão de verdade, os dois
+            // sobrevivem, um ganha número novo).
+            if (Array.isArray(estado.pedidosGerais)) {
+                const mescladoPedidos = mesclarPorIdComColisao(pedidosGerais, estado.pedidosGerais);
+                pedidosGerais = mescladoPedidos.lista;
+                if (mescladoPedidos.houveColisao) {
+                    exibirAviso('⚠️ Dois dispositivos criaram um pedido com o mesmo número quase ao mesmo tempo — o sistema corrigiu sozinho, sem apagar nenhum dos dois, mas um deles pode ter ganhado um número novo. Confira "Ver Todos os Pedidos" se algo parecer com número trocado.', 'Sincronização');
+                }
+            }
+            contadorPedidos = Number.isFinite(Number(estado.contadorPedidos)) ? Math.max(contadorPedidos, Number(estado.contadorPedidos)) : contadorPedidos;
 
             if (Array.isArray(estado.caixasAbertos)) {
-                caixasAbertos = estado.caixasAbertos;
+                caixasAbertos = mesclarPorUniao(caixasAbertos, estado.caixasAbertos);
             } else if (estado.caixaAberto === true) {
                 // Migração: estado salvo no formato antigo (1 caixa único pra
                 // barraca inteira) com um caixa aberto na hora da atualização —
