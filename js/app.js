@@ -284,7 +284,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             garantirContadorPedidosAdiante();
 
             if (Array.isArray(estado.caixasAbertos)) {
-                caixasAbertos = mesclarPorUniao(caixasAbertos, estado.caixasAbertos);
+                caixasAbertos = podarCaixasFechadas(mesclarCaixasAbertos(caixasAbertos, estado.caixasAbertos));
             } else if (estado.caixaAberto === true) {
                 // Migração: estado salvo no formato antigo (1 caixa único pra
                 // barraca inteira) com um caixa aberto na hora da atualização —
@@ -513,7 +513,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
         function caixaDoUsuarioAtual() {
             if (!usuarioAtual) return null;
-            return caixasAbertos.find(c => c.usuarioId === usuarioAtual.id) || null;
+            return caixasAbertos.find(c => c.usuarioId === usuarioAtual.id && !c.fechado) || null;
         }
 
         function usuarioPodeAbrirFecharCaixa() {
@@ -568,15 +568,47 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             return { lista: resultado, houveColisao };
         }
 
-        // caixasAbertos já usa um id composto (usuarioId + timestamp — ver
-        // abrirCaixaPrompt), praticamente impossível de colidir entre
-        // dispositivos diferentes — só precisa de união simples por id, sem
-        // a lógica de renumeração.
-        function mesclarPorUniao(locais, remotos) {
+        // BUG REAL encontrado e corrigido: fechar um caixa costumava
+        // REMOVER ele de caixasAbertos (filter). Isso quebra com
+        // mesclarPorUniao — união não tem conceito de remoção, só de "id
+        // que eu não conheço ainda". Se o dispositivo que fechou salvasse
+        // logo depois de ler um estado remoto ainda desatualizado (escrito
+        // por OUTRO dispositivo antes do fechamento chegar até ele), a
+        // união trazia o caixa "fechado" de volta pra lista — o caixa
+        // reaparecia aberto de novo, às vezes na hora, às vezes minutos
+        // depois. Quanto mais dispositivos ativos na barraca, mais fácil de
+        // acontecer (é só precisar de UM save de qualquer outro aparelho
+        // que ainda não soube do fechamento).
+        //
+        // Fechar agora só marca fechado:true (não remove mais — ver
+        // fecharCaixaPrompt) e essa função de mescla dá sempre preferência
+        // pro lado que já está fechado, não importa se veio do lado local
+        // ou remoto — fechar é uma via de mão única (nunca reabre sozinho),
+        // então não existe ambiguidade de "qual versão é mais nova" pra
+        // resolver: fechado sempre vence sobre aberto.
+        function mesclarCaixasAbertos(locais, remotos) {
             const mapa = new Map();
             remotos.forEach(item => mapa.set(item.id, item));
-            locais.forEach(item => mapa.set(item.id, item));
+            locais.forEach(item => {
+                const existente = mapa.get(item.id);
+                if (existente && existente.fechado && !item.fechado) return; // remoto já fechou, não reabre
+                mapa.set(item.id, item);
+            });
             return Array.from(mapa.values());
+        }
+
+        // Sem isso, caixasAbertos cresceria pra sempre (todo caixa fechado
+        // desde o início do evento continuaria ocupando espaço, só pra
+        // proteger contra a ressureição acima). 48h é bem mais que
+        // suficiente pra qualquer dispositivo ativo já ter sincronizado o
+        // fechamento — depois disso não tem mais risco de ressurreição, dá
+        // pra esquecer o registro de vez (o fechamento em si já está salvo
+        // permanentemente em pdv_historico_caixas, isso aqui é só
+        // coordenação entre dispositivos).
+        function podarCaixasFechadas(lista) {
+            const LIMITE_MS = 48 * 60 * 60 * 1000;
+            const agora = Date.now();
+            return lista.filter(c => !c.fechado || !c.fechadoEm || (agora - c.fechadoEm) < LIMITE_MS);
         }
 
         // Garante que contadorPedidos nunca fique atrás do maior id que já
@@ -625,7 +657,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     houveColisao = houveColisao || mescladoPedidos.houveColisao;
 
                     const remotoCaixasAbertos = Array.isArray(remoto.caixasAbertos) ? remoto.caixasAbertos : [];
-                    caixasAbertos = mesclarPorUniao(caixasAbertos, remotoCaixasAbertos);
+                    caixasAbertos = podarCaixasFechadas(mesclarCaixasAbertos(caixasAbertos, remotoCaixasAbertos));
 
                     const remotoContador = Number(remoto.contadorPedidos) || 0;
                     contadorPedidos = Math.max(contadorPedidos, remotoContador);
@@ -4321,14 +4353,15 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         function obterDadosRelatorioCaixa(caixaId = caixaRelatorioSelecionado) {
             let listaPedidos, dados;
             if (caixaId) {
-                const caixa = caixasAbertos.find(c => c.id === caixaId);
+                const caixa = caixasAbertos.find(c => c.id === caixaId && !c.fechado);
                 listaPedidos = pedidosGerais.filter(p => p.caixaId === caixaId);
                 dados = calcularResumoPedidos(listaPedidos, !!caixa, caixa ? caixa.valorFundoCaixa : 0);
             } else {
                 // "Todos": soma de todos os caixas abertos agora nesta barraca.
+                const caixasRealmenteAbertas = caixasAbertos.filter(c => !c.fechado);
                 listaPedidos = pedidosGerais;
-                const fundoTotal = caixasAbertos.reduce((a, c) => a + c.valorFundoCaixa, 0);
-                dados = calcularResumoPedidos(pedidosGerais, caixasAbertos.length > 0, fundoTotal);
+                const fundoTotal = caixasRealmenteAbertas.reduce((a, c) => a + c.valorFundoCaixa, 0);
+                dados = calcularResumoPedidos(pedidosGerais, caixasRealmenteAbertas.length > 0, fundoTotal);
             }
             // Custo de produção + taxa de maquininha não fazem parte de
             // calcularResumoPedidos (js/barracas.js) porque dependem do
@@ -5272,7 +5305,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         // entram no fechamento e saem de pedidosGerais — os outros caixas
         // abertos na barraca continuam intactos.
         async function fecharCaixaPrompt(idCaixa) {
-            const caixa = caixasAbertos.find(c => c.id === idCaixa);
+            const caixa = caixasAbertos.find(c => c.id === idCaixa && !c.fechado);
             if (!caixa) return exibirAviso("Este caixa já está fechado.");
             if (!usuarioPodeAbrirFecharCaixa()) {
                 return exibirAviso("Você não tem permissão para fechar caixa.");
@@ -5436,7 +5469,12 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             // nunca é descartado.
             historicoCaixasDB.unshift(registroFechamento);
 
-            caixasAbertos = caixasAbertos.filter(c => c.id !== idCaixa);
+            // Marca fechado em vez de REMOVER de caixasAbertos — remover
+            // direto quebrava a sincronização entre dispositivos (ver
+            // mesclarCaixasAbertos acima pra entender o bug e por que a
+            // correção precisa ser aqui, não só na função de mescla).
+            const caixaFechado = caixasAbertos.find(c => c.id === idCaixa);
+            if (caixaFechado) { caixaFechado.fechado = true; caixaFechado.fechadoEm = Date.now(); }
             pedidosGerais = pedidosGerais.filter(p => p.caixaId !== idCaixa);
             if (caixaRelatorioSelecionado === idCaixa) caixaRelatorioSelecionado = null;
 
@@ -6289,7 +6327,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 html += `<div class="badge-caixa badge-caixa-fechado">🔒 Peça pra alguém com acesso abrir o caixa</div>`;
             }
 
-            const outrosCaixas = caixasAbertos.filter(c => !meuCaixa || c.id !== meuCaixa.id);
+            const outrosCaixas = caixasAbertos.filter(c => !c.fechado && (!meuCaixa || c.id !== meuCaixa.id));
             if (usuarioPodeAbrirFecharCaixa() && outrosCaixas.length > 0) {
                 html += `<div class="lista-outros-caixas">` + outrosCaixas.map(c => `
                     <span class="chip-outro-caixa">${c.usuarioNome}: R$ ${c.valorFundoCaixa.toFixed(2)}
@@ -6307,7 +6345,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             const container = document.getElementById('abas-caixas-relatorio');
             if (!container) return;
 
-            const abas = [{ id: null, label: 'Todos' }, ...caixasAbertos.map(c => ({ id: c.id, label: c.usuarioNome }))];
+            const abas = [{ id: null, label: 'Todos' }, ...caixasAbertos.filter(c => !c.fechado).map(c => ({ id: c.id, label: c.usuarioNome }))];
             container.innerHTML = abas.map(a => `
                 <button class="tag-categoria ${caixaRelatorioSelecionado === a.id ? 'ativa' : ''}" onclick="selecionarCaixaRelatorio(${a.id ? `'${a.id}'` : 'null'})">${a.id ? '💰 ' + a.label : '🗂️ Todos'}</button>
             `).join('');
