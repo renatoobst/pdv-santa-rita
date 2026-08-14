@@ -761,7 +761,7 @@
                         </div>
                         <div class="campo-produto" id="box-preco-simples">
                             <label>Preço Total (R$):</label>
-                            <input type="number" id="novo-prod-preco" placeholder="0.00" step="0.01">
+                            <input type="number" id="novo-prod-preco" placeholder="0.00" step="0.01" oninput="atualizarResumoCustoLucro()">
                         </div>
                         <div class="campo-produto" id="box-estoque-simples">
                             <label>📦 Estoque nesta barraca:</label>
@@ -820,6 +820,18 @@
                             </div>
                             <ul id="lista-combo-temporario" style="margin:0; padding-left:20px; font-size: 0.85rem; font-weight:bold;"></ul>
                         </div>
+
+                        <div id="box-ficha-tecnica" class="secao-form-produto" style="display:none; grid-column: 1 / -1; background: #ecfdf5;">
+                            <h4 style="color: #065f46;">💰 Custo de Produção (interno — nunca aparece pro cliente)</h4>
+                            <p style="font-size: 0.75rem; color: #065f46; margin: 0 0 10px 0;">Opcional. Quais insumos/produtos entram na produção de 1 unidade — usado só pra estimar custo e lucro, não muda o que aparece no pedido/recibo. Precisa que o insumo já tenha custo médio (uma Entrada de Estoque registrada) pra entrar na conta.</p>
+                            <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+                                <select id="ficha-tecnica-add-select" style="margin-bottom:0; flex:1;"></select>
+                                <input type="number" id="ficha-tecnica-add-qtd" value="1" min="0.01" step="0.01" style="margin-bottom:0; width:70px;">
+                                <button class="btn btn-success" style="padding: 10px;" onclick="addItemFichaTecnica()">➕</button>
+                            </div>
+                            <ul id="lista-ficha-tecnica" style="margin:0 0 10px 0; padding-left:20px; font-size: 0.85rem; font-weight:bold;"></ul>
+                            <div id="resumo-custo-lucro-produto" style="font-size:0.85rem; font-weight:bold; color:#065f46;"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -848,6 +860,8 @@
                                     <th>Categoria</th>
                                     <th>Barracas</th>
                                     <th>Preço</th>
+                                    <th title="Interno — nunca aparece pro cliente">💰 Custo Médio</th>
+                                    <th title="Interno — nunca aparece pro cliente">📈 Lucro Est.</th>
                                     <th>Estoque (aqui)</th>
                                     <th>Ações</th>
                                 </tr>

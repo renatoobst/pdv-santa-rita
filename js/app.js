@@ -1378,7 +1378,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if(idAba === 'tela-gestao') atualizarFiltrosGestao();
             if(idAba === 'tela-relatorio') atualizarDashboard();
             if(idAba === 'tela-fechamento-caixa') carregarHistoricoCaixas();
-            if(idAba === 'tela-produtos') { renderizarCategoriasUI(); renderizarTabelaProdutos(); if (produtoEmEdicaoId === null) renderizarChecklistBarracasProduto(); }
+            if(idAba === 'tela-produtos') { renderizarCategoriasUI(); renderizarTabelaProdutos(); popularSelectsEntradaEstoque(); if (produtoEmEdicaoId === null) renderizarChecklistBarracasProduto(); }
             if(idAba === 'tela-entrada-estoque') { popularSelectsEntradaEstoque(); mudarModoEntradaEstoque('compra'); }
             if(idAba === 'tela-pedido') {
                 renderizarCategoriasUI();
@@ -1941,9 +1941,13 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 document.getElementById('box-estoque-simples').style.display = 'none';
                 document.getElementById('box-cozinha-simples').style.display = 'none';
                 document.getElementById('box-itens-combo').style.display = 'block';
-                // Insumo não existe pra combo — combo é sempre vendido.
+                // Insumo e ficha técnica não existem pra combo — combo é
+                // sempre vendido, e o custo dele viria da soma dos itens
+                // escolhidos (não é uma ficha técnica fixa igual produto
+                // simples).
                 document.getElementById('box-insumo-checkbox').style.display = 'none';
                 document.getElementById('novo-prod-insumo').checked = false;
+                document.getElementById('box-ficha-tecnica').style.display = 'none';
                 document.getElementById('box-preco-simples').style.display = 'block';
                 // Combo já é a categoria "Combos" por definição — não faz
                 // sentido escolher categoria/subcategoria pra ele.
@@ -1968,6 +1972,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             const ehInsumo = document.getElementById('novo-prod-insumo').checked;
             document.getElementById('box-preco-simples').style.display = ehInsumo ? 'none' : 'block';
             document.getElementById('box-cozinha-simples').style.display = ehInsumo ? 'none' : 'block';
+            // Ficha técnica (custo de produção) só faz sentido pra quem é
+            // VENDIDO — insumo é matéria-prima, o custo dele vem direto da
+            // Entrada de Estoque, não de uma "receita" com outros itens.
+            document.getElementById('box-ficha-tecnica').style.display = ehInsumo ? 'none' : 'block';
         }
 
         function addProdutoTemporarioAoCombo() {
@@ -2006,6 +2014,78 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         function removerItemComboTemporario(index) {
             comboTemporario.splice(index, 1);
             renderizarListaComboTemporario();
+        }
+
+        // --- Ficha técnica de custo (interna) ---
+        // Lista de insumos/produtos usados pra produzir 1 unidade — só serve
+        // pra ESTIMAR custo/lucro (nunca aparece no pedido/recibo do
+        // cliente, isso continua sendo o campo "Ingredientes" de sempre).
+        // Precisa que o item usado já tenha custoMedio (uma Entrada de
+        // Estoque registrada) — se não tiver, entra na lista mas conta como
+        // "custo desconhecido" em vez de fingir que custa R$ 0.
+        let fichaTecnicaTemporaria = []; // { insumoId, insumoNome, quantidade }
+
+        function addItemFichaTecnica() {
+            const select = document.getElementById('ficha-tecnica-add-select');
+            const idInsumo = parseInt(select.value);
+            const qtd = parseFloat(document.getElementById('ficha-tecnica-add-qtd').value);
+            if (!idInsumo || isNaN(qtd) || qtd <= 0) return exibirAviso('Selecione o item e a quantidade usada.');
+            if (fichaTecnicaTemporaria.some(i => i.insumoId === idInsumo)) return exibirAviso('Esse item já está na ficha técnica.');
+            const item = produtosDB.find(p => p.id === idInsumo);
+            fichaTecnicaTemporaria.push({ insumoId: idInsumo, insumoNome: item ? item.nome : '?', quantidade: qtd });
+            document.getElementById('ficha-tecnica-add-qtd').value = '1';
+            select.value = '';
+            renderizarListaFichaTecnica();
+        }
+
+        function removerItemFichaTecnica(index) {
+            fichaTecnicaTemporaria.splice(index, 1);
+            renderizarListaFichaTecnica();
+        }
+
+        // Soma quantidade × custo médio de cada item — incompleto=true se
+        // algum item ainda não tem custo médio conhecido (nunca teve
+        // Entrada de Estoque registrada), pra quem for ler o resultado saber
+        // que o número é subestimado, não confiar cegamente nele.
+        function calcularCustoProducao(fichaTecnica) {
+            let custo = 0;
+            let incompleto = false;
+            (fichaTecnica || []).forEach(item => {
+                const insumo = produtosDB.find(p => p.id === item.insumoId);
+                const custoMedio = insumo ? insumo.custoMedio : undefined;
+                if (custoMedio === undefined || custoMedio === null) { incompleto = true; return; }
+                custo += custoMedio * item.quantidade;
+            });
+            return { custo, incompleto };
+        }
+
+        function renderizarListaFichaTecnica() {
+            const ul = document.getElementById('lista-ficha-tecnica');
+            if (!ul) return;
+            ul.innerHTML = fichaTecnicaTemporaria.length === 0
+                ? '<li style="color:gray; font-weight:normal; list-style:none; margin-left:-20px;">Nenhum item adicionado.</li>'
+                : fichaTecnicaTemporaria.map((item, i) => {
+                    const insumo = produtosDB.find(p => p.id === item.insumoId);
+                    const custoMedio = insumo ? insumo.custoMedio : undefined;
+                    const custoTxt = (custoMedio !== undefined && custoMedio !== null) ? `R$ ${(custoMedio * item.quantidade).toFixed(2)}` : '⚠️ custo desconhecido';
+                    return `<li style="display:flex; justify-content:space-between; border-bottom: 1px dashed #a7f3d0; padding: 4px 0;">
+                        <span>${item.quantidade}x ${item.insumoNome} <small style="font-weight:normal; color:#065f46;">(${custoTxt})</small></span>
+                        <button class="btn" onclick="removerItemFichaTecnica(${i})" style="background:none; border:none; color:red; cursor:pointer; padding:0;">❌</button>
+                    </li>`;
+                }).join('');
+            atualizarResumoCustoLucro();
+        }
+
+        function atualizarResumoCustoLucro() {
+            const div = document.getElementById('resumo-custo-lucro-produto');
+            if (!div) return;
+            if (fichaTecnicaTemporaria.length === 0) { div.innerHTML = ''; return; }
+            const { custo, incompleto } = calcularCustoProducao(fichaTecnicaTemporaria);
+            const preco = parseFloat(document.getElementById('novo-prod-preco').value) || 0;
+            const lucro = preco - custo;
+            const margem = preco > 0 ? (lucro / preco * 100) : 0;
+            div.innerHTML = `Custo estimado: R$ ${custo.toFixed(2)}${incompleto ? ' <span style="color:#b45309;">(algum item sem custo médio ainda)</span>' : ''}<br>` +
+                `Lucro estimado: <span style="color:${lucro >= 0 ? '#065f46' : 'var(--danger)'};">R$ ${lucro.toFixed(2)} (${margem.toFixed(0)}%)</span>`;
         }
 
         // Ativo/Inativo é global (produto some das vendas em TODAS as barracas) —
@@ -2070,7 +2150,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (contadorEl) contadorEl.innerText = `Mostrando ${lista.length} ${lista.length === 1 ? 'produto' : 'produtos'}${produtosDB.length !== lista.length ? ` de ${produtosDB.length} no total` : ''}`;
 
             if (lista.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: gray;">Nenhum produto ou combo encontrado.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; padding: 20px; color: gray;">Nenhum produto ou combo encontrado.</td></tr>';
                 return;
             }
 
@@ -2098,6 +2178,21 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     ? nomesBarracas.map(n => `<span style="background:#ede9fe; color:#5b21b6; padding:2px 6px; border-radius:4px; font-size:0.75rem; display:inline-block; margin:1px;">${n}</span>`).join('')
                     : '<span style="color:var(--danger); font-size:0.75rem;">Nenhuma (invisível)</span>';
 
+                // Custo Médio / Lucro Est. são só informação interna (nunca
+                // aparecem pro cliente) — combo não tem custo médio próprio
+                // (seria a soma dos itens escolhidos, variável por pedido) e
+                // insumo não tem "lucro" (nunca é vendido direto).
+                let txtCustoMedio = '<span style="color:gray;">—</span>';
+                if (!p.isCombo && p.custoMedio !== undefined && p.custoMedio !== null) {
+                    txtCustoMedio = `R$ ${p.custoMedio.toFixed(2)}`;
+                }
+                let txtLucro = '<span style="color:gray;">—</span>';
+                if (!p.isCombo && p.tipo !== 'insumo' && Array.isArray(p.fichaTecnica) && p.fichaTecnica.length > 0) {
+                    const { custo, incompleto } = calcularCustoProducao(p.fichaTecnica);
+                    const lucro = p.preco - custo;
+                    txtLucro = `<span style="color:${lucro >= 0 ? '#065f46' : 'var(--danger)'};">R$ ${lucro.toFixed(2)}</span>${incompleto ? ' ⚠️' : ''}`;
+                }
+
                 tbody.innerHTML += `
                     <tr draggable="true" ondragstart="tratarDragStartProduto(event, ${p.id})" ondragover="tratarDragOverProduto(event)" ondrop="tratarDropProduto(event, ${p.id})" ondragend="tratarDragEndProduto(event)" style="border-bottom: 1px solid #f3f4f6; cursor: grab; ${p.ativo === false ? 'opacity: 0.6; background:#fef2f2;' : ''}">
                         <td style="padding: 10px; font-weight: bold;"><span style="color:gray; cursor:grab;" title="Arraste para reordenar (dentro da mesma categoria)">☰</span> #${p.id}</td>
@@ -2106,7 +2201,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                         <td>${p.nome} ${desc} <br><span style="font-size: 0.8rem; color: gray;">${p.tipo === 'insumo' ? '🧪 Insumo' : (p.cozinha ? '👨‍🍳 Cozinha' : '🛍️ Balcão')}</span></td>
                         <td><span style="background:#e5e7eb; padding:2px 6px; border-radius:4px; font-size:0.8rem;">${p.categoria}</span>${p.subcategoria ? `<br><span style="color:gray; font-size:0.7rem;">↳ ${p.subcategoria}</span>` : ''}</td>
                         <td style="max-width:160px;">${badgesBarracas}</td>
-                        <td style="font-weight: bold;">R$ ${p.preco.toFixed(2)}</td><td style="${corEstoque}">${txtEstoque}</td>
+                        <td style="font-weight: bold;">R$ ${p.preco.toFixed(2)}</td>
+                        <td>${txtCustoMedio}</td>
+                        <td>${txtLucro}</td>
+                        <td style="${corEstoque}">${txtEstoque}</td>
                         <td style="white-space: nowrap;">
                             <button class="btn btn-warning" style="padding: 4px; font-size: 0.8rem; color: black;" onclick="prepararEdicaoProduto(${p.id})">✏️</button>
                             ${!p.isCombo ? `<button class="btn btn-primary" style="padding: 4px; font-size: 0.8rem;" onclick="adicionarEstoqueManual(${p.id})">📦 +</button>` : ''}
@@ -2295,6 +2393,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 const estoqueAqui = estoquePorProduto[p.id];
                 document.getElementById('txt-estoque-atual-cadastro').innerText = (estoqueAqui !== undefined && estoqueAqui !== null) ? `${estoqueAqui} un.` : '∞ Livre (sem controle)';
                 document.getElementById('novo-prod-cozinha').value = p.cozinha ? 'cozinha' : (p.entregaInstantanea ? 'instantaneo' : 'balcao');
+                fichaTecnicaTemporaria = Array.isArray(p.fichaTecnica) ? JSON.parse(JSON.stringify(p.fichaTecnica)) : [];
+                renderizarListaFichaTecnica();
             }
 
             produtoEmEdicaoId = p.id;
@@ -2319,6 +2419,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             renderizarChecklistBarracasProduto();
 
             comboTemporario = []; renderizarListaComboTemporario();
+            fichaTecnicaTemporaria = []; renderizarListaFichaTecnica();
             mudarModoCadastro('simples');
             document.getElementById('btn-salvar-produto').innerText = "Salvar 💾";
             document.getElementById('btn-salvar-produto').classList.replace('btn-warning', 'btn-primary');
@@ -2369,6 +2470,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 p.entregaInstantanea = entregaInstantanea;
                 p.isCombo = isCombo; p.itensCombo = finalItensCombo; p.foto = foto; p.ativo = ativo; p.barracas = barracasMarcadas;
                 p.ingredientes = ingredientes; p.tipo = ehInsumo ? 'insumo' : 'venda';
+                p.fichaTecnica = (isCombo || ehInsumo) ? [] : JSON.parse(JSON.stringify(fichaTecnicaTemporaria));
                 idSalvo = p.id;
                 cancelarEdicaoProduto();
             } else {
@@ -2376,7 +2478,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 produtosDB.push({
                     id: idSalvo,
                     nome, preco, categoria, subcategoria, cozinha, entregaInstantanea, isCombo, itensCombo: finalItensCombo, foto, ativo, barracas: barracasMarcadas, ingredientes,
-                    tipo: ehInsumo ? 'insumo' : 'venda'
+                    tipo: ehInsumo ? 'insumo' : 'venda',
+                    fichaTecnica: (isCombo || ehInsumo) ? [] : JSON.parse(JSON.stringify(fichaTecnicaTemporaria))
                 });
                 cancelarEdicaoProduto();
             }
@@ -2474,8 +2577,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 .map(p => `<option value="${p.id}">${p.nome}${p.tipo === 'insumo' ? ' 🧪' : ''}</option>`).join('');
             const selectItem = document.getElementById('entrada-item-select');
             const selectAjuste = document.getElementById('ajuste-produto-select');
+            const selectFicha = document.getElementById('ficha-tecnica-add-select');
             if (selectItem) selectItem.innerHTML = '<option value="">-- Selecione --</option>' + opcoes;
             if (selectAjuste) selectAjuste.innerHTML = '<option value="">-- Selecione --</option>' + opcoes;
+            if (selectFicha) selectFicha.innerHTML = '<option value="">-- Selecione --</option>' + opcoes;
         }
 
         function mudarModoEntradaEstoque(modo) {
@@ -2561,7 +2666,18 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
                 const produto = produtosDB.find(p => p.id === item.produtoId);
                 if (produto) {
-                    produto.custoUnitario = custoUnitarioFinal;
+                    // Média ponderada pelo estoque que já existia — não é só
+                    // "o preço da última compra", senão uma entrada barata
+                    // isolada bagunça o custo de um lote grande já em estoque
+                    // (e vice-versa). Sem custoMedio anterior (1ª entrada
+                    // desse produto, ou produto antigo de antes dessa
+                    // funcionalidade) cai direto pro custo desta entrada.
+                    const custoMedioAntigo = (produto.custoMedio !== undefined && produto.custoMedio !== null) ? produto.custoMedio : null;
+                    const baseAntiga = custoMedioAntigo !== null ? estoqueAntesVal : 0;
+                    const totalUnidades = baseAntiga + item.qtd;
+                    produto.custoMedio = totalUnidades > 0
+                        ? ((baseAntiga * (custoMedioAntigo || 0)) + (item.qtd * custoUnitarioFinal)) / totalUnidades
+                        : custoUnitarioFinal;
                     sincronizarAtivoPorEstoque(produto, estoqueDepois);
                 }
 
@@ -3679,6 +3795,18 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             // registro do pedido coerente com isso.
             const ehBonificacao = formaPagto.startsWith('Bonificação');
             const itensSnapshot = JSON.parse(JSON.stringify(carrinho)).map(item => {
+                // Reabrir um pedido já finalizado: editar e mudar "Status do
+                // Pedido" de volta pra "Na Cozinha"/"Balcão Pendente" não
+                // adiantava nada sozinho — os itens continuavam com
+                // fase:'entregue' (herdada do pedido original), e tanto
+                // Cozinha quanto Balcão só mostram item com fase !== 'entregue'
+                // (ver atualizarTelas). Resultado: o pedido sumia de tudo,
+                // mesmo com o status dizendo "preparando"/"nenhum". Se o novo
+                // status não é mais "entregue", devolve pra "agora" os itens
+                // que ainda estavam marcados como entregues.
+                if (pedidoEmEdicaoId !== null && statusPainelCalculado !== 'entregue' && item.fase === 'entregue') {
+                    item.fase = 'agora';
+                }
                 if (!ehBonificacao) return item;
                 item.preco = 0;
                 item.desconto = undefined;
@@ -6218,6 +6346,9 @@ window.adicionarEstoqueManual = adicionarEstoqueManual;
 window.apagarProduto = apagarProduto;
 window.filtrarProdutosPorTipo = filtrarProdutosPorTipo;
 window.atualizarCamposInsumo = atualizarCamposInsumo;
+window.addItemFichaTecnica = addItemFichaTecnica;
+window.removerItemFichaTecnica = removerItemFichaTecnica;
+window.atualizarResumoCustoLucro = atualizarResumoCustoLucro;
 window.mudarModoEntradaEstoque = mudarModoEntradaEstoque;
 window.addItemEntradaEstoque = addItemEntradaEstoque;
 window.removerItemEntradaEstoque = removerItemEntradaEstoque;
