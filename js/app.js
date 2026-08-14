@@ -3671,7 +3671,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 if(ci.isCombo) {
                     ci.itensComboEscolhidos.forEach(sub => { if(sub.idProduto === idProduto) countCart += 1; });
                 } else {
-                    if(ci.idProduto === idProduto) countCart += 1;
+                    if(ci.idProduto === idProduto) countCart += (ci.qtd || 1);
                 }
             });
 
@@ -3694,7 +3694,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             atualizarCarrinhoUI();
         }
 
-        function addCarrinho(idProduto) {
+        async function addCarrinho(idProduto) {
             if (!caixaDoUsuarioAtual()) {
                 return exibirAviso("🔒 Abra o seu caixa (ícone 💰 ao lado do carrinho) antes de adicionar pedidos.", "Caixa Fechado");
             }
@@ -3709,17 +3709,30 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 abrirModalCombo(produto);
                 return;
             }
-            
-            if(!verificarEstoqueDisponivel(idProduto, 1)) return;
-            
+
+            // Item de Cozinha costuma ser pedido em quantidade (ex: "3
+            // X-Bacon") — clicar no card 3x pra virar 3 linhas separadas no
+            // carrinho é ruim tanto pra digitar quanto pra Cozinha ler
+            // depois (3 cards "1x" em vez de 1 card "3x"). Balcão/instantâneo
+            // continua 1 clique = 1 unidade, que já é rápido o bastante.
+            let quantidade = 1;
+            if (produto.cozinha) {
+                const qtdStr = await pedirTexto(`Quantidade de "${produto.nome}":`, { titulo: '👨‍🍳 Quantidade', valorInicial: '1' });
+                if (qtdStr === null) return;
+                quantidade = parseInt(qtdStr);
+                if (isNaN(quantidade) || quantidade <= 0) return exibirAviso("Quantidade inválida.");
+            }
+
+            if(!verificarEstoqueDisponivel(idProduto, quantidade)) return;
+
             let tipoGlobal = document.getElementById('tipo-retirada-global').value;
             let fase = tipoGlobal === 'mais_tarde' ? 'mais_tarde' : 'agora';
-            
+
             carrinho.push({
                 cartId: Date.now().toString() + Math.floor(Math.random()*1000),
                 idProduto: produto.id, nome: produto.nome, preco: produto.preco,
                 categoria: produto.categoria, cozinha: produto.cozinha, entregaInstantanea: !!produto.entregaInstantanea,
-                isCombo: false, qtd: 1, obs: '', fase: fase
+                isCombo: false, qtd: quantidade, obs: '', fase: fase
             });
             atualizarCarrinhoUI();
             avisarItemAdicionadoMobile();
@@ -3794,13 +3807,18 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
                 let descCombo = item.isCombo ? `<div style="font-size:0.75rem; color:gray; margin-top:2px;">↳ Contém: ${item.itensComboEscolhidos.map(sub=>`1x ${sub.nome}`).join(', ')}</div>` : '';
 
+                // Total da LINHA (preço unitário × quantidade), não o preço
+                // unitário sozinho — senão "3x Coca-Cola R$ 5,00" ficaria
+                // ambíguo (5 é de 1 ou das 3?). Desconto/acréscimo já são
+                // valores da linha inteira (ver abrirDescontoItem/abrirAcrescimoItem).
+                let precoLinha = item.preco * item.qtd;
                 let htmlPreco = (desconto > 0 || acrescimo > 0)
-                    ? `<b><s style="color:gray; font-weight:normal; font-size:0.85rem;">R$ ${(item.preco).toFixed(2)}</s> R$ ${(item.preco - desconto + acrescimo).toFixed(2)}</b>`
-                    : `<b>R$ ${(item.preco).toFixed(2)}</b>`;
+                    ? `<b><s style="color:gray; font-weight:normal; font-size:0.85rem;">R$ ${precoLinha.toFixed(2)}</s> R$ ${(precoLinha - desconto + acrescimo).toFixed(2)}</b>`
+                    : `<b>R$ ${precoLinha.toFixed(2)}</b>`;
 
                 divItens.innerHTML += `
                     <div class="item-carrinho">
-                        <div style="display:flex; justify-content:space-between;"><b>1x ${item.nome}</b>${htmlPreco}</div>
+                        <div style="display:flex; justify-content:space-between;"><b>${item.qtd}x ${item.nome}</b>${htmlPreco}</div>
                         ${descCombo}
                         ${desconto > 0 ? `<div style="color:var(--success); font-size:0.8rem; font-weight:bold; margin-top:2px;">🏷️ Desconto: R$ ${desconto.toFixed(2)}</div>` : ''}
                         ${acrescimo > 0 ? `<div style="color:#c2410c; font-size:0.8rem; font-weight:bold; margin-top:2px;">➕ Acréscimo: R$ ${acrescimo.toFixed(2)}</div>` : ''}
@@ -4178,7 +4196,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 let obs = i.obs ? `<div style="font-size:12px; font-weight:bold;">Observação: ${i.obs}</div>` : '';
                 let desconto = i.desconto ? `<div style="font-size:12px; font-weight:bold;">Desconto: -R$ ${i.desconto.toFixed(2)}</div>` : '';
                 let acrescimo = i.acrescimo ? `<div style="font-size:12px; font-weight:bold;">Acréscimo: +R$ ${i.acrescimo.toFixed(2)}</div>` : '';
-                return `<div style="margin-top:5px;"><div class="print-row"><span class="print-bold">1x ${i.nome}</span><span class="print-bold">R$ ${(i.preco).toFixed(2)}</span></div>${det}${desconto}${acrescimo}${obs}</div>`;
+                return `<div style="margin-top:5px;"><div class="print-row"><span class="print-bold">${i.qtd}x ${i.nome}</span><span class="print-bold">R$ ${(i.preco * i.qtd).toFixed(2)}</span></div>${det}${desconto}${acrescimo}${obs}</div>`;
             };
 
             return `
@@ -4769,7 +4787,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                             });
                         } else {
                             if(item.cozinha) {
-                                itensPurosCozinha.push({nome: item.nome, obs: item.obs});
+                                itensPurosCozinha.push({nome: item.nome, obs: item.obs, qtd: item.qtd});
                                 resumoProducaoCozinha[item.nome] = (resumoProducaoCozinha[item.nome] || 0) + item.qtd;
                             }
                         }
@@ -4781,7 +4799,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     countCoz++;
                     const itensDetalhadosCozinha = itensPurosCozinha.map(i => `
                         <div style="border-bottom:1px dashed #ccc; padding:6px 0;">
-                            <b>1x ${i.nome}</b> 
+                            <b>${i.qtd || 1}x ${i.nome}</b>
                             ${i.comboPai ? `<br><small style="color:gray;">(Vem do ${i.comboPai})</small>` : ''}
                             ${i.obs ? `<br><i style="color:red;font-size:0.8rem; font-weight:bold;">Observação: ${i.obs}</i>`:''}
                         </div>
@@ -4858,7 +4876,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                             let btnTroca = (!item.cozinha && (p.statusPainel === 'pronto' || p.statusPainel === 'preparando' || p.statusPainel === 'nenhum')) ? `<button class="btn btn-warning" style="padding:2px 6px; font-size:0.75rem; margin-left:5px;" onclick="abrirModalTrocaItem(${p.id}, '${item.cartId}')" title="Trocar Sabor/Produto">✏️ Trocar</button>` : '';
                             return `
                                 <div style="border-bottom:1px dashed #ccc; padding:6px 0; display:flex; justify-content:space-between; align-items:center;">
-                                    <div><b>1x ${item.nome}</b>${item.obs ? `<br><i style="color:red;font-size:0.8rem;">Obs: ${item.obs}</i>`:''}</div>
+                                    <div><b>${item.qtd}x ${item.nome}</b>${item.obs ? `<br><i style="color:red;font-size:0.8rem;">Obs: ${item.obs}</i>`:''}</div>
                                     <div style="display:flex; align-items:center; gap:4px;">
                                         ${btnTroca}
                                     </div>
@@ -4890,7 +4908,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
                         let comboDet = i.isCombo ? `<br><small style="color:gray;">↳ ${i.itensComboEscolhidos.map(sub=>`1x ${sub.nome}`).join(', ')}</small>` : '';
                         let obsDet = i.obs ? `<br><i style="color:red; font-size:0.8rem; font-weight:bold;">Observação: ${i.obs}</i>` : '';
-                        return `<div style="border-bottom:1px dashed #ccc; padding:4px 0;"><b>1x ${i.nome}</b>${comboDet}${obsDet}</div>`;
+                        return `<div style="border-bottom:1px dashed #ccc; padding:4px 0;"><b>${i.qtd}x ${i.nome}</b>${comboDet}${obsDet}</div>`;
                     }).join('');
 
                     htmlAgenda += `
@@ -5177,7 +5195,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
                     acoesHtml = btnImprimir + `<button onclick="editarPedido(${p.id})" class="btn btn-warning" style="padding: 4px 8px; font-size: 0.8rem; margin-right: 5px;">✏️</button> ${btnCancelarGestao}`;
                 }
-                const resumoItens = p.itens.map(i => `1x ${i.nome}`).join(', ');
+                const resumoItens = p.itens.map(i => `${i.qtd}x ${i.nome}`).join(', ');
                 const tempoPreparo = calcularDiferencaMinutos(p.horaEntradaCozinha || p.hora, p.horaEntrega);
                 const caixaDoPedido = caixasAbertos.find(c => c.id === p.caixaId);
                 const nomeCaixaPedido = caixaDoPedido ? caixaDoPedido.usuarioNome : '-';
