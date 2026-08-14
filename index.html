@@ -590,8 +590,8 @@
                     <button class="btn btn-success btn-toggle-voz" onclick="alternarVozAnuncio()">🗣️ Voz Ligada</button>
                     <div class="controle-zoom-tela" title="Volume do aviso (bipe fica realmente mais alto acima de 100%; a voz é limitada a 100% pelo navegador)">
                         🔊
-                        <input type="range" id="slider-volume-anuncio" min="0" max="100" step="10" value="100" oninput="ajustarVolumeAnuncio(this.value)" style="width:100px;">
-                        <span id="txt-volume-anuncio">100%</span>
+                        <input type="range" class="slider-volume-anuncio" min="0" max="100" step="10" value="100" oninput="ajustarVolumeAnuncio(this.value)" style="width:100px;">
+                        <span class="txt-volume-anuncio">100%</span>
                     </div>
                     <button class="btn" style="background:#16a34a; color:white;" onclick="abrirModalPedidosEntregues()" title="Ver todos os pedidos já entregues">✅ Pedidos Já Entregues</button>
                     <div class="controle-zoom-tela">
@@ -626,6 +626,12 @@
                 <h2 style="margin:0;">🍬 Balcão 02 (Doces) <span id="contagem-entrega-doces" class="contagem-tela">0 pedidos</span></h2>
                 <div style="display:flex; gap:8px; align-items:center;">
                     <button id="btn-toggle-chamar-doces" class="btn btn-success" onclick="alternarChamarAtivo('balcaoDoces')" title="Ligado: precisa chamar (som) antes de liberar Entregue. Desligado: botão Entregue direto.">🔔 Chamar Ligado</button>
+                    <button class="btn btn-success btn-toggle-voz" onclick="alternarVozAnuncio()">🗣️ Voz Ligada</button>
+                    <div class="controle-zoom-tela" title="Volume do aviso (bipe fica realmente mais alto acima de 100%; a voz é limitada a 100% pelo navegador)">
+                        🔊
+                        <input type="range" class="slider-volume-anuncio" min="0" max="100" step="10" value="100" oninput="ajustarVolumeAnuncio(this.value)" style="width:100px;">
+                        <span class="txt-volume-anuncio">100%</span>
+                    </div>
                     <button class="btn" style="background:#16a34a; color:white;" onclick="abrirModalPedidosEntregues()" title="Ver todos os pedidos já entregues">✅ Pedidos Já Entregues</button>
                     <div class="controle-zoom-tela">
                         <button onclick="ajustarZoomTela('conteudo-zoom-entrega-doces', -10)">➖</button>

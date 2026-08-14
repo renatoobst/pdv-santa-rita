@@ -88,6 +88,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 const detalhe = offlineDesde ? `Ficou offline por ${Math.round((Date.now() - offlineDesde) / 1000)}s` : null;
                 registrarLog('online', detalhe, { tela: telaAtual(), barracaId: barracaStateId });
                 tentarEnviarFilaDeLogs();
+                tentarEnviarFilaDeFechamentos();
                 if (intervaloTentativaReconexao) { clearInterval(intervaloTentativaReconexao); intervaloTentativaReconexao = null; }
                 offlineDesde = null;
             }
@@ -195,12 +196,15 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
         // Estado desta barraca: pedidos, caixa, estoque. NÃO inclui mais
         // categoriasDB/produtosDB — isso é o catálogo compartilhado, sincronizado
-        // separadamente (ver montarCatalogoAtual/salvarCatalogo mais abaixo).
+        // separadamente (ver montarCatalogoAtual/salvarCatalogo mais abaixo). Também
+        // não inclui mais historicoCaixasDB — isso agora é a tabela própria
+        // pdv_historico_caixas (ver carregarHistoricoCaixas/
+        // enviarFechamentoParaSupabase), pra não crescer sem limite dentro
+        // deste blob que é lido/gravado inteiro a cada ação do sistema.
         function montarEstadoAtual() {
             return {
                 pedidosGerais,
                 contadorPedidos,
-                historicoCaixasDB,
                 caixasAbertos,
                 estoquePorProduto,
                 configPadroes,
@@ -242,7 +246,6 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
             pedidosGerais = Array.isArray(estado.pedidosGerais) ? estado.pedidosGerais : pedidosGerais;
             contadorPedidos = Number.isFinite(Number(estado.contadorPedidos)) ? Number(estado.contadorPedidos) : contadorPedidos;
-            historicoCaixasDB = Array.isArray(estado.historicoCaixasDB) ? estado.historicoCaixasDB : historicoCaixasDB;
 
             if (Array.isArray(estado.caixasAbertos)) {
                 caixasAbertos = estado.caixasAbertos;
@@ -500,8 +503,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         // (dois dispositivos calcularam o mesmo número "ao mesmo tempo" —
         // colisão de verdade), a que já está no servidor fica com aquele
         // número e a local ganha um número novo, nunca perde nenhuma das
-        // duas. Usado tanto pra pedidosGerais quanto historicoCaixasDB (os
-        // dois têm o mesmo formato de risco: id = contador local++).
+        // duas. Usado por pedidosGerais (id = contador local++, mesmo risco
+        // de colisão entre dispositivos). historicoCaixasDB não usa mais
+        // isso — tem tabela própria (pdv_historico_caixas) com id gerado
+        // pelo Postgres, então colisão de id não existe mais pra ele.
         function mesclarPorIdComColisao(locais, remotos) {
             const mapaRemoto = new Map(remotos.map(item => [item.id, item]));
             const resultado = [...remotos];
@@ -564,11 +569,6 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     pedidosGerais = mescladoPedidos.lista;
                     houveColisao = houveColisao || mescladoPedidos.houveColisao;
 
-                    const remotoHistorico = Array.isArray(remoto.historicoCaixasDB) ? remoto.historicoCaixasDB : [];
-                    const mescladoHistorico = mesclarPorIdComColisao(historicoCaixasDB, remotoHistorico);
-                    historicoCaixasDB = mescladoHistorico.lista;
-                    houveColisao = houveColisao || mescladoHistorico.houveColisao;
-
                     const remotoCaixasAbertos = Array.isArray(remoto.caixasAbertos) ? remoto.caixasAbertos : [];
                     caixasAbertos = mesclarPorUniao(caixasAbertos, remotoCaixasAbertos);
 
@@ -576,7 +576,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     contadorPedidos = Math.max(contadorPedidos, remotoContador);
 
                     if (houveColisao) {
-                        exibirAviso('⚠️ Dois dispositivos criaram um pedido ou fechamento com o mesmo número quase ao mesmo tempo — o sistema corrigiu sozinho, sem apagar nenhum dos dois, mas um deles pode ter ganhado um número novo. Confira "Ver Todos os Pedidos" se algo parecer com número trocado.', 'Sincronização');
+                        exibirAviso('⚠️ Dois dispositivos criaram um pedido com o mesmo número quase ao mesmo tempo — o sistema corrigiu sozinho, sem apagar nenhum dos dois, mas um deles pode ter ganhado um número novo. Confira "Ver Todos os Pedidos" se algo parecer com número trocado.', 'Sincronização');
                     }
                 }
 
@@ -590,6 +590,143 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 definirSupabaseDisponivel(false);
                 console.error('Falha ao sincronizar com Supabase. Dados mantidos no cache local:', erro);
             }
+        }
+
+        // --- Histórico de fechamentos de caixa (pdv_historico_caixas) ---
+        // Tabela própria em vez de dentro do blob de pdv_state — ver
+        // supabase/pdv_historico_caixas.sql. historicoCaixasDB continua
+        // existindo como array em memória (os relatórios/telas que já
+        // dependiam dele continuam iguais), só passa a ser POPULADO via
+        // fetch nesta tabela em vez de vir junto do resto do estado.
+        function mapearLinhaHistoricoCaixa(row) {
+            return {
+                id: row.id,
+                chaveUnica: row.chave_unica,
+                usuarioNome: row.usuario_nome,
+                campanha: row.campanha,
+                dataAbertura: row.data_abertura,
+                dataFechamento: row.data_fechamento,
+                fundoInicial: Number(row.fundo_inicial) || 0,
+                totalVendas: Number(row.total_vendas) || 0,
+                pix: Number(row.pix) || 0,
+                pixDireto: Number(row.pix_direto) || 0,
+                credito: Number(row.credito) || 0,
+                debito: Number(row.debito) || 0,
+                dinheiroVendas: Number(row.dinheiro_vendas) || 0,
+                bonificacao: Number(row.bonificacao) || 0,
+                totalGaveta: Number(row.total_gaveta) || 0,
+                qtdPedidos: row.qtd_pedidos || 0,
+                produtosVendidos: row.produtos_vendidos || {},
+                valorProdutosVendidos: row.valor_produtos_vendidos || {},
+                pedidosDetalhados: row.pedidos_detalhados || []
+            };
+        }
+
+        function linhaHistoricoCaixaParaSupabase(registro) {
+            return {
+                barraca_id: barracaStateId,
+                chave_unica: registro.chaveUnica,
+                usuario_nome: registro.usuarioNome,
+                campanha: registro.campanha,
+                data_abertura: registro.dataAbertura,
+                data_fechamento: registro.dataFechamento,
+                fundo_inicial: registro.fundoInicial,
+                total_vendas: registro.totalVendas,
+                pix: registro.pix,
+                pix_direto: registro.pixDireto,
+                credito: registro.credito,
+                debito: registro.debito,
+                dinheiro_vendas: registro.dinheiroVendas,
+                bonificacao: registro.bonificacao,
+                total_gaveta: registro.totalGaveta,
+                qtd_pedidos: registro.qtdPedidos,
+                produtos_vendidos: registro.produtosVendidos,
+                valor_produtos_vendidos: registro.valorProdutosVendidos,
+                pedidos_detalhados: registro.pedidosDetalhados
+            };
+        }
+
+        // Carrega o histórico de fechamentos DESTA barraca do Supabase pra
+        // dentro do array em memória — chamado ao entrar em Histórico de
+        // Caixas / Produtos por Período (mudarAba) e uma vez no boot.
+        async function carregarHistoricoCaixas() {
+            if (!barracaStateId) return;
+            try {
+                const { data, error } = await supabaseClient
+                    .from('pdv_historico_caixas')
+                    .select('*')
+                    .eq('barraca_id', barracaStateId)
+                    .order('criado_em', { ascending: false });
+                if (error) throw error;
+                historicoCaixasDB = (data || []).map(mapearLinhaHistoricoCaixa);
+            } catch (erro) {
+                console.error('Falha ao carregar histórico de caixas:', erro);
+                const tbody = document.getElementById('tabela-historico-caixas');
+                if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="padding: 20px; text-align: center; color: var(--danger);">Não foi possível carregar o histórico de caixas. A tabela pdv_historico_caixas existe no Supabase? (ver supabase/pdv_historico_caixas.sql)</td></tr>`;
+                return;
+            }
+            renderizarHistoricoCaixas();
+            renderizarProdutosPorPeriodo();
+        }
+
+        // Fila de retry local pra fechamento de caixa que não conseguiu ser
+        // gravado no Supabase na hora (sem internet etc) — mesma ideia da
+        // fila de logs em auth.js, mas fechamento de caixa é dado
+        // financeiro, não pode ficar só na esperança de um F5 futuro
+        // carregar o cache certo. Fica em localStorage até confirmar.
+        const CHAVE_FILA_FECHAMENTOS = 'pdv_fila_fechamentos_pendentes';
+        function lerFilaFechamentosPendentes() {
+            try { return JSON.parse(localStorage.getItem(CHAVE_FILA_FECHAMENTOS)) || []; }
+            catch { return []; }
+        }
+        function salvarFilaFechamentosPendentes(fila) {
+            try { localStorage.setItem(CHAVE_FILA_FECHAMENTOS, JSON.stringify(fila)); }
+            catch (erro) { console.error('Não foi possível salvar a fila de fechamentos pendentes:', erro); }
+        }
+
+        // Chamado logo depois de fechar um caixa (fecharCaixaPrompt), com o
+        // registro já visível na tela local (unshift síncrono lá). Se a
+        // gravação falhar, entra na fila em vez de ser descartado — nunca
+        // perde um fechamento por causa de internet.
+        async function enviarFechamentoParaSupabase(registro) {
+            const linha = linhaHistoricoCaixaParaSupabase(registro);
+            try {
+                const { data, error } = await supabaseClient.from('pdv_historico_caixas').insert(linha).select('id').single();
+                if (error) throw error;
+                // Troca o id temporário local pelo id real do Postgres — o
+                // registro na tela é o MESMO objeto (mesma referência) que
+                // está dentro de historicoCaixasDB, então isso já corrige
+                // ele lá também; só precisa re-renderizar pra atualizar os
+                // botões que têm o id embutido no onclick.
+                registro.id = data.id;
+                renderizarHistoricoCaixas();
+            } catch (erro) {
+                console.error('Falha ao gravar fechamento de caixa no Supabase — entrou na fila de retry:', erro);
+                const fila = lerFilaFechamentosPendentes();
+                fila.push(linha);
+                salvarFilaFechamentosPendentes(fila);
+            }
+        }
+
+        // Chamado ao reconectar (definirSupabaseDisponivel) e uma vez no
+        // boot, pro caso de ter sobrado algo na fila de uma sessão anterior
+        // que fechou antes da internet voltar. upsert com ignoreDuplicates
+        // (por chave_unica) pra ser seguro reenviar mesmo se uma tentativa
+        // anterior já tiver dado certo silenciosamente (timeout ambíguo).
+        async function tentarEnviarFilaDeFechamentos() {
+            const fila = lerFilaFechamentosPendentes();
+            if (fila.length === 0) return;
+            const restantes = [];
+            for (const linha of fila) {
+                try {
+                    const { error } = await supabaseClient.from('pdv_historico_caixas').upsert(linha, { onConflict: 'chave_unica', ignoreDuplicates: true });
+                    if (error) throw error;
+                } catch (erro) {
+                    restantes.push(linha);
+                }
+            }
+            salvarFilaFechamentosPendentes(restantes);
+            if (restantes.length < fila.length) carregarHistoricoCaixas();
         }
 
         async function carregarEstadoSupabase(mostrarAvisoSeFalhar = true) {
@@ -978,8 +1115,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
         function ajustarVolumeAnuncio(valor) {
             localStorage.setItem(CHAVE_VOLUME_ANUNCIO, valor);
-            const label = document.getElementById('txt-volume-anuncio');
-            if (label) label.innerText = `${valor}%`;
+            // Balcão 01 e Balcão 02 (Doces) têm cada um seu próprio slider
+            // (mesma classe) — mexer em um sincroniza o outro na hora,
+            // mesmo padrão do botão de Voz Ligada/Desligada.
+            document.querySelectorAll('.slider-volume-anuncio').forEach(s => { s.value = valor; });
+            document.querySelectorAll('.txt-volume-anuncio').forEach(label => { label.innerText = `${valor}%`; });
         }
 
         function toggleMenuGlobal() {
@@ -1049,7 +1189,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             
             if(idAba === 'tela-gestao') atualizarFiltrosGestao();
             if(idAba === 'tela-relatorio') atualizarDashboard();
-            if(idAba === 'tela-fechamento-caixa') renderizarHistoricoCaixas();
+            if(idAba === 'tela-fechamento-caixa') carregarHistoricoCaixas();
             if(idAba === 'tela-produtos') { renderizarCategoriasUI(); renderizarTabelaProdutos(); if (produtoEmEdicaoId === null) renderizarChecklistBarracasProduto(); }
             if(idAba === 'tela-pedido') {
                 renderizarCategoriasUI();
@@ -1066,7 +1206,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if(idAba === 'tela-gestao-usuarios') renderizarTelaGestaoUsuarios();
             if(idAba === 'tela-dashboard-geral') carregarDashboardGeral();
             if(idAba === 'tela-configuracoes') aplicarConfiguracoesImpressaoRedeNaTela();
-            if(idAba === 'tela-produtos-periodo') renderizarProdutosPorPeriodo();
+            if(idAba === 'tela-produtos-periodo') carregarHistoricoCaixas();
             if(idAba === 'tela-logs-sistema') carregarLogsSistema();
         }
 
@@ -3415,10 +3555,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
             const valorSalvo = parseInt(localStorage.getItem(CHAVE_VOLUME_ANUNCIO));
             const volume = isNaN(valorSalvo) ? 100 : valorSalvo;
-            const slider = document.getElementById('slider-volume-anuncio');
-            const label = document.getElementById('txt-volume-anuncio');
-            if (slider) slider.value = volume;
-            if (label) label.innerText = `${volume}%`;
+            document.querySelectorAll('.slider-volume-anuncio').forEach(s => { s.value = volume; });
+            document.querySelectorAll('.txt-volume-anuncio').forEach(label => { label.innerText = `${volume}%`; });
         }
 
         function chamarNoPainel(id) {
@@ -4053,11 +4191,14 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             const dataHoraAbertura = caixa.dataHoraAbertura || dataHoraFechamento;
 
             const registroFechamento = {
-                id: historicoCaixasDB.length + 1,
-                // Mesma ideia de chaveUnica dos pedidos (ver finalizarPedido) —
-                // identidade estável pra mesclarPedidosPorId reconhecer esse
-                // fechamento mesmo se o número "id" precisar mudar por ter
-                // colidido com um fechamento de outro dispositivo.
+                // Id temporário só pra esta tela (negativo, nunca colide com
+                // um id real do Postgres, que é sempre positivo) — vira o
+                // id de verdade assim que enviarFechamentoParaSupabase
+                // confirmar a gravação, ver logo abaixo.
+                id: -Date.now(),
+                // Identidade estável enviada pra pdv_historico_caixas (ver
+                // enviarFechamentoParaSupabase) — usada só pela fila de
+                // retry, pra não duplicar se reenviar duas vezes.
                 chaveUnica: `${PDV_CLIENT_ID}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
                 usuarioNome: caixa.usuarioNome,
                 campanha: nomeCampanha.trim(),
@@ -4078,6 +4219,12 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 pedidosDetalhados: JSON.parse(JSON.stringify(pedidosDoCaixa))
             };
 
+            // Mostra na tela local IMEDIATAMENTE (antes até de confirmar no
+            // Supabase) — imprimir e navegar pro Histórico não podem esperar
+            // rede. enviarFechamentoParaSupabase troca o id temporário pelo
+            // real quando confirmar; se falhar (sem internet), entra na fila
+            // de retry e tenta de novo sozinho quando a conexão voltar —
+            // nunca é descartado.
             historicoCaixasDB.unshift(registroFechamento);
 
             caixasAbertos = caixasAbertos.filter(c => c.id !== idCaixa);
@@ -4094,6 +4241,12 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
             exibirAviso("Caixa fechado com sucesso! Redirecionando para o Histórico de Caixas...");
 
+            // Espera essa tentativa (rápida, mesmo offline — falha na hora e
+            // vai pra fila) ANTES de navegar: mudarAba pra tela-fechamento-caixa
+            // recarrega o histórico do Supabase, e se navegasse antes desse
+            // insert terminar, o fechamento que acabou de ser criado podia
+            // sumir da tela até a próxima atualização.
+            await enviarFechamentoParaSupabase(registroFechamento);
             mudarAba('tela-fechamento-caixa', document.getElementById('btn-sub-fechamento'));
         }
 
@@ -4142,7 +4295,15 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             renderizarHistoricoCaixas();
             renderizarTabelaProdutos();
             renderizarMenu(categoriaFiltroAtual);
-            exibirAviso(`Registro de Caixa #${idCaixa} excluído e estoque devolvido com sucesso!`);
+
+            try {
+                const { error } = await supabaseClient.from('pdv_historico_caixas').delete().eq('id', idCaixa);
+                if (error) throw error;
+                exibirAviso(`Registro de Caixa #${idCaixa} excluído e estoque devolvido com sucesso!`);
+            } catch (erro) {
+                console.error('Falha ao excluir fechamento de caixa no Supabase:', erro);
+                exibirAviso(`Removido da tela e o estoque foi devolvido, mas não deu pra confirmar a exclusão no servidor agora (sem internet?). Se o Fechamento #${idCaixa} reaparecer aqui mais tarde, exclua de novo.`);
+            }
         }
 
         // "dd/mm/yyyy hh:mm" (formato usado em dataFechamento) -> Date.
@@ -5026,7 +5187,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             aplicarConfigPadroesNoFormulario();
             atualizarTelas();
             atualizarFiltrosGestao();
-            renderizarHistoricoCaixas();
+            carregarHistoricoCaixas();
+            tentarEnviarFilaDeFechamentos();
             atualizarBotoesVozAnuncio();
             aplicarTodosZoomsSalvos();
             iniciarRealtimeSupabase();

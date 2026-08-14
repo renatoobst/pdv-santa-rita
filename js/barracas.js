@@ -406,6 +406,20 @@ export async function carregarDashboardGeral() {
         return;
     }
 
+    // Total histórico não vem mais do JSON de pdv_state (ver
+    // supabase/pdv_historico_caixas.sql) — soma direto da tabela própria,
+    // por barraca. Se essa consulta falhar (ex: tabela ainda não criada),
+    // não trava o resto do dashboard — só mostra histórico como R$ 0,00.
+    const totalHistoricoPorBarraca = {};
+    const { data: fechamentos, error: erroFechamentos } = await supabaseClient.from('pdv_historico_caixas').select('barraca_id, total_vendas').in('barraca_id', ids);
+    if (erroFechamentos) {
+        console.error('Falha ao carregar histórico de fechamentos para o Dashboard Geral:', erroFechamentos);
+    } else {
+        (fechamentos || []).forEach(f => {
+            totalHistoricoPorBarraca[f.barraca_id] = (totalHistoricoPorBarraca[f.barraca_id] || 0) + (Number(f.total_vendas) || 0);
+        });
+    }
+
     const porId = {};
     (data || []).forEach(row => { porId[row.id] = row.data; });
 
@@ -419,7 +433,7 @@ export async function carregarDashboardGeral() {
             return;
         }
         const resumo = calcularResumoPedidos(estado.pedidosGerais, !!estado.caixaAberto, Number(estado.valorFundoCaixa) || 0);
-        const totalHistorico = (Array.isArray(estado.historicoCaixasDB) ? estado.historicoCaixasDB : []).reduce((acc, c) => acc + (c.totalVendas || 0), 0);
+        const totalHistorico = totalHistoricoPorBarraca[b.id] || 0;
         const totalBarraca = resumo.totalVendas + totalHistorico;
 
         totalGeralAtual += resumo.totalVendas;
