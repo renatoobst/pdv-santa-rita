@@ -4668,6 +4668,40 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             atualizarTelas(); 
         }
 
+        // Devolve o estoque de todos os itens do pedido e marca como
+        // cancelado — núcleo reaproveitado tanto por cancelarPedido (1
+        // pedido, com prompt de motivo) quanto pelo forçar-fechamento de
+        // caixa (vários pedidos de uma vez, 1 motivo só pro lote inteiro).
+        // Não salva nem re-renderiza sozinho — quem chama decide quando
+        // fazer isso (1x só, depois do lote inteiro processado).
+        function cancelarPedidoInterno(p, motivo) {
+            let catalogoAlteradoPorEstoque = false;
+            p.itens.forEach(item => {
+                if(item.isCombo) {
+                    item.itensComboEscolhidos.forEach(sub => {
+                        const est = estoquePorProduto[sub.idProduto];
+                        if(est !== undefined && est !== null) {
+                            const novoEst = est + 1;
+                            estoquePorProduto[sub.idProduto] = novoEst;
+                            const subProd = produtosDB.find(x => x.id === sub.idProduto);
+                            if (sincronizarAtivoPorEstoque(subProd, novoEst)) catalogoAlteradoPorEstoque = true;
+                        }
+                    });
+                } else {
+                    const est = estoquePorProduto[item.idProduto];
+                    if(est !== undefined && est !== null) {
+                        const novoEst = est + 1;
+                        estoquePorProduto[item.idProduto] = novoEst;
+                        const prod = produtosDB.find(x => x.id === item.idProduto);
+                        if (sincronizarAtivoPorEstoque(prod, novoEst)) catalogoAlteradoPorEstoque = true;
+                    }
+                }
+            });
+            p.statusPainel = 'cancelado';
+            p.motivoCancelamento = motivo;
+            return catalogoAlteradoPorEstoque;
+        }
+
         async function cancelarPedido(id) {
             if (!usuarioAtual || !usuarioAtual.isMaster) return exibirAviso("Só o usuário Master pode cancelar/apagar pedidos.");
 
@@ -4682,31 +4716,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (!motivo.trim()) return exibirAviso("É obrigatório informar o motivo do cancelamento.");
 
             if (p && p.statusPainel !== 'cancelado') {
-                let catalogoAlteradoPorEstoque = false;
-                p.itens.forEach(item => {
-                    if(item.isCombo) {
-                        item.itensComboEscolhidos.forEach(sub => {
-                            const est = estoquePorProduto[sub.idProduto];
-                            if(est !== undefined && est !== null) {
-                                const novoEst = est + 1;
-                                estoquePorProduto[sub.idProduto] = novoEst;
-                                const subProd = produtosDB.find(x => x.id === sub.idProduto);
-                                if (sincronizarAtivoPorEstoque(subProd, novoEst)) catalogoAlteradoPorEstoque = true;
-                            }
-                        });
-                    } else {
-                        const est = estoquePorProduto[item.idProduto];
-                        if(est !== undefined && est !== null) {
-                            const novoEst = est + 1;
-                            estoquePorProduto[item.idProduto] = novoEst;
-                            const prod = produtosDB.find(x => x.id === item.idProduto);
-                            if (sincronizarAtivoPorEstoque(prod, novoEst)) catalogoAlteradoPorEstoque = true;
-                        }
-                    }
-                });
-                p.statusPainel = 'cancelado';
-                p.motivoCancelamento = motivo.trim();
-                if (catalogoAlteradoPorEstoque) salvarCatalogo();
+                const catalogoAlterado = cancelarPedidoInterno(p, motivo.trim());
+                if (catalogoAlterado) salvarCatalogo();
                 salvarNoBancoLocal();
                 renderizarMenu(categoriaFiltroAtual);
                 renderizarTabelaProdutos();
@@ -5272,7 +5283,36 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             // senão esses pedidos ficariam "órfãos" depois do fechamento.
             const pendentes = pedidosGerais.filter(p => p.caixaId === idCaixa && p.statusPainel !== 'entregue' && p.statusPainel !== 'cancelado');
             if (pendentes.length > 0) {
-                return exibirAviso(`Ainda há ${pendentes.length} pedido(s) pendente(s) desse caixa no Balcão ou em Pedidos em Pausa. Finalize ou cancele todos antes de fechar o caixa.`, "Caixa não pode ser fechado");
+                if (!usuarioAtual.isMaster) {
+                    return exibirAviso(`Ainda há ${pendentes.length} pedido(s) pendente(s) desse caixa no Balcão ou em Pedidos em Pausa. Finalize ou cancele todos antes de fechar o caixa.`, "Caixa não pode ser fechado");
+                }
+                // Master pode forçar: cancela em lote os pendentes (devolve
+                // o estoque de cada um, igual cancelarPedido faz um por um)
+                // pra liberar o fechamento — útil no fim do evento, quando
+                // sobra pedido que não vai mais ser produzido/entregue.
+                // Sempre pede confirmação explícita + motivo, nunca aplica
+                // silencioso — é uma ação que não dá pra desfazer.
+                const listaNomes = pendentes.map(p => `#${rotuloPedido(p)} (${p.cliente})`).join(', ');
+                const confirmouForcar = await pedirConfirmacao(
+                    `Ainda há ${pendentes.length} pedido(s) pendente(s) neste caixa: ${listaNomes}. Forçar o fechamento CANCELA todos esses pedidos (devolve o estoque) — não dá pra desfazer. Forçar mesmo assim?`,
+                    { titulo: '⚠️ Forçar Fechamento de Caixa' }
+                );
+                if (!confirmouForcar) return;
+
+                const motivoForcado = await pedirTexto('Motivo do cancelamento em lote (obrigatório):', { titulo: '🗑️ Forçar Fechamento — Motivo', valorInicial: 'Fechamento forçado do caixa' });
+                if (motivoForcado === null) return;
+                if (!motivoForcado.trim()) return exibirAviso("É obrigatório informar o motivo.");
+
+                let catalogoAlteradoPorEstoqueForcado = false;
+                pendentes.forEach(p => {
+                    if (cancelarPedidoInterno(p, motivoForcado.trim())) catalogoAlteradoPorEstoqueForcado = true;
+                });
+                if (catalogoAlteradoPorEstoqueForcado) salvarCatalogo();
+                salvarNoBancoLocal();
+                renderizarMenu(categoriaFiltroAtual);
+                renderizarTabelaProdutos();
+                atualizarTelas();
+                atualizarFiltrosGestao();
             }
 
             const senha = await pedirTexto(`Confirme sua senha (${usuarioAtual.nome}) para fechar o caixa de ${caixa.usuarioNome}:`, { titulo: '🔒 Confirmar senha', senha: true });
