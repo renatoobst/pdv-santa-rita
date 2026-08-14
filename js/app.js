@@ -2123,7 +2123,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                         const prod = produtosDB.find(x => x.id === item.idProduto);
                         if (prod && Array.isArray(prod.fichaTecnica) && prod.fichaTecnica.length > 0) {
                             const { custo, incompleto } = calcularCustoProducao(prod.fichaTecnica);
-                            custoTotal += custo * item.qtd;
+                            custoTotal += custo * (item.qtd || 1);
                             if (incompleto) itensSemCusto++;
                         } else {
                             itensSemCusto++;
@@ -5325,6 +5325,17 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 return exibirAviso("O Nome da Campanha é obrigatório para fechar o caixa!");
             }
 
+            // Tudo que segue (cálculo + salvar + imprimir) fica blindado num
+            // try/catch — antes, se QUALQUER conta aqui dentro desse
+            // (ex: um pedido antigo com campo faltando) explodisse, a
+            // função simplesmente parava no meio sem avisar nada: o caixa
+            // continuava em caixasAbertos (parecendo "não fechou") e
+            // ninguém via mensagem de erro nenhuma. Agora qualquer falha
+            // aparece na tela em vez de falhar em silêncio, e só mexe em
+            // caixasAbertos/pedidosGerais depois que os cálculos já deram
+            // certo — nunca deixa o caixa pela metade.
+            try {
+
             const pedidosDoCaixa = pedidosGerais.filter(p => p.caixaId === idCaixa);
             const validos = pedidosDoCaixa.filter(p => p.statusPainel !== 'cancelado');
             const validosFinanceiros = validos.filter(p => p.pagamento && !p.pagamento.startsWith('Bonificação'));
@@ -5446,6 +5457,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             // sumir da tela até a próxima atualização.
             await enviarFechamentoParaSupabase(registroFechamento);
             mudarAba('tela-fechamento-caixa', document.getElementById('btn-sub-fechamento'));
+
+            } catch (erro) {
+                console.error('Falha ao fechar caixa:', erro);
+                exibirAviso(`❌ Deu um erro durante o fechamento: ${erro.message || erro}. Confira a tela: se o caixa ainda aparecer na lista de abertos, tente fechar de novo; se já tiver sumido de lá, o fechamento em si aconteceu (confira em Histórico de Caixas) e o erro foi só num passo depois (imprimir/sincronizar). Se precisar, avise o suporte com essa mensagem.`, 'Erro ao Fechar Caixa');
+            }
         }
 
         async function excluirRegistroCaixa(idCaixa) {
