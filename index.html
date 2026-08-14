@@ -892,14 +892,6 @@
                     </div>
                 </div>
 
-                <div style="margin-top:18px; padding-top:14px; border-top: 2px solid #e5e7eb;">
-                    <label class="item-checkbox-ingrediente" style="font-size:0.9rem;">
-                        <input type="checkbox" id="cfg-separar-balcao-doces" onchange="salvarConfiguracoesPadrao()">
-                        🍬 Separar Balcão Doces: pedido sem NADA de cozinha (doce, refri...) vai pro Balcão 02 em vez do Balcão 01
-                    </label>
-                    <p style="font-size: 0.78rem; color: #6b7280; margin: 4px 0 0 24px;">Desligado = tudo continua no Balcão 01, como sempre foi.</p>
-                </div>
-
                 <button class="btn btn-neutro" style="width:100%; margin-top:15px;" onclick="fecharModalConfigPedido()">Fechar</button>
             </div>
         </div>
@@ -1001,6 +993,18 @@
                 </label>
                 <small style="display:block; margin-top:6px; color:gray;">Ative isso na máquina que está de verdade ligada na impressora térmica. Ela vai imprimir automaticamente sempre que outro dispositivo mandar um trabalho pra cá — precisa deixar essa aba aberta e logada.</small>
                 <p id="status-impressora-rede" style="font-weight:bold; margin-top:8px; color: #16a34a;"></p>
+            </div>
+
+            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); max-width: 700px; margin-top: 20px;">
+                <h3 style="margin-top:0;">🍬 Balcão 02 (Doces)</h3>
+                <p style="font-size:0.85rem; color:#4b5563;">
+                    Diferente das opções acima, isso <b>sincroniza com todos os dispositivos</b> da barraca. Quando ligado, pedido sem NENHUM item de cozinha (doce, refri...) vai pro Balcão 02 em vez do Balcão 01, e o botão "🍬 Balcão 02" aparece no menu de todo mundo.
+                </p>
+                <label class="item-checkbox-ingrediente" style="margin-top: 10px;">
+                    <input type="checkbox" id="cfg-separar-balcao-doces" onchange="salvarConfiguracoesPadrao()">
+                    Separar Balcão Doces
+                </label>
+                <p style="font-size: 0.78rem; color: #6b7280; margin: 6px 0 0 24px;">Desligado = tudo continua no Balcão 01, como sempre foi.</p>
             </div>
         </div>
 

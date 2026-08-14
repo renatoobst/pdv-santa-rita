@@ -883,6 +883,9 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 : '';
             if (chkAtiva.checked || chkSou.checked) obterCanalImpressaoRede();
             atualizarSelectDestinoImpressao();
+
+            const chkBalcaoDoces = document.getElementById('cfg-separar-balcao-doces');
+            if (chkBalcaoDoces) chkBalcaoDoces.checked = !!configPadroes.separarBalcaoDoces;
         }
 
         let carrinho = [];
