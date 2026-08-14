@@ -1246,7 +1246,15 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
         let carrinho = [];
         let pedidoEmEdicaoId = null; let categoriaFiltroAtual = 'Todos'; let produtoEmEdicaoId = null;
-        let categoriaFiltroTabelaProdutos = 'Todos'; 
+        let categoriaFiltroTabelaProdutos = 'Todos';
+        // 'venda' | 'insumo' — qual dos dois sub-menus de "📦 Produtos" a
+        // tabela está mostrando agora (ver filtrarProdutosPorTipo).
+        let tipoFiltroTabelaProdutos = 'venda';
+
+        function filtrarProdutosPorTipo(tipo, botao) {
+            tipoFiltroTabelaProdutos = tipo;
+            mudarAba('tela-produtos', botao);
+        } 
         
         let chartVendas, chartHorarios, chartCategorias, chartRetirada;
         let chartPagamentoCaixa, chartProdutosCaixa;
@@ -1371,6 +1379,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if(idAba === 'tela-relatorio') atualizarDashboard();
             if(idAba === 'tela-fechamento-caixa') carregarHistoricoCaixas();
             if(idAba === 'tela-produtos') { renderizarCategoriasUI(); renderizarTabelaProdutos(); if (produtoEmEdicaoId === null) renderizarChecklistBarracasProduto(); }
+            if(idAba === 'tela-entrada-estoque') { popularSelectsEntradaEstoque(); mudarModoEntradaEstoque('compra'); }
             if(idAba === 'tela-pedido') {
                 renderizarCategoriasUI();
                 renderizarMenu(categoriaFiltroAtual);
@@ -1932,6 +1941,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 document.getElementById('box-estoque-simples').style.display = 'none';
                 document.getElementById('box-cozinha-simples').style.display = 'none';
                 document.getElementById('box-itens-combo').style.display = 'block';
+                // Insumo não existe pra combo — combo é sempre vendido.
+                document.getElementById('box-insumo-checkbox').style.display = 'none';
+                document.getElementById('novo-prod-insumo').checked = false;
+                document.getElementById('box-preco-simples').style.display = 'block';
                 // Combo já é a categoria "Combos" por definição — não faz
                 // sentido escolher categoria/subcategoria pra ele.
                 document.getElementById('box-categoria-subcategoria').style.display = 'none';
@@ -1940,11 +1953,21 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 document.getElementById('titulo-form-produto').innerText = "Cadastrar Combo";
             } else {
                 document.getElementById('box-estoque-simples').style.display = 'block';
-                document.getElementById('box-cozinha-simples').style.display = 'block';
                 document.getElementById('box-itens-combo').style.display = 'none';
                 document.getElementById('box-categoria-subcategoria').style.display = 'block';
+                document.getElementById('box-insumo-checkbox').style.display = 'block';
+                atualizarCamposInsumo();
                 document.getElementById('titulo-form-produto').innerText = "Cadastrar Produto";
             }
+        }
+
+        // Esconde Preço/Cozinha-Balcão quando "É um insumo" está marcado —
+        // insumo é matéria-prima (farinha, embalagem...), nunca vendido
+        // direto, então essas duas perguntas não fazem sentido pra ele.
+        function atualizarCamposInsumo() {
+            const ehInsumo = document.getElementById('novo-prod-insumo').checked;
+            document.getElementById('box-preco-simples').style.display = ehInsumo ? 'none' : 'block';
+            document.getElementById('box-cozinha-simples').style.display = ehInsumo ? 'none' : 'block';
         }
 
         function addProdutoTemporarioAoCombo() {
@@ -2024,7 +2047,12 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             const buscaInput = document.getElementById('busca-tabela-produtos');
             const termoBusca = buscaInput ? buscaInput.value.trim().toLowerCase() : '';
 
-            let lista = [...produtosDB];
+            // Combo não tem tipo próprio (é sempre vendido, nunca insumo) --
+            // conta como 'venda' pra esse filtro mesmo sem o campo.
+            let lista = produtosDB.filter(p => p.isCombo || (p.tipo || 'venda') === tipoFiltroTabelaProdutos);
+
+            const tituloTela = document.getElementById('titulo-tela-produtos');
+            if (tituloTela) tituloTela.innerText = tipoFiltroTabelaProdutos === 'insumo' ? '🧪 Gerenciar Insumos' : '🛒 Gerenciar Produtos & Combos';
 
             if (categoriaFiltroTabelaProdutos && categoriaFiltroTabelaProdutos !== 'Todos') {
                 lista = lista.filter(p => p.categoria === categoriaFiltroTabelaProdutos);
@@ -2075,7 +2103,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                         <td style="padding: 10px; font-weight: bold;"><span style="color:gray; cursor:grab;" title="Arraste para reordenar (dentro da mesma categoria)">☰</span> #${p.id}</td>
                         <td>${imgThumb}</td>
                         <td>${badgeStatus}</td>
-                        <td>${p.nome} ${desc} <br><span style="font-size: 0.8rem; color: gray;">${p.cozinha ? '👨‍🍳 Cozinha' : '🛍️ Balcão'}</span></td>
+                        <td>${p.nome} ${desc} <br><span style="font-size: 0.8rem; color: gray;">${p.tipo === 'insumo' ? '🧪 Insumo' : (p.cozinha ? '👨‍🍳 Cozinha' : '🛍️ Balcão')}</span></td>
                         <td><span style="background:#e5e7eb; padding:2px 6px; border-radius:4px; font-size:0.8rem;">${p.categoria}</span>${p.subcategoria ? `<br><span style="color:gray; font-size:0.7rem;">↳ ${p.subcategoria}</span>` : ''}</td>
                         <td style="max-width:160px;">${badgesBarracas}</td>
                         <td style="font-weight: bold;">R$ ${p.preco.toFixed(2)}</td><td style="${corEstoque}">${txtEstoque}</td>
@@ -2249,6 +2277,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 document.getElementById('preview-foto-container').style.display = 'none';
             }
 
+            // Precisa vir ANTES de mudarModoCadastro() — no modo "simples"
+            // ela chama atualizarCamposInsumo(), que lê esse checkbox pra
+            // decidir se esconde Preço/Cozinha-Balcão.
+            document.getElementById('novo-prod-insumo').checked = p.tipo === 'insumo';
             mudarModoCadastro(p.isCombo ? 'combo' : 'simples');
 
             if(p.isCombo) {
@@ -2261,7 +2293,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 renderizarListaComboTemporario();
             } else {
                 const estoqueAqui = estoquePorProduto[p.id];
-                document.getElementById('novo-prod-estoque').value = (estoqueAqui !== undefined && estoqueAqui !== null) ? estoqueAqui : '';
+                document.getElementById('txt-estoque-atual-cadastro').innerText = (estoqueAqui !== undefined && estoqueAqui !== null) ? `${estoqueAqui} un.` : '∞ Livre (sem controle)';
                 document.getElementById('novo-prod-cozinha').value = p.cozinha ? 'cozinha' : (p.entregaInstantanea ? 'instantaneo' : 'balcao');
             }
 
@@ -2276,12 +2308,13 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             produtoEmEdicaoId = null;
             document.getElementById('novo-prod-nome').value = '';
             document.getElementById('novo-prod-preco').value = '';
-            document.getElementById('novo-prod-estoque').value = '';
+            document.getElementById('txt-estoque-atual-cadastro').innerText = '—';
             document.getElementById('novo-prod-foto').value = '';
             document.getElementById('file-prod-foto').value = '';
             document.getElementById('novo-prod-ativo').value = "true";
             document.getElementById('novo-prod-ingredientes').value = '';
             document.getElementById('novo-prod-subcategoria').value = '';
+            document.getElementById('novo-prod-insumo').checked = false;
             document.getElementById('preview-foto-container').style.display = 'none';
             renderizarChecklistBarracasProduto();
 
@@ -2296,7 +2329,6 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (uploadFotoEmAndamento) return exibirAviso("A foto ainda está sendo enviada — aguarde um instante e tente salvar de novo.");
 
             let nome = document.getElementById('novo-prod-nome').value.trim();
-            let preco = parseFloat(document.getElementById('novo-prod-preco').value);
             let categoria = document.getElementById('novo-prod-categoria').value;
             let subcategoria = document.getElementById('novo-prod-subcategoria').value.trim();
             let foto = document.getElementById('novo-prod-foto').value.trim();
@@ -2304,54 +2336,57 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             let ingredientes = document.getElementById('novo-prod-ingredientes').value.trim();
             let barracasMarcadas = Array.from(document.querySelectorAll('.chk-barraca-produto:checked')).map(chk => chk.value);
 
-            if (!nome || isNaN(preco) || preco <= 0 || !categoria) return exibirAviso("Preencha todos os campos do produto corretamente.");
-
             let isCombo = (modoCadastroAtivo === 'combo');
+            // Insumo (matéria-prima, nunca vendida direto) não existe pra combo.
+            let ehInsumo = !isCombo && document.getElementById('novo-prod-insumo').checked;
+            let preco = ehInsumo ? 0 : parseFloat(document.getElementById('novo-prod-preco').value);
+
+            if (!nome || !categoria || (!ehInsumo && (isNaN(preco) || preco <= 0))) return exibirAviso("Preencha todos os campos do produto corretamente.");
+
             let cozinha = false;
             let entregaInstantanea = false;
-            let estoqueFinal = null;
             let finalItensCombo = [];
 
             if (isCombo) {
                 if (comboTemporario.length === 0) return exibirAviso("O combo precisa ter pelo menos 1 item incluso!");
                 finalItensCombo = JSON.parse(JSON.stringify(comboTemporario));
                 cozinha = true;
-            } else {
+            } else if (!ehInsumo) {
                 const direcionamento = document.getElementById('novo-prod-cozinha').value;
                 cozinha = direcionamento === 'cozinha';
                 entregaInstantanea = direcionamento === 'instantaneo';
-                let estoqueInput = document.getElementById('novo-prod-estoque').value.trim();
-                estoqueFinal = estoqueInput === '' ? null : parseInt(estoqueInput);
-                // Estoque é só desta barraca (estoquePorProduto), não mais um campo
-                // do produto — por isso só desativa automaticamente (nunca reativa
-                // aqui, isso fica a cargo do dropdown "Status do Produto" manual)
-                // quando o produto pertence a exatamente 1 barraca, senão zerar o
-                // estoque aqui apagaria o produto também das outras barracas.
-                if (estoqueFinal !== null && estoqueFinal <= 0 && barracasMarcadas.length === 1) {
-                    ativo = false;
-                }
             }
 
+            // Estoque não é mais editado aqui de jeito nenhum — só pela tela
+            // "📥 Entrada de Produtos" (entrada de compra) ou um Ajuste de
+            // Inventário. Editar cadastro (nome, preço, categoria...) nunca
+            // mais mexe no número de estoque, evitando resetar sem querer.
+            const eraNovoProduto = produtoEmEdicaoId === null;
             let idSalvo;
             if (produtoEmEdicaoId !== null) {
                 let p = produtosDB.find(prod => prod.id === produtoEmEdicaoId);
                 p.nome = nome; p.preco = preco; p.categoria = categoria; p.subcategoria = subcategoria; p.cozinha = cozinha;
                 p.entregaInstantanea = entregaInstantanea;
                 p.isCombo = isCombo; p.itensCombo = finalItensCombo; p.foto = foto; p.ativo = ativo; p.barracas = barracasMarcadas;
-                p.ingredientes = ingredientes;
+                p.ingredientes = ingredientes; p.tipo = ehInsumo ? 'insumo' : 'venda';
                 idSalvo = p.id;
                 cancelarEdicaoProduto();
             } else {
                 idSalvo = produtosDB.length > 0 ? Math.max(...produtosDB.map(p => p.id)) + 1 : 1;
                 produtosDB.push({
                     id: idSalvo,
-                    nome, preco, categoria, subcategoria, cozinha, entregaInstantanea, isCombo, itensCombo: finalItensCombo, foto, ativo, barracas: barracasMarcadas, ingredientes
+                    nome, preco, categoria, subcategoria, cozinha, entregaInstantanea, isCombo, itensCombo: finalItensCombo, foto, ativo, barracas: barracasMarcadas, ingredientes,
+                    tipo: ehInsumo ? 'insumo' : 'venda'
                 });
                 cancelarEdicaoProduto();
             }
 
-            if (!isCombo) {
-                estoquePorProduto[idSalvo] = estoqueFinal;
+            if (!isCombo && eraNovoProduto) {
+                // Só inicializa (como "estoque livre") na CRIAÇÃO — editar
+                // um produto depois nunca mais mexe no estoque aqui; isso
+                // fica só a cargo de "📥 Entrada de Produtos" / Ajuste de
+                // Inventário, que ficam com o histórico de por que mudou.
+                estoquePorProduto[idSalvo] = null;
                 salvarNoBancoLocal();
             }
             salvarCatalogo();
@@ -2384,11 +2419,32 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if(atualVal === null) return exibirAviso("Este produto possui Estoque Livre nesta barraca.");
             const add = await pedirTexto(`Adicionar estoque ao ${p.nome} nesta barraca (Atual: ${atualVal}):`, { titulo: '📦 Adicionar Estoque' });
             if(add && !isNaN(add)) {
-                const novoEstoque = atualVal + parseInt(add);
+                const qtdAdicionada = parseInt(add);
+                const novoEstoque = atualVal + qtdAdicionada;
                 estoquePorProduto[idProduto] = novoEstoque;
                 if (sincronizarAtivoPorEstoque(p, novoEstoque)) salvarCatalogo();
                 salvarNoBancoLocal();
                 renderizarTabelaProdutos(); renderizarMenu(categoriaFiltroAtual);
+
+                // Atalho rápido também entra no histórico de movimentações —
+                // sem nota fiscal/custo (é só um "+ rápido"), mas nenhuma
+                // entrada de estoque deve escapar do registro, venha de onde vier.
+                try {
+                    const { error } = await supabaseClient.from('pdv_movimentacoes_estoque').insert({
+                        barraca_id: barracaStateId,
+                        produto_id: idProduto,
+                        produto_nome: p.nome,
+                        tipo: 'entrada',
+                        quantidade: qtdAdicionada,
+                        estoque_antes: atualVal,
+                        estoque_depois: novoEstoque,
+                        motivo: 'Atalho rápido (📦 + na lista de produtos)',
+                        usuario_nome: usuarioAtual ? usuarioAtual.nome : null
+                    });
+                    if (error) throw error;
+                } catch (erro) {
+                    console.error('Falha ao gravar movimentação do atalho rápido de estoque:', erro);
+                }
             }
         }
 
@@ -2403,6 +2459,276 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 renderizarTabelaProdutos();
                 renderizarMenu(categoriaFiltroAtual);
             }
+        }
+
+        // --- Entrada de Estoque (compra + ajuste de inventário) ---
+        // Único jeito de estoque mudar fora da baixa automática de venda —
+        // ver salvarProduto() (cadastro não mexe mais nisso). Cada entrada/
+        // ajuste vira 1 linha em pdv_movimentacoes_estoque por produto (ver
+        // supabase/pdv_movimentacoes_estoque.sql), pra guardar o histórico
+        // de por que o estoque mudou (nota fiscal, custo, motivo).
+        let itensEntradaEstoque = []; // { produtoId, produtoNome, qtd, custoUnitario }
+
+        function popularSelectsEntradaEstoque() {
+            const opcoes = produtosDB.filter(p => !p.isCombo)
+                .map(p => `<option value="${p.id}">${p.nome}${p.tipo === 'insumo' ? ' 🧪' : ''}</option>`).join('');
+            const selectItem = document.getElementById('entrada-item-select');
+            const selectAjuste = document.getElementById('ajuste-produto-select');
+            if (selectItem) selectItem.innerHTML = '<option value="">-- Selecione --</option>' + opcoes;
+            if (selectAjuste) selectAjuste.innerHTML = '<option value="">-- Selecione --</option>' + opcoes;
+        }
+
+        function mudarModoEntradaEstoque(modo) {
+            ['compra', 'ajuste', 'historico'].forEach(m => {
+                const tab = document.getElementById(`tab-entrada-${m}`);
+                tab.style.background = m === modo ? 'var(--primary)' : 'transparent';
+                tab.style.color = m === modo ? 'white' : '#333';
+                document.getElementById(`box-entrada-${m}`).style.display = m === modo ? 'block' : 'none';
+            });
+            if (modo === 'historico') carregarMovimentacoesEstoque();
+        }
+
+        function addItemEntradaEstoque() {
+            const select = document.getElementById('entrada-item-select');
+            const idProduto = parseInt(select.value);
+            const qtd = parseFloat(document.getElementById('entrada-item-qtd').value);
+            const custo = parseFloat(document.getElementById('entrada-item-custo').value);
+            if (!idProduto || isNaN(qtd) || qtd <= 0 || isNaN(custo) || custo < 0) {
+                return exibirAviso('Selecione o produto e preencha quantidade/custo corretamente.');
+            }
+            const produto = produtosDB.find(p => p.id === idProduto);
+            itensEntradaEstoque.push({ produtoId: idProduto, produtoNome: produto.nome, qtd, custoUnitario: custo });
+            document.getElementById('entrada-item-qtd').value = '1';
+            document.getElementById('entrada-item-custo').value = '';
+            select.value = '';
+            renderizarItensEntradaEstoque();
+        }
+
+        function removerItemEntradaEstoque(index) {
+            itensEntradaEstoque.splice(index, 1);
+            renderizarItensEntradaEstoque();
+        }
+
+        function renderizarItensEntradaEstoque() {
+            const tbody = document.getElementById('tabela-itens-entrada-estoque');
+            if (itensEntradaEstoque.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="padding:12px; text-align:center; color:gray;">Nenhum item adicionado.</td></tr>';
+            } else {
+                tbody.innerHTML = itensEntradaEstoque.map((item, i) => `
+                    <tr style="border-bottom:1px solid #f3f4f6;">
+                        <td style="padding:6px;">${item.produtoNome}</td>
+                        <td>${item.qtd}</td>
+                        <td>R$ ${item.custoUnitario.toFixed(2)}</td>
+                        <td>R$ ${(item.qtd * item.custoUnitario).toFixed(2)}</td>
+                        <td><button class="btn btn-danger" style="padding:3px 8px; font-size:0.75rem;" onclick="removerItemEntradaEstoque(${i})">🗑️</button></td>
+                    </tr>
+                `).join('');
+            }
+            atualizarTotalEntradaEstoque();
+        }
+
+        function atualizarTotalEntradaEstoque() {
+            const frete = parseFloat(document.getElementById('entrada-frete').value) || 0;
+            const despesas = parseFloat(document.getElementById('entrada-outras-despesas').value) || 0;
+            const subtotal = itensEntradaEstoque.reduce((a, i) => a + i.qtd * i.custoUnitario, 0);
+            document.getElementById('txt-total-entrada-estoque').innerText = (subtotal + frete + despesas).toFixed(2);
+        }
+
+        // Estoque é por barraca (estoquePorProduto vive dentro do pdv_state
+        // DESTA barraca) — confirmar uma entrada só muda o estoque de quem
+        // está logado nela agora, mesmo o produto sendo do catálogo
+        // compartilhado. Frete/despesas são rateados entre os itens
+        // proporcional ao valor de cada um (custo "pousado"/landed cost).
+        async function confirmarEntradaEstoque() {
+            if (itensEntradaEstoque.length === 0) return exibirAviso('Adicione pelo menos 1 item antes de confirmar a entrada.');
+
+            const numeroNF = document.getElementById('entrada-numero-nf').value.trim();
+            const fornecedor = document.getElementById('entrada-fornecedor').value.trim();
+            const frete = parseFloat(document.getElementById('entrada-frete').value) || 0;
+            const despesas = parseFloat(document.getElementById('entrada-outras-despesas').value) || 0;
+            const rateioTotal = frete + despesas;
+            const subtotalGeral = itensEntradaEstoque.reduce((a, i) => a + i.qtd * i.custoUnitario, 0);
+
+            const linhas = itensEntradaEstoque.map(item => {
+                const valorItem = item.qtd * item.custoUnitario;
+                const shareRateio = subtotalGeral > 0 ? (valorItem / subtotalGeral) * rateioTotal : 0;
+                const custoUnitarioFinal = item.custoUnitario + (shareRateio / item.qtd);
+
+                const estoqueAntes = estoquePorProduto[item.produtoId];
+                const estoqueAntesVal = (estoqueAntes === undefined || estoqueAntes === null) ? 0 : estoqueAntes;
+                const estoqueDepois = estoqueAntesVal + item.qtd;
+                estoquePorProduto[item.produtoId] = estoqueDepois;
+
+                const produto = produtosDB.find(p => p.id === item.produtoId);
+                if (produto) {
+                    produto.custoUnitario = custoUnitarioFinal;
+                    sincronizarAtivoPorEstoque(produto, estoqueDepois);
+                }
+
+                return {
+                    barraca_id: barracaStateId,
+                    produto_id: item.produtoId,
+                    produto_nome: item.produtoNome,
+                    tipo: 'entrada',
+                    quantidade: item.qtd,
+                    estoque_antes: estoqueAntesVal,
+                    estoque_depois: estoqueDepois,
+                    custo_unitario: item.custoUnitario,
+                    custo_unitario_final: custoUnitarioFinal,
+                    numero_nota_fiscal: numeroNF || null,
+                    fornecedor: fornecedor || null,
+                    usuario_nome: usuarioAtual ? usuarioAtual.nome : null
+                };
+            });
+
+            salvarNoBancoLocal();
+            salvarCatalogo();
+            renderizarTabelaProdutos();
+            renderizarMenu(categoriaFiltroAtual);
+
+            try {
+                const { error } = await supabaseClient.from('pdv_movimentacoes_estoque').insert(linhas);
+                if (error) throw error;
+                exibirAviso(`Entrada confirmada! Estoque atualizado pra ${linhas.length} item(ns).`);
+            } catch (erro) {
+                console.error('Falha ao gravar movimentação de estoque:', erro);
+                exibirAviso('O estoque já foi atualizado, mas não deu pra gravar o histórico dessa entrada agora (sem internet?). O número em si está certo.');
+            }
+
+            itensEntradaEstoque = [];
+            document.getElementById('entrada-data-nf').value = '';
+            document.getElementById('entrada-numero-nf').value = '';
+            document.getElementById('entrada-fornecedor').value = '';
+            document.getElementById('entrada-frete').value = '';
+            document.getElementById('entrada-outras-despesas').value = '';
+            renderizarItensEntradaEstoque();
+        }
+
+        function atualizarEstoqueAtualAjuste() {
+            const idProduto = parseInt(document.getElementById('ajuste-produto-select').value);
+            const atual = estoquePorProduto[idProduto];
+            const atualVal = (atual === undefined || atual === null) ? null : atual;
+            document.getElementById('txt-ajuste-estoque-atual').innerText = atualVal === null ? '∞ Livre (sem controle)' : `${atualVal} un.`;
+            document.getElementById('ajuste-estoque-contado').value = atualVal !== null ? atualVal : '';
+            atualizarDiferencaAjuste();
+        }
+
+        function atualizarDiferencaAjuste() {
+            const idProduto = parseInt(document.getElementById('ajuste-produto-select').value);
+            const atual = estoquePorProduto[idProduto];
+            const atualVal = (atual === undefined || atual === null) ? 0 : atual;
+            const contadoStr = document.getElementById('ajuste-estoque-contado').value;
+            const txtDif = document.getElementById('txt-ajuste-diferenca');
+            if (contadoStr === '') { txtDif.innerText = '—'; return; }
+            const contado = parseFloat(contadoStr);
+            if (isNaN(contado)) { txtDif.innerText = '—'; return; }
+            const dif = contado - atualVal;
+            txtDif.innerText = (dif > 0 ? '+' : '') + dif;
+            txtDif.style.color = dif === 0 ? '#111827' : (dif > 0 ? 'var(--success)' : 'var(--danger)');
+        }
+
+        async function confirmarAjusteInventario() {
+            const idProduto = parseInt(document.getElementById('ajuste-produto-select').value);
+            if (!idProduto) return exibirAviso('Selecione um produto ou insumo.');
+            const contadoStr = document.getElementById('ajuste-estoque-contado').value;
+            if (contadoStr === '') return exibirAviso('Preencha o estoque contado fisicamente.');
+            const contado = parseFloat(contadoStr);
+            if (isNaN(contado) || contado < 0) return exibirAviso('Estoque contado inválido.');
+            const motivo = document.getElementById('ajuste-motivo').value.trim();
+            if (!motivo) return exibirAviso('O motivo do ajuste é obrigatório.');
+
+            const produto = produtosDB.find(p => p.id === idProduto);
+            const atual = estoquePorProduto[idProduto];
+            const atualVal = (atual === undefined || atual === null) ? 0 : atual;
+            const diferenca = contado - atualVal;
+
+            estoquePorProduto[idProduto] = contado;
+            if (produto && sincronizarAtivoPorEstoque(produto, contado)) salvarCatalogo();
+            salvarNoBancoLocal();
+            renderizarTabelaProdutos();
+            renderizarMenu(categoriaFiltroAtual);
+
+            try {
+                const { error } = await supabaseClient.from('pdv_movimentacoes_estoque').insert({
+                    barraca_id: barracaStateId,
+                    produto_id: idProduto,
+                    produto_nome: produto ? produto.nome : '?',
+                    tipo: 'ajuste',
+                    quantidade: diferenca,
+                    estoque_antes: atualVal,
+                    estoque_depois: contado,
+                    motivo,
+                    usuario_nome: usuarioAtual ? usuarioAtual.nome : null
+                });
+                if (error) throw error;
+                exibirAviso('Ajuste de inventário confirmado!');
+            } catch (erro) {
+                console.error('Falha ao gravar ajuste de inventário:', erro);
+                exibirAviso('O estoque já foi ajustado, mas não deu pra gravar o histórico agora (sem internet?). O número em si está certo.');
+            }
+
+            document.getElementById('ajuste-produto-select').value = '';
+            document.getElementById('txt-ajuste-estoque-atual').innerText = '—';
+            document.getElementById('ajuste-estoque-contado').value = '';
+            document.getElementById('txt-ajuste-diferenca').innerText = '—';
+            document.getElementById('ajuste-motivo').value = '';
+        }
+
+        const ROTULOS_TIPO_MOV_ESTOQUE = {
+            entrada: { texto: '📥 Entrada', cor: '#16a34a' },
+            ajuste: { texto: '🔧 Ajuste', cor: '#d97706' }
+        };
+
+        async function carregarMovimentacoesEstoque() {
+            const tbody = document.getElementById('tabela-movimentacoes-estoque');
+            if (!tbody || !barracaStateId) return;
+            tbody.innerHTML = '<tr><td colspan="9" style="padding:20px; text-align:center; color:gray;">Carregando...</td></tr>';
+
+            const inicio = document.getElementById('filtro-mov-data-inicio').value;
+            const fim = document.getElementById('filtro-mov-data-fim').value;
+            const tipo = document.getElementById('filtro-mov-tipo').value;
+
+            let consulta = supabaseClient.from('pdv_movimentacoes_estoque').select('*').eq('barraca_id', barracaStateId).order('criado_em', { ascending: false }).limit(500);
+            if (tipo) consulta = consulta.eq('tipo', tipo);
+            if (inicio) consulta = consulta.gte('criado_em', `${inicio}T00:00:00`);
+            if (fim) consulta = consulta.lte('criado_em', `${fim}T23:59:59`);
+
+            try {
+                const { data, error } = await consulta;
+                if (error) throw error;
+                renderizarTabelaMovimentacoesEstoque(data || []);
+            } catch (erro) {
+                console.error('Falha ao carregar movimentações de estoque:', erro);
+                tbody.innerHTML = '<tr><td colspan="9" style="padding:20px; text-align:center; color:var(--danger);">Não foi possível carregar o histórico. A tabela pdv_movimentacoes_estoque existe no Supabase? (ver supabase/pdv_movimentacoes_estoque.sql)</td></tr>';
+            }
+        }
+
+        function renderizarTabelaMovimentacoesEstoque(linhas) {
+            const tbody = document.getElementById('tabela-movimentacoes-estoque');
+            if (!tbody) return;
+            if (linhas.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" style="padding:20px; text-align:center; color:gray;">Nenhuma movimentação encontrada.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = linhas.map(l => {
+                const rotulo = ROTULOS_TIPO_MOV_ESTOQUE[l.tipo] || { texto: l.tipo, cor: '#374151' };
+                const dataHora = new Date(l.criado_em).toLocaleString('pt-BR');
+                const nfFornecedor = [l.numero_nota_fiscal, l.fornecedor].filter(Boolean).join(' / ') || '-';
+                const qtdNum = Number(l.quantidade);
+                return `
+                    <tr style="border-bottom:1px solid #e5e7eb;">
+                        <td style="padding:8px; white-space:nowrap;">${dataHora}</td>
+                        <td><span style="color:${rotulo.cor}; font-weight:bold;">${rotulo.texto}</span></td>
+                        <td style="font-weight:bold;">${l.produto_nome}</td>
+                        <td style="font-weight:bold; color:${qtdNum < 0 ? 'var(--danger)' : 'var(--success)'};">${qtdNum > 0 ? '+' : ''}${qtdNum}</td>
+                        <td>${l.estoque_antes ?? '-'} → ${l.estoque_depois ?? '-'}</td>
+                        <td>${l.custo_unitario_final != null ? 'R$ ' + Number(l.custo_unitario_final).toFixed(2) : '-'}</td>
+                        <td>${nfFornecedor}</td>
+                        <td>${l.motivo || '-'}</td>
+                        <td>${l.usuario_nome || '-'}</td>
+                    </tr>
+                `;
+            }).join('');
         }
 
         function imprimirEstoquePorCategoria() {
@@ -2479,7 +2805,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             // Só produtos ativos (globalmente) E marcados para esta barraca aparecem
             // aqui — o catálogo é único, mas cada barraca só vende o que foi
             // marcado para ela.
-            const produtosDisponiveisVenda = produtosDB.filter(p => p.ativo !== false && Array.isArray(p.barracas) && p.barracas.includes(barracaStateId));
+            const produtosDisponiveisVenda = produtosDB.filter(p => p.ativo !== false && p.tipo !== 'insumo' && Array.isArray(p.barracas) && p.barracas.includes(barracaStateId));
 
             const renderCardHTML = (produto) => {
                 let badgeEstoque = ''; let opacity = '1'; let descCombo = '';
@@ -5890,6 +6216,17 @@ window.addProdutoTemporarioAoCombo = addProdutoTemporarioAoCombo;
 window.adicionarCategoria = adicionarCategoria;
 window.adicionarEstoqueManual = adicionarEstoqueManual;
 window.apagarProduto = apagarProduto;
+window.filtrarProdutosPorTipo = filtrarProdutosPorTipo;
+window.atualizarCamposInsumo = atualizarCamposInsumo;
+window.mudarModoEntradaEstoque = mudarModoEntradaEstoque;
+window.addItemEntradaEstoque = addItemEntradaEstoque;
+window.removerItemEntradaEstoque = removerItemEntradaEstoque;
+window.atualizarTotalEntradaEstoque = atualizarTotalEntradaEstoque;
+window.confirmarEntradaEstoque = confirmarEntradaEstoque;
+window.atualizarEstoqueAtualAjuste = atualizarEstoqueAtualAjuste;
+window.atualizarDiferencaAjuste = atualizarDiferencaAjuste;
+window.confirmarAjusteInventario = confirmarAjusteInventario;
+window.carregarMovimentacoesEstoque = carregarMovimentacoesEstoque;
 window.atualizarFiltrosGestao = atualizarFiltrosGestao;
 window.atualizarTelas = atualizarTelas;
 window.atualizarValoresMisto = atualizarValoresMisto;

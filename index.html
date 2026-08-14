@@ -190,10 +190,20 @@
         </div>
 
         <div class="dropdown">
+            <button class="dropbtn">📦 Produtos ▾</button>
+            <div class="dropdown-content">
+                <div class="dropdown-inner">
+                    <button id="btn-nav-produtos-venda" onclick="filtrarProdutosPorTipo('venda', this)">🛒 Produtos para Venda</button>
+                    <button id="btn-nav-insumos" onclick="filtrarProdutosPorTipo('insumo', this)">🧪 Insumos</button>
+                    <button id="btn-nav-entrada-estoque" onclick="mudarAba('tela-entrada-estoque', this)">📥 Entrada de Produtos</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="dropdown">
             <button class="dropbtn">⚙️ Gestão ▾</button>
             <div class="dropdown-content">
                 <div class="dropdown-inner">
-                    <button onclick="mudarAba('tela-produtos', this)">📦 Produtos & Estoque</button>
                     <button id="btn-nav-barracas" onclick="mudarAba('tela-barracas', this)">🏪 Barracas</button>
                     <button id="btn-sub-gestao" onclick="mudarAba('tela-gestao', this)">📋 Gestão de Pedidos</button>
                     <button id="btn-sub-fechamento" onclick="mudarAba('tela-fechamento-caixa', this)">📜 Fechamentos de Caixa</button>
@@ -699,7 +709,7 @@
         <div id="tela-produtos" class="tab-content">
             <div class="produtos-topo-fixo">
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
-                    <h2 style="border: none; padding: 0; margin: 0;">Gerenciar Produtos, Combos, Categorias & Estoque</h2>
+                    <h2 id="titulo-tela-produtos" style="border: none; padding: 0; margin: 0;">🛒 Gerenciar Produtos & Combos</h2>
                     <div style="display:flex; gap:10px; flex-wrap: wrap;">
                         <button class="btn btn-primary" onclick="imprimirEstoquePorCategoria()">🖨️ Imprimir Estoque por Categoria</button>
                         <button class="btn btn-success" onclick="gerarPDFEstoquePorCategoria()" style="background:#0d9488;">📄 Baixar PDF Estoque</button>
@@ -742,13 +752,21 @@
                             </div>
                         </div>
 
-                        <div class="campo-produto">
+                        <div class="campo-produto" id="box-insumo-checkbox">
+                            <label>&nbsp;</label>
+                            <label class="item-checkbox-ingrediente" style="margin-top:8px;" title="Insumo é matéria-prima/ingrediente que nunca é vendido direto — não aparece na tela de Pedido, só entra no controle de estoque.">
+                                <input type="checkbox" id="novo-prod-insumo" onchange="atualizarCamposInsumo()">
+                                🧪 É um insumo (não vendido)
+                            </label>
+                        </div>
+                        <div class="campo-produto" id="box-preco-simples">
                             <label>Preço Total (R$):</label>
-                            <input type="number" id="novo-prod-preco" placeholder="0.00" step="0.01" required>
+                            <input type="number" id="novo-prod-preco" placeholder="0.00" step="0.01">
                         </div>
                         <div class="campo-produto" id="box-estoque-simples">
-                            <label>Estoque nesta barraca:</label>
-                            <input type="number" id="novo-prod-estoque" placeholder="Vazio = Livre">
+                            <label>📦 Estoque nesta barraca:</label>
+                            <div id="txt-estoque-atual-cadastro" style="padding:8px; background:#f9fafb; border-radius:6px; border:1px solid #e5e7eb; font-weight:bold; font-size:0.9rem;">—</div>
+                            <a href="#" onclick="mudarAba('tela-entrada-estoque', document.getElementById('btn-nav-entrada-estoque')); return false;" style="font-size:0.75rem; display:inline-block; margin-top:2px;">→ Dar entrada / ajustar estoque</a>
                         </div>
                         <div class="campo-produto" id="box-cozinha-simples" title="Vai para Cozinha: aparece na tela de Cozinha. Só Balcão: espera retirada no Balcão. Não vai pra nenhum (rifa/ingresso): já entra como entregue na hora do pagamento.">
                             <label>👨‍🍳 Para onde vai a venda?</label>
@@ -837,6 +855,151 @@
                             <tbody id="tabela-produtos"></tbody>
                         </table>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TELA: ENTRADA DE ESTOQUE (compra + ajuste de inventário) -->
+        <div id="tela-entrada-estoque" class="tab-content">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #e5e7eb; padding-bottom:10px; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
+                <h2 style="border:none; padding:0; margin:0;">📥 Entrada de Estoque</h2>
+                <div style="display:flex; gap:5px; background:#f3f4f6; padding:5px; border-radius:8px;">
+                    <button id="tab-entrada-compra" class="btn btn-primary" style="padding:6px 14px; font-size:0.85rem;" onclick="mudarModoEntradaEstoque('compra')">Nova Entrada (Compra)</button>
+                    <button id="tab-entrada-ajuste" class="btn" style="padding:6px 14px; font-size:0.85rem; background:transparent; color:#333;" onclick="mudarModoEntradaEstoque('ajuste')">Ajuste de Inventário</button>
+                    <button id="tab-entrada-historico" class="btn" style="padding:6px 14px; font-size:0.85rem; background:transparent; color:#333;" onclick="mudarModoEntradaEstoque('historico')">Histórico</button>
+                </div>
+            </div>
+
+            <!-- BLOCO A: NOVA ENTRADA (COMPRA) -->
+            <div id="box-entrada-compra" class="card-produtos">
+                <div class="row-inputs" style="margin-bottom:10px;">
+                    <div style="flex:1;">
+                        <label>Data da Nota Fiscal:</label>
+                        <input type="date" id="entrada-data-nf">
+                    </div>
+                    <div style="flex:1;">
+                        <label>Número da NF (opcional):</label>
+                        <input type="text" id="entrada-numero-nf" placeholder="Ex: 12345">
+                    </div>
+                    <div style="flex:1;">
+                        <label>Fornecedor (opcional):</label>
+                        <input type="text" id="entrada-fornecedor" placeholder="Ex: Atacadão">
+                    </div>
+                </div>
+                <div class="row-inputs" style="margin-bottom:15px;">
+                    <div style="flex:1;">
+                        <label title="Rateado entre os itens da nota, proporcional ao valor de cada um.">Frete Total (R$, opcional):</label>
+                        <input type="number" id="entrada-frete" placeholder="0.00" step="0.01" oninput="atualizarTotalEntradaEstoque()">
+                    </div>
+                    <div style="flex:1;">
+                        <label title="Rateado entre os itens da nota, proporcional ao valor de cada um.">Outras Despesas (R$, opcional):</label>
+                        <input type="number" id="entrada-outras-despesas" placeholder="0.00" step="0.01" oninput="atualizarTotalEntradaEstoque()">
+                    </div>
+                </div>
+
+                <h4 style="margin-bottom:8px;">Itens da Nota</h4>
+                <div style="display:flex; gap:5px; margin-bottom:10px; align-items:flex-end; flex-wrap:wrap;">
+                    <div style="flex:2; min-width:180px;">
+                        <label style="font-size:0.8rem;">Produto/Insumo:</label>
+                        <select id="entrada-item-select" style="margin-bottom:0;"></select>
+                    </div>
+                    <div style="flex:1; min-width:90px;">
+                        <label style="font-size:0.8rem;">Quantidade:</label>
+                        <input type="number" id="entrada-item-qtd" value="1" min="0.01" step="0.01" style="margin-bottom:0;">
+                    </div>
+                    <div style="flex:1; min-width:110px;">
+                        <label style="font-size:0.8rem;">Custo Unitário (R$):</label>
+                        <input type="number" id="entrada-item-custo" placeholder="0.00" step="0.01" style="margin-bottom:0;">
+                    </div>
+                    <button class="btn btn-success" style="padding:10px;" onclick="addItemEntradaEstoque()">➕ Adicionar</button>
+                </div>
+                <div style="overflow-x:auto;">
+                    <table style="width:100%; min-width:500px; border-collapse:collapse; text-align:left; font-size:0.85rem; margin-bottom:10px;">
+                        <thead>
+                            <tr style="border-bottom:2px solid #e5e7eb;">
+                                <th style="padding:6px;">Produto</th>
+                                <th>Qtd</th>
+                                <th>Custo Unit.</th>
+                                <th>Subtotal</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-itens-entrada-estoque"><tr><td colspan="5" style="padding:12px; text-align:center; color:gray;">Nenhum item adicionado.</td></tr></tbody>
+                    </table>
+                </div>
+                <div style="text-align:right; font-weight:bold; font-size:1.1rem; margin-bottom:15px;">Total da Nota: R$ <span id="txt-total-entrada-estoque">0.00</span></div>
+                <button class="btn btn-primary" style="width:100%;" onclick="confirmarEntradaEstoque()">✅ Confirmar Entrada</button>
+            </div>
+
+            <!-- BLOCO B: AJUSTE DE INVENTÁRIO -->
+            <div id="box-entrada-ajuste" class="card-produtos" style="display:none;">
+                <div class="row-inputs" style="margin-bottom:10px;">
+                    <div style="flex:1;">
+                        <label>Produto/Insumo:</label>
+                        <select id="ajuste-produto-select" onchange="atualizarEstoqueAtualAjuste()"></select>
+                    </div>
+                    <div style="flex:1;">
+                        <label>Estoque Atual do Sistema:</label>
+                        <div id="txt-ajuste-estoque-atual" style="padding:8px; background:#f9fafb; border-radius:6px; border:1px solid #e5e7eb; font-weight:bold;">—</div>
+                    </div>
+                </div>
+                <div class="row-inputs" style="margin-bottom:10px;">
+                    <div style="flex:1;">
+                        <label>Estoque Contado Fisicamente:</label>
+                        <input type="number" id="ajuste-estoque-contado" step="0.01" oninput="atualizarDiferencaAjuste()">
+                    </div>
+                    <div style="flex:1;">
+                        <label>Diferença:</label>
+                        <div id="txt-ajuste-diferenca" style="padding:8px; background:#f9fafb; border-radius:6px; border:1px solid #e5e7eb; font-weight:bold;">—</div>
+                    </div>
+                </div>
+                <div style="margin-bottom:15px;">
+                    <label>Motivo (obrigatório):</label>
+                    <input type="text" id="ajuste-motivo" placeholder="Ex: contagem física do fim do evento, produto vencido...">
+                </div>
+                <button class="btn btn-warning" style="width:100%;" onclick="confirmarAjusteInventario()">✅ Confirmar Ajuste</button>
+            </div>
+
+            <!-- BLOCO C: HISTÓRICO DE MOVIMENTAÇÕES -->
+            <div id="box-entrada-historico" style="display:none;">
+                <div style="background: white; padding: 15px 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 15px;">
+                    <div class="row-inputs" style="align-items:flex-end;">
+                        <div>
+                            <label style="font-size:0.8rem; font-weight:bold; display:block;">Data Início:</label>
+                            <input type="date" id="filtro-mov-data-inicio" onchange="carregarMovimentacoesEstoque()" style="margin-bottom:0;">
+                        </div>
+                        <div>
+                            <label style="font-size:0.8rem; font-weight:bold; display:block;">Data Fim:</label>
+                            <input type="date" id="filtro-mov-data-fim" onchange="carregarMovimentacoesEstoque()" style="margin-bottom:0;">
+                        </div>
+                        <div>
+                            <label style="font-size:0.8rem; font-weight:bold; display:block;">Tipo:</label>
+                            <select id="filtro-mov-tipo" onchange="carregarMovimentacoesEstoque()" style="margin-bottom:0;">
+                                <option value="">Todos</option>
+                                <option value="entrada">📥 Entrada</option>
+                                <option value="ajuste">🔧 Ajuste</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-neutro" onclick="document.getElementById('filtro-mov-data-inicio').value=''; document.getElementById('filtro-mov-data-fim').value=''; document.getElementById('filtro-mov-tipo').value=''; carregarMovimentacoesEstoque();">🧹 Limpar Filtro</button>
+                    </div>
+                </div>
+                <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-height: 60vh; overflow-y: auto; overflow-x: auto;">
+                    <table style="width:100%; min-width:800px; border-collapse:collapse; text-align:left; font-size:0.9rem;">
+                        <thead>
+                            <tr style="border-bottom:2px solid #e5e7eb; background:#f8fafc;">
+                                <th style="padding:10px;">Data</th>
+                                <th>Tipo</th>
+                                <th>Produto</th>
+                                <th>Qtd</th>
+                                <th>Estoque Antes → Depois</th>
+                                <th>Custo Unit.</th>
+                                <th>NF / Fornecedor</th>
+                                <th>Motivo</th>
+                                <th>Usuário</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-movimentacoes-estoque"></tbody>
+                    </table>
                 </div>
             </div>
         </div>
