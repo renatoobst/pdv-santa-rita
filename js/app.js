@@ -1790,7 +1790,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
                     tbody.innerHTML += `
                         <tr style="border-bottom: 1px solid #e5e7eb; ${p.statusPainel === 'cancelado' ? 'opacity: 0.5;' : ''}">
-                            <td style="padding: 8px; font-weight: bold;">#${p.id}</td>
+                            <td style="padding: 8px; font-weight: bold;">#${rotuloPedido(p)}</td>
                             <td style="font-weight:bold; color:#374151;">${p.hora}</td>
                             <td style="color:#2563eb; font-weight:bold;">${p.horaEntradaCozinha || '-'}</td>
                             <td style="color:#16a34a; font-weight:bold;">${p.horaEntrega || '-'}</td>
@@ -3186,7 +3186,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             const prodOriginal = produtosDB.find(p => p.id === item.idProduto);
             const precoItem = item.preco || (prodOriginal ? prodOriginal.preco : 0);
 
-            document.getElementById('modal-troca-info').innerText = `Pedido #${pedido.id} (${pedido.cliente}) - Item atual: ${item.nome}${precoItem ? ` (R$ ${precoItem.toFixed(2)})` : ''}`;
+            document.getElementById('modal-troca-info').innerText = `Pedido #${rotuloPedido(pedido)} (${pedido.cliente}) - Item atual: ${item.nome}${precoItem ? ` (R$ ${precoItem.toFixed(2)})` : ''}`;
 
             // Sempre exige mesmo valor, dentro ou fora de combo — pra sub-item
             // de combo isso compara com o preço do produto ORIGINAL daquele
@@ -3669,6 +3669,35 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             atualizarCarrinhoUI();
         }
 
+        // Letra fixa deste aparelho/navegador — usada só pra rotular pedido
+        // que nasce OFFLINE (ver finalizarPedido/rotuloPedido). Diferente do
+        // PDV_CLIENT_ID (js/config.js): esse é gerado de novo a cada reload
+        // de página, não serve pra identificar "este aparelho" de forma
+        // estável. Sorteada 1x e guardada no localStorage pra sempre dar a
+        // mesma letra neste navegador, mesmo depois de recarregar/reabrir.
+        const CHAVE_LETRA_DISPOSITIVO = 'pdv_letra_dispositivo';
+        function obterLetraDispositivo() {
+            let letra = localStorage.getItem(CHAVE_LETRA_DISPOSITIVO);
+            if (!letra) {
+                letra = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[Math.floor(Math.random() * 26)];
+                localStorage.setItem(CHAVE_LETRA_DISPOSITIVO, letra);
+            }
+            return letra;
+        }
+
+        // Número que aparece pro humano (tela, recibo, voz) — normalmente é
+        // só o id. Pedido que nasceu com o app OFFLINE ganha a letra do
+        // aparelho na frente (ex: "B15"): dois aparelhos offline ao mesmo
+        // tempo podem colidir no MESMO id internamente (o mecanismo de
+        // mesclagem resolve isso sozinho depois, sem perder pedido), mas com
+        // letras diferentes o papel impresso na hora nunca fica ambíguo. Uma
+        // vez atribuído o rótulo é permanente — não muda quando sincroniza,
+        // pra nunca deixar de bater com um recibo já impresso.
+        function rotuloPedido(p) {
+            if (!p) return '?';
+            return (p.numeroProvisorio && p.letraDispositivo) ? `${p.letraDispositivo}${p.id}` : `${p.id}`;
+        }
+
         function finalizarPedido() {
             const meuCaixaAtual = caixaDoUsuarioAtual();
             if (!meuCaixaAtual) {
@@ -3760,6 +3789,13 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             // mesclarPedidosPorId), é o que permite reconhecer "esse pedido
             // aqui é o mesmo que aquele lá" mesmo se o número mudar.
             let chaveUnicaPedido = `${PDV_CLIENT_ID}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+            // Marca se o pedido NASCEU com o app offline — decidido 1x na
+            // criação e preservado em toda edição depois (mesmo padrão de
+            // chaveUnica/veioDePausa). Ver rotuloPedido(): pedido criado
+            // online nunca ganha esses campos, então continua mostrando só o
+            // id puro, igual sempre foi.
+            let numeroProvisorioPedido = false;
+            let letraDispositivoPedido = null;
 
             if (pedidoEmEdicaoId !== null) {
                 statusPainelCalculado = document.getElementById('status-pedido-edicao').value;
@@ -3773,6 +3809,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     caixaIdPedido = pedidoExistente.caixaId || meuCaixaAtual.id;
                     chaveUnicaPedido = pedidoExistente.chaveUnica || chaveUnicaPedido;
                     veioDePausaPedido = !!pedidoExistente.veioDePausa;
+                    numeroProvisorioPedido = !!pedidoExistente.numeroProvisorio;
+                    letraDispositivoPedido = pedidoExistente.letraDispositivo || null;
                 }
             } else {
                 const itensAgora = carrinho.filter(i => i.fase === 'agora');
@@ -3785,6 +3823,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 statusPainelCalculado = vaiParaCozinha ? 'preparando' : ((tipoGlobalRetirada === 'agora_sem_cozinha' || todosInstantaneos) ? 'entregue' : 'nenhum');
                 horaEntradaCozinhaCalculada = vaiParaCozinha ? horaAtual : null;
                 horaEntregaCalculada = (!vaiParaCozinha && (tipoGlobalRetirada === 'agora_sem_cozinha' || todosInstantaneos)) ? horaAtual : null;
+                if (!supabaseDisponivel) {
+                    numeroProvisorioPedido = true;
+                    letraDispositivoPedido = obterLetraDispositivo();
+                }
             }
 
             // Pedido bonificado não cobrou nada de verdade — o valor dos itens
@@ -3825,6 +3867,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 statusPainel: statusPainelCalculado,
                 caixaId: caixaIdPedido,
                 veioDePausa: veioDePausaPedido,
+                numeroProvisorio: numeroProvisorioPedido,
+                letraDispositivo: letraDispositivoPedido,
                 itens: itensSnapshot
             };
 
@@ -3885,7 +3929,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             dispararImpressao();
 
             if (pedidoEmEdicaoId === null && configPadroes.separarBalcaoDoces && !pedidoTemAlgoDeCozinha(novoPedido.itens)) {
-                exibirAviso(`Pedido #${novoPedido.id} não tem nada de cozinha — foi direcionado pro Balcão 02 (Doces).`, '🍬 Balcão 02 (Doces)');
+                exibirAviso(`Pedido #${rotuloPedido(novoPedido)} não tem nada de cozinha — foi direcionado pro Balcão 02 (Doces).`, '🍬 Balcão 02 (Doces)');
             }
 
             limparCarrinho();
@@ -3921,7 +3965,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 <div ${quebrarPagina ? 'class="print-page-break"' : ''}>
                 <div class="print-center print-bold" style="font-size: 16px;">SANTUÁRIO SANTA RITA</div>
                 <div class="print-divider"></div>
-                <div class="print-center print-bold" style="font-size: 42px; margin: 5px 0;">#${pedido.id}</div>
+                <div class="print-center print-bold" style="font-size: 42px; margin: 5px 0;">#${rotuloPedido(pedido)}</div>
                 <div class="print-center print-bold" style="font-size: 26px; margin-bottom: 5px; text-transform: uppercase;">${pedido.cliente}</div>
                 <div class="print-center print-bold" style="font-size: 14px; margin-bottom: 10px;">[ ${pedido.tipoAtendimento} ]</div>
                 <div class="print-center print-bold">${pedido.data} - ${pedido.hora}</div>
@@ -4053,7 +4097,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (dados.bonificacoesLista.length > 0) {
                 htmlBonoPrint = dados.bonificacoesLista.map(b => {
                     const resumo = b.itens.map(i => `${i.qtd}x ${i.nome}`).join(', ');
-                    return `<div style="font-size:11px; margin-bottom:3px; font-weight:bold;"><b>#${b.id} ${b.cliente}:</b> ${resumo} (${b.pagamento})</div>`;
+                    return `<div style="font-size:11px; margin-bottom:3px; font-weight:bold;"><b>#${rotuloPedido(b)} ${b.cliente}:</b> ${resumo} (${b.pagamento})</div>`;
                 }).join('');
             }
 
@@ -4119,7 +4163,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     const resumoItens = b.itens.map(i => `${i.qtd}x ${i.nome}`).join(', ');
                     return `
                         <tr>
-                            <td style="padding: 8px; border-bottom: 1px solid #fee2e2; font-weight: bold; color: #991b1b;">#${b.id} ${b.cliente}</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #fee2e2; font-weight: bold; color: #991b1b;">#${rotuloPedido(b)} ${b.cliente}</td>
                             <td style="padding: 8px; border-bottom: 1px solid #fee2e2; color: #7f1d1d;">${b.pagamento}</td>
                             <td style="padding: 8px; border-bottom: 1px solid #fee2e2; font-weight: 600;">${resumoItens}</td>
                         </tr>
@@ -4333,7 +4377,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         function chamarNoPainel(id) {
             const p = pedidosGerais.find(x => x.id === id);
             p.statusPainel = 'pronto';
-            dispararAvisoSonoro(p.id, p.cliente);
+            dispararAvisoSonoro(rotuloPedido(p), p.cliente);
             salvarNoBancoLocal();
             atualizarTelas();
         }
@@ -4353,15 +4397,16 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         async function cancelarPedido(id) {
             if (!usuarioAtual || !usuarioAtual.isMaster) return exibirAviso("Só o usuário Master pode cancelar/apagar pedidos.");
 
+            const p = pedidosGerais.find(x => x.id === id);
+
             // Pede o motivo em vez de só confirmar sim/não — ajuda a entender
             // depois se o cancelamento foi erro de operador, desistência de
             // cliente, etc. O próprio preenchimento já serve como confirmação,
             // por isso não pede mais um segundo "tem certeza?" separado.
-            const motivo = await pedirTexto(`Por que está cancelando o Pedido #${id}? (obrigatório)`, { titulo: '🗑️ Cancelar Pedido' });
+            const motivo = await pedirTexto(`Por que está cancelando o Pedido #${rotuloPedido(p)}? (obrigatório)`, { titulo: '🗑️ Cancelar Pedido' });
             if (motivo === null) return;
             if (!motivo.trim()) return exibirAviso("É obrigatório informar o motivo do cancelamento.");
 
-            const p = pedidosGerais.find(x => x.id === id);
             if (p && p.statusPainel !== 'cancelado') {
                 let catalogoAlteradoPorEstoque = false;
                 p.itens.forEach(item => {
@@ -4393,7 +4438,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 renderizarTabelaProdutos();
                 atualizarTelas();
                 atualizarFiltrosGestao();
-                exibirAviso(`Pedido #${id} cancelado com sucesso e estoque devolvido!`);
+                exibirAviso(`Pedido #${rotuloPedido(p)} cancelado com sucesso e estoque devolvido!`);
             }
         }
 
@@ -4497,7 +4542,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     htmlCozinha += `
                         <div class="card-pedido"><div class="status-bar bg-warning"></div>
                         <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <h3 style="margin:0;">#${p.id}</h3>
+                            <h3 style="margin:0;">#${rotuloPedido(p)}</h3>
                             <b style="text-transform: uppercase; font-size: 1.1rem; color: #111827;">${p.cliente}</b>
                         </div>
                         <div style="font-size: 0.85rem; font-weight: bold; color: var(--primary); margin-top: 2px; margin-bottom: 5px;">[ ${p.tipoAtendimento || 'Levar (Viagem)'} ]</div>
@@ -4576,7 +4621,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
                     const cardHtmlBalcao = `
                         <div class="card-pedido"><div class="status-bar ${p.statusPainel === 'preparando' ? 'bg-warning' : 'bg-pronto'}"></div>
-                        <div style="display:flex; justify-content:space-between;"><h3>#${p.id} - ${p.cliente}${p.veioDePausa ? ' <span title="Veio de Pedidos em Pausa">⏸️</span>' : ''}</h3><span>Entrada: ${p.hora}</span></div>
+                        <div style="display:flex; justify-content:space-between;"><h3>#${rotuloPedido(p)} - ${p.cliente}${p.veioDePausa ? ' <span title="Veio de Pedidos em Pausa">⏸️</span>' : ''}</h3><span>Entrada: ${p.hora}</span></div>
                         <div style="font-size: 0.85rem; font-weight: bold; color: var(--primary); margin-top: -5px; margin-bottom: 5px;">[ ${p.tipoAtendimento || 'Levar (Viagem)'} ]</div>
                         <div class="lista-itens" style="margin-top:0;">${itensDetalhadosBalcao}</div>
                         ${btn}</div>`;
@@ -4604,7 +4649,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                         <div class="card-pedido" style="border:1px solid var(--info);">
                             <div class="status-bar bg-info"></div>
                             <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <h3 style="margin:0;">#${p.id} - ${p.cliente}</h3>
+                                <h3 style="margin:0;">#${rotuloPedido(p)} - ${p.cliente}</h3>
                                 <b style="color:var(--info); font-size:0.85rem;">🕒 ${p.hora}</b>
                             </div>
                             <div style="font-size: 0.85rem; font-weight: bold; color: var(--primary); margin-top:2px;">[ ${p.tipoAtendimento || 'Levar (Viagem)'} ]</div>
@@ -4890,7 +4935,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 const nomeCaixaPedido = caixaDoPedido ? caixaDoPedido.usuarioNome : '-';
 
                 tbody.innerHTML += `<tr style="border-bottom: 1px solid #f3f4f6; ${p.statusPainel === 'cancelado' ? 'opacity:0.5;' : ''}">
-                    <td style="padding: 12px; font-weight: bold;">#${p.id}</td>
+                    <td style="padding: 12px; font-weight: bold;">#${rotuloPedido(p)}</td>
                     <td style="font-size: 0.8rem; font-weight: bold; color: #4b5563;">${nomeCaixaPedido}</td>
                     <td style="font-size: 0.75rem; color: #4b5563;">
                         <b>Ent:</b> ${p.hora}<br>
@@ -5692,7 +5737,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (bonificacoesFechamento.length > 0) {
                 htmlBono = bonificacoesFechamento.map(b => {
                     const resumo = b.itens.map(i => `${i.qtd}x ${i.nome}`).join(', ');
-                    return `<div style="font-size:0.85rem; margin-bottom:6px; padding-bottom:6px; border-bottom:1px dashed #fecaca;"><b>#${b.id} ${b.cliente}:</b> ${resumo}<br><small style="color:#991b1b;">${b.pagamento}</small></div>`;
+                    return `<div style="font-size:0.85rem; margin-bottom:6px; padding-bottom:6px; border-bottom:1px dashed #fecaca;"><b>#${rotuloPedido(b)} ${b.cliente}:</b> ${resumo}<br><small style="color:#991b1b;">${b.pagamento}</small></div>`;
                 }).join('');
             } else {
                 htmlBono = '<p style="color:gray; font-size:0.85rem;">Nenhuma bonificação neste caixa.</p>';
@@ -5788,7 +5833,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             let htmlBonoPrint = '';
             extrairBonificacoesDoFechamento(c).forEach(b => {
                 const resumo = b.itens.map(i => `${i.qtd}x ${i.nome}`).join(', ');
-                htmlBonoPrint += `<div style="font-size:11px; margin-bottom:3px; font-weight:bold;"><b>#${b.id} ${b.cliente}:</b> ${resumo} (${b.pagamento})</div>`;
+                htmlBonoPrint += `<div style="font-size:11px; margin-bottom:3px; font-weight:bold;"><b>#${rotuloPedido(b)} ${b.cliente}:</b> ${resumo} (${b.pagamento})</div>`;
             });
 
             const areaPrint = document.getElementById('area-impressao');
@@ -6030,7 +6075,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     const resumoItens = b.itens.map(i => `${i.qtd}x ${i.nome}`).join(', ');
                     return `
                         <div style="background:#fef2f2; border:1px solid #fca5a5; padding:8px 12px; border-radius:6px; margin-bottom:6px; font-size:0.85rem; color:#991b1b;">
-                            <b>Pedido #${b.id} - ${b.cliente}:</b> ${resumoItens} <br><small style="color:#b91c1c;">(Motivo: ${b.pagamento})</small>
+                            <b>Pedido #${rotuloPedido(b)} - ${b.cliente}:</b> ${resumoItens} <br><small style="color:#b91c1c;">(Motivo: ${b.pagamento})</small>
                         </div>
                     `;
                 }).join('');
@@ -6178,7 +6223,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             toggleCampoDinheiro(); 
             pedidoEmEdicaoId = id;
 
-            document.getElementById('lbl-id-pedido-edicao').innerText = `#${id}`;
+            document.getElementById('lbl-id-pedido-edicao').innerText = `#${rotuloPedido(p)}`;
             document.getElementById('banner-alerta-edicao').style.display = 'block';
             
             const selectStatusEdicao = document.getElementById('status-pedido-edicao');
@@ -6195,7 +6240,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             document.getElementById('btn-limpar-pedido').style.display = 'none';
 
             document.getElementById('box-carrinho-container').classList.add('modo-edicao');
-            document.getElementById('titulo-painel-carrinho').innerText = `Alterando Pedido #${id}`;
+            document.getElementById('titulo-painel-carrinho').innerText = `Alterando Pedido #${rotuloPedido(p)}`;
 
             document.getElementById('btn-finalizar-pedido').innerHTML = `Salvar Alteração e Reimprimir 🖨️`;
             document.getElementById('btn-finalizar-pedido').classList.replace('btn-primary', 'btn-warning');
