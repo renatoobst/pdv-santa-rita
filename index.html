@@ -22,6 +22,10 @@
          como window.html2canvas — os botões de "Baixar JPG" (gerarJPG em
          app.js) chamam html2canvas direto, então precisa dessa cópia solta. -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- Gera o QR Code do Pix direto no navegador, sem precisar de gateway/
+         API de pagamento — o app só monta o payload padrão do Banco Central
+         (BR Code) e desenha o desenho do QR em cima dele. -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 </head>
 <body>
 
@@ -45,6 +49,18 @@
             <h3 id="modal-aviso-titulo" style="margin-top:0; color: var(--primary); font-size: 1.3rem;">Aviso do Sistema</h3>
             <p id="modal-aviso-mensagem" style="font-size: 1rem; color: #374151; margin: 20px 0; font-weight: 600; line-height: 1.4;"></p>
             <button class="btn btn-primary" style="width: 100%; font-size: 1rem;" onclick="fecharAviso()">OK 👍</button>
+        </div>
+    </div>
+
+    <div id="modal-pix-qrcode" class="modal-geral">
+        <div class="modal-content" style="text-align:center; width:380px; max-width:95%;">
+            <h3 style="margin-top:0; color:#0d9488;">📱 Pix — QR Code</h3>
+            <p id="pix-qrcode-valor" style="font-size:1.6rem; font-weight:900; color:#111827; margin:4px 0 14px;">R$ 0,00</p>
+            <div id="pix-qrcode-desenho" style="display:flex; justify-content:center; margin-bottom:14px;"></div>
+            <p style="font-size:0.8rem; color:#6b7280; margin-bottom:6px;">Ou copie o código Pix Copia e Cola:</p>
+            <textarea id="pix-qrcode-copia-cola" readonly style="width:100%; height:70px; font-size:0.75rem; margin-bottom:8px; resize:none;"></textarea>
+            <button class="btn" style="width:100%; background:#0d9488; color:white; margin-bottom:8px;" onclick="copiarCodigoPixCopiaCola()">📋 Copiar Código</button>
+            <button class="btn btn-neutro" style="width:100%;" onclick="fecharModalPixQRCode()">Fechar</button>
         </div>
     </div>
 
@@ -443,6 +459,8 @@
                             <span>Total:</span>
                             <span>R$ <span id="total-carrinho">0.00</span></span>
                         </div>
+
+                        <button id="btn-gerar-qrcode-pix" class="btn" style="display:none; width:100%; background:#0d9488; color:white; margin-bottom:6px;" onclick="abrirModalPixQRCode()">📱 Gerar QR Code Pix</button>
 
                         <div class="grid-campos-pagamento">
                             <div>
@@ -1064,6 +1082,30 @@
                     <input type="checkbox" id="cfg-chamar-ativo-balcao-doces" onchange="salvarConfiguracoesPadrao()">
                     Chamar ativo no Balcão 02 (Doces)
                 </label>
+            </div>
+
+            <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); max-width: 700px; margin-top: 20px;">
+                <h3 style="margin-top:0;">📱 Pix (QR Code)</h3>
+                <p style="font-size:0.85rem; color:#4b5563;">
+                    Também sincroniza com todos os dispositivos. Preenchendo isso, aparece um botão "📱 Gerar QR Code Pix" na tela de Pedido quando a forma de pagamento é Pix — o cliente escaneia e paga com o valor já preenchido, sem precisar de maquininha nem digitar valor errado.
+                </p>
+                <div class="row-inputs" style="margin-top: 10px;">
+                    <div style="flex:1;">
+                        <label style="font-size:0.8rem; font-weight:bold;">Chave Pix:</label>
+                        <input type="text" id="cfg-pix-chave" placeholder="CPF, e-mail, telefone ou chave aleatória" onchange="salvarConfiguracoesPadrao()">
+                    </div>
+                </div>
+                <div class="row-inputs">
+                    <div style="flex:1;">
+                        <label style="font-size:0.8rem; font-weight:bold;">Nome do recebedor:</label>
+                        <input type="text" id="cfg-pix-nome" placeholder="Ex: Santuario Santa Rita" maxlength="25" onchange="salvarConfiguracoesPadrao()">
+                    </div>
+                    <div style="flex:1;">
+                        <label style="font-size:0.8rem; font-weight:bold;">Cidade:</label>
+                        <input type="text" id="cfg-pix-cidade" placeholder="Ex: Sao Paulo" maxlength="15" onchange="salvarConfiguracoesPadrao()">
+                    </div>
+                </div>
+                <p style="font-size: 0.78rem; color: #6b7280; margin: 4px 0 0;">Nome/cidade sem acento e sem caracteres especiais (regra do Banco Central para o QR Code) — o app ajusta sozinho ao gerar.</p>
             </div>
         </div>
 

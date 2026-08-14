@@ -133,7 +133,12 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             // Desligado = pula direto pro botão "Entregue" (sem tocar som/
             // exigir "Chamar Painel" antes) — ver atualizarTelas().
             chamarAtivoBalcao01: true,
-            chamarAtivoBalcaoDoces: true
+            chamarAtivoBalcaoDoces: true,
+            // Dados do recebedor pro QR Code de Pix (ver montarPayloadPix) —
+            // cada barraca tem sua própria conta/chave.
+            pixChave: '',
+            pixNomeRecebedor: '',
+            pixCidadeRecebedor: ''
         };
 
         function exibirAviso(mensagem, titulo = "Aviso do Sistema") {
@@ -1187,6 +1192,13 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (chkChamarBalcao01) chkChamarBalcao01.checked = configPadroes.chamarAtivoBalcao01 !== false;
             const chkChamarBalcaoDoces = document.getElementById('cfg-chamar-ativo-balcao-doces');
             if (chkChamarBalcaoDoces) chkChamarBalcaoDoces.checked = configPadroes.chamarAtivoBalcaoDoces !== false;
+
+            const inputPixChave = document.getElementById('cfg-pix-chave');
+            if (inputPixChave) {
+                inputPixChave.value = configPadroes.pixChave || '';
+                document.getElementById('cfg-pix-nome').value = configPadroes.pixNomeRecebedor || '';
+                document.getElementById('cfg-pix-cidade').value = configPadroes.pixCidadeRecebedor || '';
+            }
         }
 
         let carrinho = [];
@@ -1366,6 +1378,9 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             document.getElementById('cfg-separar-balcao-doces').checked = !!configPadroes.separarBalcaoDoces;
             document.getElementById('cfg-chamar-ativo-balcao01').checked = configPadroes.chamarAtivoBalcao01 !== false;
             document.getElementById('cfg-chamar-ativo-balcao-doces').checked = configPadroes.chamarAtivoBalcaoDoces !== false;
+            document.getElementById('cfg-pix-chave').value = configPadroes.pixChave || '';
+            document.getElementById('cfg-pix-nome').value = configPadroes.pixNomeRecebedor || '';
+            document.getElementById('cfg-pix-cidade').value = configPadroes.pixCidadeRecebedor || '';
         }
 
         function abrirModalConfigPedido() {
@@ -1384,7 +1399,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 tipoRetiradaGlobal: document.getElementById('cfg-padrao-tipo-retirada-global').value,
                 separarBalcaoDoces: document.getElementById('cfg-separar-balcao-doces').checked,
                 chamarAtivoBalcao01: document.getElementById('cfg-chamar-ativo-balcao01').checked,
-                chamarAtivoBalcaoDoces: document.getElementById('cfg-chamar-ativo-balcao-doces').checked
+                chamarAtivoBalcaoDoces: document.getElementById('cfg-chamar-ativo-balcao-doces').checked,
+                pixChave: document.getElementById('cfg-pix-chave').value.trim(),
+                pixNomeRecebedor: document.getElementById('cfg-pix-nome').value.trim(),
+                pixCidadeRecebedor: document.getElementById('cfg-pix-cidade').value.trim()
             };
             aplicarVisibilidadeBalcaoDoces();
             atualizarBotoesChamarAtivo();
@@ -2773,12 +2791,15 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             const boxDinheiro = document.getElementById('box-dinheiro-troco');
             const boxBonificacao = document.getElementById('box-bonificacao');
             const boxMisto = document.getElementById('box-pagamento-misto');
-            
+
             boxDinheiro.style.display = 'none';
             boxBonificacao.style.display = 'none';
             boxMisto.style.display = 'none';
 
-            if(forma === 'Dinheiro') { 
+            const btnQrCodePix = document.getElementById('btn-gerar-qrcode-pix');
+            if (btnQrCodePix) btnQrCodePix.style.display = (forma === 'Pix' || forma === 'Pix Direto') ? 'block' : 'none';
+
+            if(forma === 'Dinheiro') {
                 boxDinheiro.style.display = 'block'; 
                 calcularTroco(); 
             } else if (forma === 'Bonificação') {
@@ -2794,6 +2815,106 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     calcularTroco();
                 }
             }
+        }
+
+        // --- Pix QR Code ---
+        // Gera o "BR Code" (payload padrão do Banco Central pra QR Code
+        // Pix) inteiramente no navegador, sem gateway/API de pagamento —
+        // é só texto formatado + checksum, qualquer banco/carteira lê.
+        // Não confirma pagamento sozinho (isso o Pix estático nunca faz);
+        // o operador ainda confere que caiu e clica em Cobrar como sempre.
+        function removerAcentosPix(str) {
+            // Faixa Unicode dos acentos combinantes (U+0300 a U+036F) —
+            // construída via charCode em vez de regex literal, pra não
+            // depender de caracteres combinantes soltos dentro do arquivo
+            // fonte (frágil: normalização de texto em qualquer ferramenta
+            // no caminho — editor, git, terminal — pode corromper isso).
+            const inicio = String.fromCharCode(0x0300);
+            const fim = String.fromCharCode(0x036f);
+            const regexAcentos = new RegExp('[' + inicio + '-' + fim + ']', 'g');
+            return (str || '').normalize('NFD').replace(regexAcentos, '');
+        }
+
+        function tlvPix(id, valor) {
+            const tamanho = String(valor.length).padStart(2, '0');
+            return `${id}${tamanho}${valor}`;
+        }
+
+        // CRC16-CCITT (polinômio 0x1021, valor inicial 0xFFFF) — exigido
+        // pelo padrão como últimos 4 caracteres do payload, calculado sobre
+        // o payload inteiro (já incluindo o prefixo "6304" do próprio campo
+        // do CRC, sem o valor do CRC ainda).
+        function crc16Pix(payload) {
+            let crc = 0xFFFF;
+            for (let i = 0; i < payload.length; i++) {
+                crc ^= payload.charCodeAt(i) << 8;
+                for (let j = 0; j < 8; j++) {
+                    crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) : (crc << 1);
+                    crc &= 0xFFFF;
+                }
+            }
+            return crc.toString(16).toUpperCase().padStart(4, '0');
+        }
+
+        function montarPayloadPix({ chave, nome, cidade, valor }) {
+            const nomeLimpo = removerAcentosPix(nome).toUpperCase().replace(/[^A-Z0-9 ]/g, '').slice(0, 25).trim() || 'RECEBEDOR';
+            const cidadeLimpa = removerAcentosPix(cidade).toUpperCase().replace(/[^A-Z0-9 ]/g, '').slice(0, 15).trim() || 'BRASIL';
+            const valorStr = Number(valor).toFixed(2);
+
+            const infoConta = tlvPix('00', 'br.gov.bcb.pix') + tlvPix('01', chave.trim());
+            const dadosAdicionais = tlvPix('05', '***'); // sem txid próprio — "***" é o valor padrão pra Pix estático
+
+            let payload = ''
+                + tlvPix('00', '01')
+                + tlvPix('01', '11')
+                + tlvPix('26', infoConta)
+                + tlvPix('52', '0000')
+                + tlvPix('53', '986')
+                + tlvPix('54', valorStr)
+                + tlvPix('58', 'BR')
+                + tlvPix('59', nomeLimpo)
+                + tlvPix('60', cidadeLimpa)
+                + tlvPix('62', dadosAdicionais)
+                + '6304';
+
+            return payload + crc16Pix(payload);
+        }
+
+        function abrirModalPixQRCode() {
+            if (!configPadroes.pixChave) {
+                return exibirAviso('Cadastre a chave Pix desta barraca primeiro em ⚙️ Gestão → Configurações → "📱 Pix (QR Code)".');
+            }
+            const total = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd) - (item.desconto || 0) + (item.acrescimo || 0), 0);
+            if (total <= 0) return exibirAviso('Adicione itens ao pedido antes de gerar o QR Code.');
+
+            const payload = montarPayloadPix({
+                chave: configPadroes.pixChave,
+                nome: configPadroes.pixNomeRecebedor,
+                cidade: configPadroes.pixCidadeRecebedor,
+                valor: total
+            });
+
+            document.getElementById('pix-qrcode-valor').innerText = `R$ ${total.toFixed(2)}`;
+            document.getElementById('pix-qrcode-copia-cola').value = payload;
+
+            const qr = qrcode(0, 'M');
+            qr.addData(payload);
+            qr.make();
+            document.getElementById('pix-qrcode-desenho').innerHTML = qr.createSvgTag({ cellSize: 5, margin: 2 });
+
+            document.getElementById('modal-pix-qrcode').style.display = 'flex';
+        }
+
+        function fecharModalPixQRCode() {
+            document.getElementById('modal-pix-qrcode').style.display = 'none';
+        }
+
+        function copiarCodigoPixCopiaCola() {
+            const campo = document.getElementById('pix-qrcode-copia-cola');
+            campo.select();
+            navigator.clipboard.writeText(campo.value)
+                .then(() => exibirAviso('Código Pix copiado!'))
+                .catch(() => document.execCommand('copy'));
         }
 
         function atualizarValoresMisto(origem = '1') {
@@ -5488,6 +5609,9 @@ window.alternarSouImpressoraRede = alternarSouImpressoraRede;
 window.alternarChamarRemoto = alternarChamarRemoto;
 window.salvarDestinoChamarRemoto = salvarDestinoChamarRemoto;
 window.alternarSouAltoFalanteRede = alternarSouAltoFalanteRede;
+window.abrirModalPixQRCode = abrirModalPixQRCode;
+window.fecharModalPixQRCode = fecharModalPixQRCode;
+window.copiarCodigoPixCopiaCola = copiarCodigoPixCopiaCola;
 window.pedirTexto = pedirTexto;
 window.alternarMostrarSenha = alternarMostrarSenha;
 window.pedirConfirmacao = pedirConfirmacao;
