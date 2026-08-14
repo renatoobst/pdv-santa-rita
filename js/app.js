@@ -3987,6 +3987,17 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             return (p.numeroProvisorio && p.letraDispositivo) ? `${p.letraDispositivo}${p.id}` : `${p.id}`;
         }
 
+        // BUG REAL encontrado e corrigido: a tela de TV/Multiview mostrava
+        // o id cru (String(p.id).padStart(2,'0')) em vez de rotuloPedido —
+        // pedido nascido offline (rótulo tipo "B15") aparecia como só "15"
+        // na TV, diferente do que estava impresso no papel do cliente.
+        // Mantém o zero à esquerda ("01", "02"...) só quando o rótulo é
+        // número puro, pra não perder o visual de sempre no caso comum.
+        function rotuloPedidoTV(p) {
+            const rotulo = rotuloPedido(p);
+            return /^\d+$/.test(rotulo) ? rotulo.padStart(2, '0') : rotulo;
+        }
+
         function finalizarPedido() {
             const meuCaixaAtual = caixaDoUsuarioAtual();
             if (!meuCaixaAtual) {
@@ -5005,7 +5016,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 // 'preparando' definido manualmente (ex: pelo dropdown de status
                 // na edição) aparecia na TV mesmo sem nada realmente em produção.
                 if(p.statusPainel === 'preparando' && itensPurosCozinha.length > 0) {
-                    htmlPrepTV += `<div class="mc-num"><span class="id">#${String(p.id).padStart(2, '0')}</span><span class="nome">${p.cliente}</span></div>`;
+                    htmlPrepTV += `<div class="mc-num"><span class="id">#${rotuloPedidoTV(p)}</span><span class="nome">${p.cliente}</span></div>`;
                 }
 
                 if(p.statusPainel === 'pronto') prontos.push(p);
@@ -5198,11 +5209,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if(prontos.length > 0) {
                 let ult = prontos[prontos.length - 1];
                 tvDest.style.display = 'flex'; 
-                tvDest.innerHTML = `<div class="mc-destaque-num">#${String(ult.id).padStart(2, '0')}</div><div class="mc-destaque-name">${ult.cliente}</div>`;
+                tvDest.innerHTML = `<div class="mc-destaque-num">#${rotuloPedidoTV(ult)}</div><div class="mc-destaque-name">${ult.cliente}</div>`;
             } else { tvDest.style.display = 'none'; }
-            
+
             let hist = [...prontos.reverse(), ...entregues.slice(-8).reverse()].slice(0, 10);
-            document.getElementById('tv-lista-historico').innerHTML = hist.map(p => `<div class="mc-num ready"><span class="id">#${String(p.id).padStart(2, '0')}</span><span class="nome">${p.cliente}</span></div>`).join('');
+            document.getElementById('tv-lista-historico').innerHTML = hist.map(p => `<div class="mc-num ready"><span class="id">#${rotuloPedidoTV(p)}</span><span class="nome">${p.cliente}</span></div>`).join('');
 
             const cardsBalcaoVisiveis = Array.from(document.querySelectorAll('#fila-entrega .card-pedido'));
             if (cardsBalcaoVisiveis.length > 0) {
