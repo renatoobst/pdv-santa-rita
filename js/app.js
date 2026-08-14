@@ -49,6 +49,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         // { id, usuarioId, usuarioNome, valorFundoCaixa, dataHoraAbertura }.
         let caixasAbertos = [];
         let caixaRelatorioSelecionado = null; // null = aba "Todos" no Dashboard Analytics
+        // Fechamentos marcados na tela de Histórico de Caixas pra gerar um
+        // relatório combinado (soma de vários caixas do mesmo dia/evento) —
+        // ver renderizarHistoricoCaixas/imprimirRelatorioCombinado.
+        let fechamentosSelecionadosParaRelatorio = new Set();
 
         let supabaseDisponivel = true;
         let carregandoEstadoRemoto = false;
@@ -4634,6 +4638,13 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             const tbody = document.getElementById('tabela-historico-caixas');
             tbody.innerHTML = '';
 
+            // Limpa da seleção qualquer fechamento que não existe mais
+            // (ex: foi excluído) — senão "N selecionado(s)" fica errado.
+            [...fechamentosSelecionadosParaRelatorio].forEach(id => {
+                if (!historicoCaixasDB.some(c => c.id === id)) fechamentosSelecionadosParaRelatorio.delete(id);
+            });
+            atualizarBarraFechamentosSelecionados();
+
             const inicioEl = document.getElementById('filtro-historico-data-inicio');
             const fimEl = document.getElementById('filtro-historico-data-fim');
             const inicio = inicioEl ? inicioEl.value : '';
@@ -4672,12 +4683,13 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             }
 
             if (lista.length === 0) {
-                return tbody.innerHTML = `<tr><td colspan="8" style="padding: 20px; text-align: center; color: gray;">${historicoCaixasDB.length === 0 ? 'Nenhum caixa foi fechado ainda.' : 'Nenhum fechamento no período filtrado.'}</td></tr>`;
+                return tbody.innerHTML = `<tr><td colspan="9" style="padding: 20px; text-align: center; color: gray;">${historicoCaixasDB.length === 0 ? 'Nenhum caixa foi fechado ainda.' : 'Nenhum fechamento no período filtrado.'}</td></tr>`;
             }
 
             lista.forEach(c => {
                 tbody.innerHTML += `
                     <tr style="border-bottom: 1px solid #e5e7eb;">
+                        <td style="text-align:center;"><input type="checkbox" class="chk-fechamento-selecionado" ${fechamentosSelecionadosParaRelatorio.has(c.id) ? 'checked' : ''} onchange="alternarSelecaoFechamento(${c.id}, this.checked)"></td>
                         <td style="padding: 12px; font-weight: bold;">#${c.id}</td>
                         <td style="font-size: 0.85rem; font-weight: bold; color: #4b5563;">${c.usuarioNome || '-'}</td>
                         <td style="font-weight: bold; color: var(--primary); text-transform: uppercase;">${c.campanha || 'Padrão'}</td>
@@ -4695,6 +4707,147 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     </tr>
                 `;
             });
+        }
+
+        // --- Relatório combinado de vários fechamentos de caixa ---
+        // Útil quando mais de um caixa é aberto/fechado no mesmo dia/evento
+        // (vários operadores) e o Master quer um relatório só, somado, em
+        // vez de imprimir/conferir cada fechamento separado.
+        function alternarSelecaoFechamento(id, marcado) {
+            if (marcado) fechamentosSelecionadosParaRelatorio.add(id);
+            else fechamentosSelecionadosParaRelatorio.delete(id);
+            atualizarBarraFechamentosSelecionados();
+        }
+
+        function atualizarBarraFechamentosSelecionados() {
+            const qtd = fechamentosSelecionadosParaRelatorio.size;
+            const barra = document.getElementById('barra-fechamentos-selecionados');
+            if (barra) barra.style.display = qtd > 0 ? 'flex' : 'none';
+            const txt = document.getElementById('qtd-fechamentos-selecionados');
+            if (txt) txt.innerText = qtd;
+        }
+
+        function limparSelecaoFechamentos() {
+            fechamentosSelecionadosParaRelatorio.clear();
+            renderizarHistoricoCaixas();
+        }
+
+        function obterFechamentosSelecionados() {
+            return historicoCaixasDB
+                .filter(c => fechamentosSelecionadosParaRelatorio.has(c.id))
+                .sort((a, b) => (parseDataFechamentoBR(a.dataFechamento) || 0) - (parseDataFechamentoBR(b.dataFechamento) || 0));
+        }
+
+        function montarResumoCombinado(fechamentos) {
+            const totais = { totalVendas: 0, fundoInicial: 0, pix: 0, pixDireto: 0, credito: 0, debito: 0, dinheiroVendas: 0, bonificacao: 0, totalGaveta: 0, qtdPedidos: 0 };
+            const produtosVendidos = {};
+            const valorProdutosVendidos = {};
+            fechamentos.forEach(c => {
+                totais.totalVendas += c.totalVendas || 0;
+                totais.fundoInicial += c.fundoInicial || 0;
+                totais.pix += c.pix || 0;
+                totais.pixDireto += c.pixDireto || 0;
+                totais.credito += c.credito || 0;
+                totais.debito += c.debito || 0;
+                totais.dinheiroVendas += c.dinheiroVendas || 0;
+                totais.bonificacao += c.bonificacao || 0;
+                totais.totalGaveta += c.totalGaveta || 0;
+                totais.qtdPedidos += c.qtdPedidos || 0;
+                Object.entries(c.produtosVendidos || {}).forEach(([nome, qtd]) => {
+                    produtosVendidos[nome] = (produtosVendidos[nome] || 0) + qtd;
+                });
+                Object.entries(c.valorProdutosVendidos || {}).forEach(([nome, valor]) => {
+                    valorProdutosVendidos[nome] = (valorProdutosVendidos[nome] || 0) + valor;
+                });
+            });
+            return { ...totais, produtosVendidos, valorProdutosVendidos };
+        }
+
+        function montarHtmlRelatorioCombinado(fechamentos) {
+            const resumo = montarResumoCombinado(fechamentos);
+
+            const htmlLista = fechamentos.map(c => `
+                <div class="print-row" style="font-size:10px;">
+                    <span>#${c.id} ${c.usuarioNome || '-'} (${c.dataFechamento})</span>
+                    <span class="print-bold">R$ ${(c.totalVendas || 0).toFixed(2)}</span>
+                </div>
+            `).join('');
+
+            let htmlProdsPrint = '';
+            if (Object.keys(resumo.produtosVendidos).length > 0) {
+                Object.entries(resumo.produtosVendidos).sort((a, b) => b[1] - a[1]).forEach(([prod, qtd]) => {
+                    const linha = formatarLinhaProdutoVendido(prod, qtd, resumo.valorProdutosVendidos);
+                    htmlProdsPrint += `<div class="print-row"><span>${prod}</span><span class="print-bold">${linha.qtdTxt}</span></div>`;
+                });
+            }
+
+            return `
+                <div class="print-center print-bold" style="font-size: 18px;">SANTUÁRIO SANTA RITA</div>
+                <div class="print-center print-bold" style="font-size: 14px; margin-top: 5px;">RELATÓRIO COMBINADO</div>
+                <div class="print-center print-bold" style="font-size: 12px; margin-top: 2px;">${fechamentos.length} FECHAMENTOS DE CAIXA</div>
+                <div class="print-divider"></div>
+                ${htmlLista}
+                <div class="print-divider"></div>
+                <div class="print-center print-bold" style="font-size: 13px; margin-bottom:2px;">FATURAMENTO TOTAL</div>
+                <div class="print-center print-bold" style="font-size: 28px; margin-bottom:5px;">R$ ${resumo.totalVendas.toFixed(2)}</div>
+                <div class="print-divider"></div>
+                <div class="print-row"><span>Fundo Inicial (soma):</span><span class="print-bold">R$ ${resumo.fundoInicial.toFixed(2)}</span></div>
+                <div class="print-row"><span>Qtd de Pedidos:</span><span class="print-bold">${resumo.qtdPedidos}</span></div>
+                <div class="print-divider"></div>
+                <div class="print-center print-bold" style="margin-bottom: 5px;">DETALHAMENTO FORMAS PAGTO</div>
+                <div class="print-row"><span>💳 Cartão Débito:</span><span class="print-bold">R$ ${resumo.debito.toFixed(2)}</span></div>
+                <div class="print-row"><span>💳 Cartão Crédito:</span><span class="print-bold">R$ ${resumo.credito.toFixed(2)}</span></div>
+                <div class="print-row"><span>📱 Pix (Máquina):</span><span class="print-bold">R$ ${resumo.pix.toFixed(2)}</span></div>
+                <div class="print-row"><span>💵 Dinheiro Vendas:</span><span class="print-bold">R$ ${resumo.dinheiroVendas.toFixed(2)}</span></div>
+                <div class="print-row"><span>📲 Pix Direto (Conta):</span><span class="print-bold">R$ ${resumo.pixDireto.toFixed(2)}</span></div>
+                <div class="print-divider"></div>
+                <div class="print-row print-bold" style="font-size: 15px;"><span>TOTAL GAVETA (soma):</span><span>R$ ${resumo.totalGaveta.toFixed(2)}</span></div>
+                ${htmlProdsPrint ? `<div class="print-divider"></div><div class="print-center print-bold" style="margin-bottom:5px;">PRODUTOS VENDIDOS (TODOS OS CAIXAS)</div>${htmlProdsPrint}` : ''}
+                <div class="print-divider"></div>
+                <div class="print-center print-bold" style="margin-top: 10px; font-size: 11px;">Relatório combinado emitido para conferência interna.</div>
+            `;
+        }
+
+        function imprimirRelatorioCombinado() {
+            const fechamentos = obterFechamentosSelecionados();
+            if (fechamentos.length === 0) return exibirAviso('Selecione pelo menos um fechamento pra gerar o relatório combinado.');
+            if (fechamentos.length === 1) return imprimirRelatorioFechamento(fechamentos[0].id);
+            document.getElementById('area-impressao').innerHTML = montarHtmlRelatorioCombinado(fechamentos);
+            dispararImpressao();
+        }
+
+        // area-impressao normalmente é display:none (só aparece via
+        // @media print) — pra tirar JPG/PDF precisa deixar visível
+        // temporariamente antes do html2canvas capturar, e esconder de novo
+        // depois (independente de sucesso ou erro).
+        function gerarJPGRelatorioCombinado() {
+            const fechamentos = obterFechamentosSelecionados();
+            if (fechamentos.length === 0) return exibirAviso('Selecione pelo menos um fechamento pra gerar o relatório combinado.');
+            const area = document.getElementById('area-impressao');
+            area.innerHTML = montarHtmlRelatorioCombinado(fechamentos);
+            area.style.display = 'block';
+            html2canvas(area, { scale: 2 }).then(canvas => {
+                area.style.display = 'none';
+                const link = document.createElement('a');
+                link.download = `Relatorio_Combinado_${fechamentos.length}_caixas.jpg`;
+                link.href = canvas.toDataURL('image/jpeg', 0.92);
+                link.click();
+            }).catch(() => { area.style.display = 'none'; });
+        }
+
+        function gerarPDFRelatorioCombinado() {
+            const fechamentos = obterFechamentosSelecionados();
+            if (fechamentos.length === 0) return exibirAviso('Selecione pelo menos um fechamento pra gerar o relatório combinado.');
+            const area = document.getElementById('area-impressao');
+            area.innerHTML = montarHtmlRelatorioCombinado(fechamentos);
+            area.style.display = 'block';
+            html2pdf().set({
+                margin: 5,
+                filename: `Relatorio_Combinado_${fechamentos.length}_caixas.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2 },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            }).from(area).save().then(() => { area.style.display = 'none'; }).catch(() => { area.style.display = 'none'; });
         }
 
         function verDetalhesCaixa(idCaixa) {
@@ -5620,6 +5773,11 @@ window.gerarJPGDashboardGeral = gerarJPGDashboardGeral;
 window.gerarPDFDashboardGeral = gerarPDFDashboardGeral;
 window.gerarJPGFechamento = gerarJPGFechamento;
 window.gerarPDFFechamento = gerarPDFFechamento;
+window.alternarSelecaoFechamento = alternarSelecaoFechamento;
+window.limparSelecaoFechamentos = limparSelecaoFechamentos;
+window.imprimirRelatorioCombinado = imprimirRelatorioCombinado;
+window.gerarJPGRelatorioCombinado = gerarJPGRelatorioCombinado;
+window.gerarPDFRelatorioCombinado = gerarPDFRelatorioCombinado;
 window.imprimirMeuCaixa = imprimirMeuCaixa;
 window.alternarImpressaoRemota = alternarImpressaoRemota;
 window.salvarDestinoImpressaoRemota = salvarDestinoImpressaoRemota;

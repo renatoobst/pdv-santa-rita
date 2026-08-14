@@ -1314,11 +1314,20 @@
                 </div>
             </div>
 
+            <div id="barra-fechamentos-selecionados" style="display:none; align-items:center; gap:10px; background:#eff6ff; border:1px solid #bfdbfe; padding:10px 15px; border-radius:8px; margin-bottom:12px; flex-wrap:wrap;">
+                <span style="font-weight:bold; color:#1e40af;"><span id="qtd-fechamentos-selecionados">0</span> selecionado(s)</span>
+                <button class="btn" style="background:#1e40af; color:white; padding:6px 12px; font-size:0.85rem;" onclick="imprimirRelatorioCombinado()">🖨️ Imprimir Combinado</button>
+                <button class="btn" style="background:#7c3aed; color:white; padding:6px 12px; font-size:0.85rem;" onclick="gerarJPGRelatorioCombinado()">🖼️ JPG</button>
+                <button class="btn" style="background:#b91c1c; color:white; padding:6px 12px; font-size:0.85rem;" onclick="gerarPDFRelatorioCombinado()">📄 PDF</button>
+                <button class="btn btn-neutro" style="padding:6px 12px; font-size:0.85rem;" onclick="limparSelecaoFechamentos()">✖️ Limpar Seleção</button>
+            </div>
+
             <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-height: 60vh; overflow-y: auto; overflow-x: auto;">
                 <table style="width: 100%; min-width: 700px; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
                     <thead>
                         <tr style="border-bottom: 2px solid #e5e7eb; background: #f8fafc;">
-                            <th style="padding: 12px;"># Ref</th>
+                            <th style="padding: 12px; text-align:center;" title="Marque 2 ou mais pra combinar num relatório só">☑️</th>
+                            <th># Ref</th>
                             <th>Operador</th>
                             <th>Campanha / Evento</th>
                             <th>Abertura</th>
