@@ -272,7 +272,12 @@
 
         /* RESPONSIVIDADE — CELULAR E TABLET (telas de TV/Multiview ficam de fora
            de propósito: são pensadas pra tela grande fixa, não pra toque). */
-        html, body { max-width: 100%; overflow-x: hidden; }
+        /* Só no body, não em html+body: quando os dois têm overflow-x definido,
+           o CSS obriga overflow-y a virar "auto" nos dois (regra de overflow-x/y
+           acoplados), criando dois containers de rolagem em vez de um — isso
+           quebra position:sticky (ex: cabeçalho fixo do cadastro de produtos,
+           que "solta" e rola junto com a lista em vez de ficar parado no topo). */
+        body { max-width: 100%; overflow-x: hidden; }
 
         @media (max-width: 900px) {
             .layout-pedido { grid-template-columns: 1fr; }
