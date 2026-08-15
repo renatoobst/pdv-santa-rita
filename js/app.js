@@ -586,6 +586,12 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         // de colisão entre dispositivos). historicoCaixasDB não usa mais
         // isso — tem tabela própria (pdv_historico_caixas) com id gerado
         // pelo Postgres, então colisão de id não existe mais pra ele.
+        // Ordem natural do ciclo de vida do pedido — usada só pra bloquear
+        // REGRESSÃO acidental na mescla (ver mesclarPorIdComColisao logo
+        // abaixo). "cancelado" fica no mesmo nível de "entregue" (os dois
+        // são estados finais; um não é "mais avançado" que o outro).
+        const PESO_STATUS = { 'nenhum': 0, 'preparando': 1, 'pronto': 2, 'entregue': 3, 'cancelado': 3 };
+
         function mesclarPorIdComColisao(locais, remotos) {
             const mapaRemoto = new Map(remotos.map(item => [item.id, item]));
             const resultado = [...remotos];
@@ -600,27 +606,41 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 }
                 if (mesmaEntrada(itemLocal, noServidor)) {
                     const idx = resultado.findIndex(item => item.id === itemLocal.id);
-                    // BUG REAL encontrado e corrigido: aqui sempre vencia o
-                    // local, assumindo que "local" = "intenção mais
-                    // recente". Errado com múltiplos dispositivos ativos —
-                    // se ESTE aparelho estava com uma cópia desatualizada
-                    // do pedido (ex: não viu ainda que outro aparelho já
-                    // marcou "Entregue"), ele sobrescrevia o servidor de
-                    // volta pro status antigo só por salvar depois. Isso
-                    // fazia pedido já entregue "voltar" a pendente sozinho.
-                    // Agora compara atualizadoEm (carimbado em toda
-                    // mudança de status/edição) e quem for mais recente de
-                    // verdade vence — não importa de qual lado. Pedido sem
-                    // esse campo (legado, de antes desta correção) cai no
-                    // comportamento antigo (local vence), pra não quebrar
-                    // nada que já estava em andamento.
+                    // BUG REAL encontrado e corrigido (2 camadas):
+                    //
+                    // 1) Local sempre vencia, assumindo "local" = "intenção
+                    // mais recente" — errado com múltiplos dispositivos: um
+                    // aparelho com cópia desatualizada sobrescrevia o
+                    // servidor de volta pro status antigo só por salvar
+                    // depois. Corrigido comparando atualizadoEm — quem for
+                    // mais recente de verdade vence.
+                    //
+                    // 2) Isso sozinho ainda deixava passar um caso: tela
+                    // desatualizada (ex: PC que não repintou ainda) mostra
+                    // um pedido já 'entregue' em outro aparelho como se
+                    // ainda estivesse 'preparando'. Um clique em "Chamar
+                    // Painel" nessa tela velha gera um carimbo NOVO de
+                    // verdade (Date.now() de agora), que vencia por
+                    // timestamp mesmo sendo um retrocesso de status —
+                    // "reabrindo" um pedido já entregue e voltando ele pra
+                    // produção. Barrado hoje na origem por chamarNoPainel/
+                    // finalizarEntrega (que já recusam agir num pedido que
+                    // a MEMÓRIA local sabe que está entregue/cancelado),
+                    // mas reforça aqui também, na mescla: retrocesso de
+                    // status (peso menor) só vence se for uma reabertura
+                    // DELIBERADA (reaberturaEm marcado por editarPedido/
+                    // finalizarPedido) — nunca por timestamp sozinho.
                     if (idx !== -1) {
+                        const pesoLocal = PESO_STATUS[itemLocal.statusPainel] ?? 0;
+                        const pesoServidor = PESO_STATUS[noServidor.statusPainel] ?? 0;
+                        const ehRegressaoAcidental = pesoLocal < pesoServidor && !itemLocal.reaberturaEm;
+
                         // Usa === undefined (não "!valor") pra não confundir
                         // "não tem carimbo" com "tem carimbo igual a zero" —
                         // não acontece na prática (Date.now() nunca é 0), mas
                         // não custa nada blindar.
-                        const localMaisNovo = noServidor.atualizadoEm === undefined
-                            || (itemLocal.atualizadoEm !== undefined && itemLocal.atualizadoEm >= noServidor.atualizadoEm);
+                        const localMaisNovo = !ehRegressaoAcidental && (noServidor.atualizadoEm === undefined
+                            || (itemLocal.atualizadoEm !== undefined && itemLocal.atualizadoEm >= noServidor.atualizadoEm));
                         resultado[idx] = localMaisNovo ? itemLocal : noServidor;
                     }
                 } else {
@@ -4173,6 +4193,13 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             // id puro, igual sempre foi.
             let numeroProvisorioPedido = false;
             let letraDispositivoPedido = null;
+            // Marcado só quando editar aqui está DE PROPÓSITO voltando o
+            // status pra trás (ex: reabrir um pedido já entregue de volta
+            // pra "Na Cozinha") — sinaliza pra mesclarPorIdComColisao que
+            // esse retrocesso é intencional, não um clique de tela
+            // desatualizada, então pode vencer a mescla normalmente por
+            // data em vez de ser barrado pela proteção de regressão.
+            let reaberturaEmPedido = undefined;
 
             if (pedidoEmEdicaoId !== null) {
                 statusPainelCalculado = document.getElementById('status-pedido-edicao').value;
@@ -4188,6 +4215,9 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     veioDePausaPedido = !!pedidoExistente.veioDePausa;
                     numeroProvisorioPedido = !!pedidoExistente.numeroProvisorio;
                     letraDispositivoPedido = pedidoExistente.letraDispositivo || null;
+                    if ((PESO_STATUS[statusPainelCalculado] ?? 0) < (PESO_STATUS[pedidoExistente.statusPainel] ?? 0)) {
+                        reaberturaEmPedido = Date.now();
+                    }
                 }
             } else {
                 const itensAgora = carrinho.filter(i => i.fase === 'agora');
@@ -4246,6 +4276,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 veioDePausa: veioDePausaPedido,
                 numeroProvisorio: numeroProvisorioPedido,
                 letraDispositivo: letraDispositivoPedido,
+                reaberturaEm: reaberturaEmPedido,
                 // Carimbo de "agora" em toda criação/edição — usado pela
                 // mescla (mesclarPorIdComColisao) pra saber qual versão de
                 // um pedido é mais recente de verdade quando dois
