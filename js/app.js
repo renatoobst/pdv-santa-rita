@@ -520,6 +520,25 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             return !!(usuarioAtual && (usuarioAtual.isMaster || usuarioAtual.podeAbrirFecharCaixa));
         }
 
+        // BUG REAL encontrado e corrigido: fechar um caixa tentava REMOVER
+        // os pedidos dele de pedidosGerais (filter), igual o antigo bug do
+        // caixasAbertos — e quebra do mesmo jeito com mesclarPorIdComColisao
+        // (união não tem conceito de remoção). Resultado: pedido de caixa já
+        // fechado nunca sumia de verdade do Dashboard "Todos"/"Ver Todos os
+        // Pedidos"/tempo médio de entrega, porque o próximo salvarNoBancoLocal
+        // buscava o servidor (que ainda tinha os pedidos) e a mescla trazia
+        // eles de volta pra pedidosGerais antes de salvar. Além disso,
+        // apagar de verdade quebraria a tela de Gestão, que precisa buscar
+        // pedido de qualquer data — pedidosGerais é (e sempre foi) o
+        // histórico completo, permanente. A solução correta é: pedidosGerais
+        // nunca perde nada, e quem precisa de "só o que está rolando agora"
+        // (Dashboard Todos, Ver Todos os Pedidos, tempo médio de entrega)
+        // filtra por essa função em vez de usar a lista inteira.
+        function pedidosDosCaixasAbertos() {
+            const idsAbertos = new Set(caixasAbertos.filter(c => !c.fechado).map(c => c.id));
+            return pedidosGerais.filter(p => idsAbertos.has(p.caixaId));
+        }
+
         // Duas entradas (pedido OU fechamento de caixa) são "a mesma coisa" só
         // se a chaveUnica bater. Registros salvos ANTES dessa chave existir
         // (de antes desta correção) caem no fallback: só considera igual se o
@@ -1831,7 +1850,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             const filtroStatus = document.getElementById('filtro-modal-status').value;
             tbody.innerHTML = '';
             
-            let lista = [...pedidosGerais].reverse();
+            // Só pedidos dos caixas abertos agora — pedido de caixa já
+            // fechado fica salvo permanentemente no Histórico de Caixas,
+            // não precisa (nem deve) continuar aparecendo aqui pra sempre.
+            let lista = [...pedidosDosCaixasAbertos()].reverse();
 
             if (filtroStatus !== 'Todos') {
                 if (filtroStatus === 'preparando') lista = lista.filter(p => p.statusPainel === 'preparando' || p.statusPainel === 'pronto');
@@ -4385,10 +4407,14 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 dados = calcularResumoPedidos(listaPedidos, !!caixa, caixa ? caixa.valorFundoCaixa : 0);
             } else {
                 // "Todos": soma de todos os caixas abertos agora nesta barraca.
+                // pedidosGerais é o histórico completo (permanente, usado
+                // também pela tela de Gestão) — aqui filtra só o que é dos
+                // caixas abertos NESTE MOMENTO, senão pedido de caixa já
+                // fechado ficava contando pra sempre no Dashboard "Todos".
                 const caixasRealmenteAbertas = caixasAbertos.filter(c => !c.fechado);
-                listaPedidos = pedidosGerais;
+                listaPedidos = pedidosDosCaixasAbertos();
                 const fundoTotal = caixasRealmenteAbertas.reduce((a, c) => a + c.valorFundoCaixa, 0);
-                dados = calcularResumoPedidos(pedidosGerais, caixasRealmenteAbertas.length > 0, fundoTotal);
+                dados = calcularResumoPedidos(listaPedidos, caixasRealmenteAbertas.length > 0, fundoTotal);
             }
             // Custo de produção + taxa de maquininha não fazem parte de
             // calcularResumoPedidos (js/barracas.js) porque dependem do
@@ -5084,7 +5110,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             const elTempoBalcaoDoces = document.querySelector('#tempo-medio-entrega-balcao-doces .valor-tempo-medio-entrega');
             if (elTempoBalcao01 || elTempoBalcaoDoces) {
                 const entreguesBalcao01 = [], entreguesBalcaoDoces = [];
-                pedidosGerais.forEach(p => {
+                pedidosDosCaixasAbertos().forEach(p => {
                     if (p.statusPainel !== 'entregue') return;
                     const vaiPraDoces = configPadroes.separarBalcaoDoces && !pedidoTemAlgoDeCozinha(p.itens);
                     (vaiPraDoces ? entreguesBalcaoDoces : entreguesBalcao01).push(p);
@@ -5333,8 +5359,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         // Fecha um caixa específico (idCaixa) — qualquer usuário com permissão
         // de abrir/fechar caixa pode fechar o de outro operador (ex: alguém
         // esqueceu aberto), não só o próprio. Só os pedidos DAQUELE caixa
-        // entram no fechamento e saem de pedidosGerais — os outros caixas
-        // abertos na barraca continuam intactos.
+        // entram no fechamento (registroFechamento/histórico) — os outros
+        // caixas abertos na barraca continuam intactos. Os pedidos NÃO saem
+        // de pedidosGerais (ver pedidosDosCaixasAbertos() e o comentário
+        // logo antes dela pra entender por quê).
         async function fecharCaixaPrompt(idCaixa) {
             const caixa = caixasAbertos.find(c => c.id === idCaixa && !c.fechado);
             if (!caixa) return exibirAviso("Este caixa já está fechado.");
@@ -5506,7 +5534,12 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             // correção precisa ser aqui, não só na função de mescla).
             const caixaFechado = caixasAbertos.find(c => c.id === idCaixa);
             if (caixaFechado) { caixaFechado.fechado = true; caixaFechado.fechadoEm = Date.now(); }
-            pedidosGerais = pedidosGerais.filter(p => p.caixaId !== idCaixa);
+            // Não remove os pedidos de pedidosGerais aqui — ver
+            // pedidosDosCaixasAbertos() acima pra entender por que isso
+            // nunca funcionou de verdade e por que a lista tem que
+            // permanecer completa (histórico + tela de Gestão dependem
+            // disso). Quem precisa só do que está aberto agora usa aquela
+            // função em vez de ler pedidosGerais direto.
             if (caixaRelatorioSelecionado === idCaixa) caixaRelatorioSelecionado = null;
 
             salvarNoBancoLocal();
@@ -6988,7 +7021,49 @@ window.carregarLogsSistema = carregarLogsSistema;
 // Supabase, isso aqui nunca intercepta essas chamadas (ver sw.js).
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js').catch((erro) => {
+        navigator.serviceWorker.register('sw.js').then((registration) => {
+            // Detecta quando uma versão nova foi publicada (git push) e avisa
+            // o operador em vez de depender só de Ctrl+F5 manual — já
+            // aconteceu de um único aparelho esquecido na versão antiga
+            // corromper pedido de todo mundo durante o evento. Não recarrega
+            // sozinho (perderia carrinho em andamento) — só avisa com botão.
+            function avisarNovaVersao() {
+                if (document.getElementById('aviso-nova-versao')) return;
+                const banner = document.createElement('div');
+                banner.id = 'aviso-nova-versao';
+                banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#dc2626;color:#fff;padding:10px 16px;text-align:center;font-weight:bold;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,0.3);display:flex;justify-content:center;align-items:center;gap:12px;flex-wrap:wrap;';
+                const texto = document.createElement('span');
+                texto.textContent = '🔄 Nova versão do sistema publicada — atualize assim que possível pra evitar pedido desincronizado.';
+                const btn = document.createElement('button');
+                btn.textContent = 'Atualizar agora';
+                btn.style.cssText = 'background:#fff;color:#dc2626;border:none;padding:6px 14px;border-radius:6px;font-weight:bold;cursor:pointer;';
+                btn.onclick = () => window.location.reload();
+                banner.appendChild(texto);
+                banner.appendChild(btn);
+                document.body.prepend(banner);
+            }
+
+            function vigiarNovoWorker(worker) {
+                worker.addEventListener('statechange', () => {
+                    if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+                        avisarNovaVersao();
+                    }
+                });
+            }
+
+            if (registration.installing) vigiarNovoWorker(registration.installing);
+            registration.addEventListener('updatefound', () => {
+                if (registration.installing) vigiarNovoWorker(registration.installing);
+            });
+
+            // O navegador só confere sw.js por conta própria de vez em
+            // quando — força a checagem periodicamente e sempre que a aba
+            // volta a ficar visível, pra detectar publicação nova rápido.
+            setInterval(() => registration.update().catch(() => {}), 2 * 60 * 1000);
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') registration.update().catch(() => {});
+            });
+        }).catch((erro) => {
             console.log('Service worker não pôde ser registrado (app continua funcionando normal):', erro);
         });
     });
