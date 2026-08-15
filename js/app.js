@@ -6808,6 +6808,18 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             });
             window.addEventListener('online', () => resincronizarSeNecessario('conexão de internet voltou'));
 
+            // Dispositivo que fica a tela toda ligada sem nunca trocar de
+            // aba nem cair de vez (ex: um monitor de Balcão fixo) não bate
+            // em NENHUM dos gatilhos acima — se o canal de tempo real morrer
+            // quieto (wifi ruim, sem cair de verdade), esse aparelho fica
+            // "dormindo" indefinidamente, mostrando pedido desatualizado sem
+            // ninguém perceber. Batida de segurança a cada 45s, sempre —
+            // resincronizarSeNecessario já tem debounce próprio, então não
+            // tem custo real quando está tudo em dia.
+            setInterval(() => {
+                if (document.visibilityState === 'visible') resincronizarSeNecessario('batida periódica de segurança');
+            }, 45000);
+
             // Reconecta sozinho se este dispositivo já tinha sido configurado
             // (numa sessão anterior) como impressora de rede ou como remetente
             // — senão só voltaria a funcionar depois de reabrir a tela de
