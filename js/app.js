@@ -6891,12 +6891,12 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             // em NENHUM dos gatilhos acima — se o canal de tempo real morrer
             // quieto (wifi ruim, sem cair de verdade), esse aparelho fica
             // "dormindo" indefinidamente, mostrando pedido desatualizado sem
-            // ninguém perceber. Batida de segurança a cada 45s, sempre —
+            // ninguém perceber. Batida de segurança a cada 15s, sempre —
             // resincronizarSeNecessario já tem debounce próprio, então não
             // tem custo real quando está tudo em dia.
             setInterval(() => {
                 if (document.visibilityState === 'visible') resincronizarSeNecessario('batida periódica de segurança');
-            }, 45000);
+            }, 15000);
 
             // Reconecta sozinho se este dispositivo já tinha sido configurado
             // (numa sessão anterior) como impressora de rede ou como remetente
