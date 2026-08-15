@@ -7039,13 +7039,31 @@ if ('serviceWorker' in navigator) {
             // aconteceu de um único aparelho esquecido na versão antiga
             // corromper pedido de todo mundo durante o evento. Não recarrega
             // sozinho (perderia carrinho em andamento) — só avisa com botão.
+            // Atualiza sozinho, sem precisar de clique, quando é seguro (carrinho
+            // vazio = nada em risco de se perder). Só pede clique manual (banner)
+            // quando tem pedido sendo montado na hora — aí sim esperar é melhor
+            // do que arriscar apagar o que o operador estava digitando.
+            function aplicarAtualizacaoAutomatica() {
+                if (document.getElementById('aviso-nova-versao')) return;
+                const toast = document.createElement('div');
+                toast.id = 'aviso-nova-versao';
+                toast.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#16a34a;color:#fff;padding:10px 16px;text-align:center;font-weight:bold;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,0.3);';
+                toast.textContent = '🔄 Atualizando sistema automaticamente...';
+                document.body.prepend(toast);
+                setTimeout(() => window.location.reload(), 1200);
+            }
+
             function avisarNovaVersao() {
                 if (document.getElementById('aviso-nova-versao')) return;
+                if (carrinho.length === 0) {
+                    aplicarAtualizacaoAutomatica();
+                    return;
+                }
                 const banner = document.createElement('div');
                 banner.id = 'aviso-nova-versao';
                 banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#dc2626;color:#fff;padding:10px 16px;text-align:center;font-weight:bold;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,0.3);display:flex;justify-content:center;align-items:center;gap:12px;flex-wrap:wrap;';
                 const texto = document.createElement('span');
-                texto.textContent = '🔄 Nova versão do sistema publicada — atualize assim que possível pra evitar pedido desincronizado.';
+                texto.textContent = '🔄 Nova versão do sistema publicada — atualiza assim que terminar esse pedido (ou clica aqui).';
                 const btn = document.createElement('button');
                 btn.textContent = 'Atualizar agora';
                 btn.style.cssText = 'background:#fff;color:#dc2626;border:none;padding:6px 14px;border-radius:6px;font-weight:bold;cursor:pointer;';
@@ -7053,6 +7071,17 @@ if ('serviceWorker' in navigator) {
                 banner.appendChild(texto);
                 banner.appendChild(btn);
                 document.body.prepend(banner);
+
+                // Assim que o carrinho esvaziar sozinho (pedido foi enviado/
+                // limpo), troca pro reload automático — não fica esperando
+                // clique indefinidamente.
+                const verificadorCarrinhoVazio = setInterval(() => {
+                    if (carrinho.length === 0) {
+                        clearInterval(verificadorCarrinhoVazio);
+                        banner.remove();
+                        aplicarAtualizacaoAutomatica();
+                    }
+                }, 4000);
             }
 
             function vigiarNovoWorker(worker) {
