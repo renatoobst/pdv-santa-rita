@@ -671,10 +671,26 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (maiorId >= contadorPedidos) contadorPedidos = maiorId + 1;
         }
 
+        // BUG REAL encontrado e corrigido: cada chamada disparava sua
+        // própria leitura+mescla+gravação sem esperar a anterior terminar.
+        // Numa rajada de ações rápidas (ex: dar baixa em 10 pedidos
+        // seguidos no Balcão), várias gravações ficavam concorrentes, TODAS
+        // lendo o servidor no mesmo instante (antes de qualquer uma
+        // terminar de escrever) — se outro aparelho gravasse algo bem nessa
+        // janela, uma dessas gravações atrasadas (que leu um instantâneo
+        // desatualizado) podia sobrescrever por cima sem nunca ter visto
+        // aquela mudança. Agora a parte de rede é sempre enfileirada: nunca
+        // duas leituras+gravações rodam ao mesmo tempo, cada uma só começa
+        // depois que a anterior terminou de verdade.
+        let filaSalvamentoRemoto = Promise.resolve();
         async function salvarNoBancoLocal() {
             salvarCacheLocal();
             if (carregandoEstadoRemoto) return;
+            filaSalvamentoRemoto = filaSalvamentoRemoto.then(salvarNoSupabaseAgora, salvarNoSupabaseAgora);
+            return filaSalvamentoRemoto;
+        }
 
+        async function salvarNoSupabaseAgora() {
             try {
                 // Busca o que está no servidor NESTE INSTANTE, bem antes de
                 // gravar, e mescla por id em vez de sobrescrever o array
