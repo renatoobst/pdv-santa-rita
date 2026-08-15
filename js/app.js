@@ -260,6 +260,19 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         function aplicarEstado(estado, atualizarUI = true) {
             if (!estado) return;
             carregandoEstadoRemoto = true;
+            // BUG REAL encontrado e corrigido: esta função não tinha
+            // try/catch nenhum. Qualquer erro no meio (dado remoto num
+            // formato inesperado, etc.) parava tudo ANTES da linha que
+            // reseta carregandoEstadoRemoto pra false — a flag ficava
+            // travada em true pra sempre, e enquanto travada,
+            // salvarNoBancoLocal() e resincronizarSeNecessario() saem na
+            // hora sem fazer nada (ver os dois "if (carregandoEstadoRemoto)
+            // return" acima). Resultado: aparelho parava de mandar E de
+            // receber atualização dos outros, em silêncio, sem erro visível
+            // — só um F5 (que reinicia a variável) resolvia, e só até bater
+            // no mesmo erro nos dados de novo. Try/finally garante que a
+            // flag sempre volta a false, não importa o que aconteça.
+            try {
 
             // MESCLA em vez de SOBRESCREVER — antes, chegar estado daqui
             // (boot, push em tempo real de outro dispositivo, ou
@@ -321,7 +334,6 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
             ultimaAtualizacaoRemota = estado.salvoEm || null;
             salvarCacheLocal();
-            carregandoEstadoRemoto = false;
 
             if (atualizarUI) {
                 atualizarInterfaceCaixa();
@@ -335,6 +347,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 if (modalConfig && modalConfig.style.display === 'flex') carregarFormularioConfiguracoes();
                 const relatorio = document.getElementById('tela-relatorio');
                 if (relatorio && relatorio.classList.contains('active')) atualizarDashboard();
+            }
+            } catch (erro) {
+                console.error('Falha ao aplicar estado remoto — dispositivo pode ficar temporariamente fora de sincronia até o próximo F5:', erro);
+            } finally {
+                carregandoEstadoRemoto = false;
             }
         }
 
