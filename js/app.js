@@ -921,7 +921,17 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 definirSupabaseDisponivel(true);
 
                 if (data && data.data) {
-                    aplicarEstado(data.data, false);
+                    // BUG REAL encontrado e corrigido: estava chamando com
+                    // atualizarUI=false. carregarEstadoSupabase é o caminho
+                    // usado pela resincronização periódica (15s, troca de
+                    // aba, volta de internet) — com false, ela buscava e
+                    // mesclava o dado certo na memória, mas NUNCA repintava
+                    // a tela. Explica por que a tela ficava presa mostrando
+                    // número velho mesmo com o dado já correto por trás: só
+                    // a atualização em tempo real (que já usava true) e o
+                    // boot inicial (que chama atualizarTelas() explicitamente
+                    // logo depois) realmente atualizavam o que aparecia.
+                    aplicarEstado(data.data, true);
                 } else {
                     await salvarNoBancoLocal();
                 }
