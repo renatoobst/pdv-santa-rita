@@ -5636,6 +5636,17 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             return new Date(y, m - 1, d);
         }
 
+        // Igual parseDataFechamentoBR, mas preserva a hora — usado só pra
+        // ordenar a lista (o filtro por período continua no nível de dia).
+        function parseDataHoraFechamentoBR(dataStr) {
+            if (!dataStr) return null;
+            const [dataParte, horaParte] = dataStr.split(' ');
+            const [d, m, y] = (dataParte || '').split('/').map(Number);
+            if (!d || !m || !y) return null;
+            const [h, min] = (horaParte || '0:0').split(':').map(Number);
+            return new Date(y, m - 1, d, h || 0, min || 0);
+        }
+
         // Fundiu "Histórico de Caixas" com "Fechamentos por Período" numa tela
         // só — eram quase a mesma coisa (as duas listavam historicoCaixasDB
         // filtrado por data). Ações (ver/imprimir/exportar/excluir) do
@@ -5677,6 +5688,19 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (operador && operador !== 'Todos') {
                 lista = lista.filter(c => c.usuarioNome === operador);
             }
+
+            // Mais recente primeiro — antes vinha na ordem crua de
+            // historicoCaixasDB (mistura id local com id do Postgres depois
+            // da sincronização), que não tem relação nenhuma com a ordem
+            // cronológica real dos fechamentos.
+            lista.sort((a, b) => {
+                const da = parseDataHoraFechamentoBR(a.dataFechamento);
+                const db = parseDataHoraFechamentoBR(b.dataFechamento);
+                if (!da && !db) return 0;
+                if (!da) return 1;
+                if (!db) return -1;
+                return db - da;
+            });
 
             const totalVendas = lista.reduce((a, c) => a + c.totalVendas, 0);
             const qtdPedidosSoma = lista.reduce((a, c) => a + c.qtdPedidos, 0);
