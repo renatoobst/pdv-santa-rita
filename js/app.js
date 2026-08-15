@@ -5151,8 +5151,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                             <thead>
                                 <tr>
                                     <th style="text-align:left;">Item / Produto</th>
-                                    <th>ativo</th>
-                                    <th>ficha</th>
+                                    <th title="No balcão agora, inclui o que já está pronto pra entregar">no balcão</th>
+                                    <th title="Em Pedidos em Pausa, ainda não foi pra cozinha">em pausa</th>
                                     <th>total</th>
                                 </tr>
                             </thead>
