@@ -4792,6 +4792,20 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
         function chamarNoPainel(id) {
             const p = pedidosGerais.find(x => x.id === id);
+            // BUG REAL encontrado e corrigido: clicar num card que a TELA
+            // ainda mostrava (mas que por trás já tinha sido entregue por
+            // outro aparelho — tela desatualizada por alguns segundos)
+            // criava uma mudança de status NOVA e genuína, com carimbo de
+            // agora, que vencia a mesclagem por ser mais recente — "reabria"
+            // um pedido já entregue e bagunçava a Cozinha. Confere o status
+            // ATUAL em memória (não o que a tela mostrava no momento do
+            // clique) antes de agir; se já passou dessa fase, bloqueia e
+            // corrige a tela na hora em vez de criar um retrocesso.
+            if (!p || p.statusPainel === 'entregue' || p.statusPainel === 'cancelado') {
+                exibirAviso('Esse pedido já foi finalizado em outro aparelho — a tela estava desatualizada, já corrigida agora.', 'Pedido já finalizado');
+                atualizarTelas();
+                return;
+            }
             p.statusPainel = 'pronto';
             p.atualizadoEm = Date.now();
             dispararAvisoSonoro(rotuloPedido(p), p.cliente);
@@ -4801,6 +4815,12 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
         function finalizarEntrega(id) {
             const p = pedidosGerais.find(x => x.id === id);
+            // Mesma proteção de chamarNoPainel — ver comentário lá.
+            if (!p || p.statusPainel === 'entregue' || p.statusPainel === 'cancelado') {
+                exibirAviso('Esse pedido já foi finalizado em outro aparelho — a tela estava desatualizada, já corrigida agora.', 'Pedido já finalizado');
+                atualizarTelas();
+                return;
+            }
             const horaAtual = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
             p.itens.forEach(i => { if(i.fase !== 'mais_tarde') i.fase = 'entregue'; });
