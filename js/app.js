@@ -264,6 +264,20 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             }
         }
 
+        // Resumo barato (não é o estado inteiro, só o que os renders usam
+        // pra decidir o que desenhar) de tudo que pode afetar a tela — ver
+        // aplicarEstado. length + atualizadoEm de cada pedido já cobre
+        // criação/status mudando; JSON.stringify de caixasAbertos/
+        // configPadroes/estoquePorProduto cobre o resto (são pequenos,
+        // stringify neles é rápido).
+        function calcularAssinaturaEstadoParaTela() {
+            return pedidosGerais.length + '|'
+                + pedidosGerais.map(p => p.atualizadoEm || 0).join(',') + '|'
+                + JSON.stringify(caixasAbertos) + '|'
+                + JSON.stringify(configPadroes) + '|'
+                + JSON.stringify(estoquePorProduto);
+        }
+
         function aplicarEstado(estado, atualizarUI = true) {
             if (!estado) return;
             carregandoEstadoRemoto = true;
@@ -280,6 +294,19 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             // no mesmo erro nos dados de novo. Try/finally garante que a
             // flag sempre volta a false, não importa o que aconteça.
             try {
+
+            // Repintar a tela inteira (Cozinha/Balcão/tabela de Produtos/
+            // Gestão/etc) é caro em tablet mais fraco — várias trocas de
+            // innerHTML grandes de uma vez. Com a checagem periódica de
+            // segurança rodando a cada 15s e SEMPRE repintando (corrigido
+            // depois de descobrir que "false" aqui deixava a tela presa),
+            // isso passou a rodar até quando nada tinha mudado de verdade
+            // nos últimos 15s — o caso mais comum. Só compara uma
+            // "assinatura" barata do que afeta a tela ANTES e DEPOIS da
+            // mesclagem: se for igual, pula os renders caros — a mesclagem
+            // em si (a parte que garante o dado certo) continua rodando
+            // sempre, só a repintura é que fica condicional.
+            const assinaturaAntes = atualizarUI ? calcularAssinaturaEstadoParaTela() : null;
 
             // MESCLA em vez de SOBRESCREVER — antes, chegar estado daqui
             // (boot, push em tempo real de outro dispositivo, ou
@@ -342,7 +369,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             ultimaAtualizacaoRemota = estado.salvoEm || null;
             salvarCacheLocal();
 
-            if (atualizarUI) {
+            if (atualizarUI && calcularAssinaturaEstadoParaTela() !== assinaturaAntes) {
                 atualizarInterfaceCaixa();
                 renderizarMenu(categoriaFiltroAtual);
                 renderizarTabelaProdutos();
