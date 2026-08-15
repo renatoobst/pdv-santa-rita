@@ -591,7 +591,12 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     // comportamento antigo (local vence), pra não quebrar
                     // nada que já estava em andamento.
                     if (idx !== -1) {
-                        const localMaisNovo = !noServidor.atualizadoEm || (itemLocal.atualizadoEm && itemLocal.atualizadoEm >= noServidor.atualizadoEm);
+                        // Usa === undefined (não "!valor") pra não confundir
+                        // "não tem carimbo" com "tem carimbo igual a zero" —
+                        // não acontece na prática (Date.now() nunca é 0), mas
+                        // não custa nada blindar.
+                        const localMaisNovo = noServidor.atualizadoEm === undefined
+                            || (itemLocal.atualizadoEm !== undefined && itemLocal.atualizadoEm >= noServidor.atualizadoEm);
                         resultado[idx] = localMaisNovo ? itemLocal : noServidor;
                     }
                 } else {
