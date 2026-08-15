@@ -4920,7 +4920,16 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             // ver bloco do Balcão logo abaixo.
             let resumoBalcaoDoces = {};
 
-            pedidosGerais.forEach(p => {
+            // BUG REAL encontrado e corrigido: este loop lia pedidosGerais
+            // inteiro, sem filtrar por caixa aberto. Presumia que todo
+            // pedido de um caixa já fechado sempre estaria 'entregue' ou
+            // 'cancelado' antes do fechamento — falso: se o caixa fechou
+            // (normal ou forçado) enquanto ainda tinha pedido pendente numa
+            // cópia desatualizada de outro dispositivo, esse pedido nunca
+            // saía da Cozinha/Balcão, mesmo com "Ver Todos os Pedidos" e o
+            // Dashboard já mostrando tudo certo (aqueles já usavam
+            // pedidosDosCaixasAbertos). Agora usa a mesma fonte.
+            pedidosDosCaixasAbertos().forEach(p => {
                 if(p.statusPainel === 'cancelado') return;
                 
                 // Exclui 'entregue' junto com 'mais_tarde' — senão, quando uma
