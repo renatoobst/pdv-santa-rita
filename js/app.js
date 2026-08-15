@@ -98,6 +98,18 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             }
         }
 
+        // Pedido explícito: sem internet, o sistema não deixa lançar pedido,
+        // dar baixa nem chamar painel — trava dura em vez de deixar
+        // acumular localmente pra sincronizar depois. Usa supabaseDisponivel
+        // (só muda quando uma leitura/gravação REAL falha) em vez de
+        // navigator.onLine, que pode dizer "online" com wifi sem internet de
+        // verdade. Retorna true (e já mostra o aviso) quando bloqueou.
+        function bloquearSeOffline(acao) {
+            if (supabaseDisponivel) return false;
+            exibirAviso(`🔴 Sem conexão com o servidor agora — ${acao} fica bloqueado até a internet voltar.`, 'Sem Internet');
+            return true;
+        }
+
         // Captura qualquer erro JS não tratado (e Promise rejeitada sem
         // .catch) e manda pra pdv_logs — junto com qual tela estava ativa e
         // qual usuário estava logado, pra dar pra investigar "o sistema
@@ -4059,6 +4071,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         }
 
         function finalizarPedido() {
+            if (bloquearSeOffline('lançar pedido')) return;
             const meuCaixaAtual = caixaDoUsuarioAtual();
             if (!meuCaixaAtual) {
                 return exibirAviso("🔒 Abra o seu caixa antes de finalizar pedidos.", "Caixa Fechado");
@@ -4774,6 +4787,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         }
 
         function chamarNoPainel(id) {
+            if (bloquearSeOffline('chamar painel')) return;
             const p = pedidosGerais.find(x => x.id === id);
             p.statusPainel = 'pronto';
             p.atualizadoEm = Date.now();
@@ -4783,6 +4797,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         }
 
         function finalizarEntrega(id) {
+            if (bloquearSeOffline('dar baixa no pedido')) return;
             const p = pedidosGerais.find(x => x.id === id);
             const horaAtual = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
