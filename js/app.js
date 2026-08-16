@@ -1863,11 +1863,14 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 urlTVParaAbrirEmMonitor = `${location.origin}${location.pathname}?abrirTela=tela-tv`;
                 const corpo = document.getElementById('lista-escolha-monitor');
                 if (!corpo) { abrirJanelaTVSimples(); return; }
-                corpo.innerHTML = telas.map((tela, i) => `
-                    <button type="button" class="btn btn-primary" style="width:100%; margin-bottom:8px; text-align:left;" onclick="abrirTVNoMonitorEscolhido(${i})">
-                        🖥️ Monitor ${i + 1}${tela.isPrimary ? ' (principal)' : ''} — ${tela.width}×${tela.height}
-                    </button>
-                `).join('');
+                corpo.innerHTML = telas.map((tela, i) => {
+                    const rotulo = tela.label || `Monitor ${i + 1}`;
+                    return `
+                        <button type="button" class="btn btn-primary" style="width:100%; margin-bottom:8px; text-align:left;" onclick="abrirTVNoMonitorEscolhido(${i})">
+                            🖥️ ${rotulo}${tela.isPrimary ? ' (principal)' : ''} — ${tela.width}×${tela.height}
+                        </button>
+                    `;
+                }).join('');
                 document.getElementById('modal-escolha-monitor').style.display = 'flex';
             } catch (erro) {
                 // Permissão negada ou API bloqueada nesta janela — abre do
@@ -1880,40 +1883,40 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             const tela = telasDisponiveisParaEscolhaMonitor[indice];
             fecharModalEscolhaMonitor();
             if (!tela) { abrirJanelaTVSimples(); return; }
-            // BUG REAL encontrado e corrigido: left/top direto no window.open
-            // não pula de monitor de forma confiável — o Chrome cria a
-            // janela sempre no monitor ATUAL e ignora/limita coordenadas de
-            // outro monitor nesse instante da criação. moveTo/resizeTo
-            // DEPOIS de a janela já existir é o jeito que funciona de
-            // verdade (com a permissão de Window Management já concedida,
-            // já que getScreenDetails() só chegou até aqui se foi
-            // concedida). Nome único a cada clique — um nome fixo reusava a
-            // janela já aberta (se existisse) e ignorava tudo de novo.
-            const janela = window.open(urlTVParaAbrirEmMonitor, `pdv-tv-senha-${Date.now()}`, `width=${tela.width},height=${tela.height}`);
+
+            // BUG REAL encontrado e corrigido (2 tentativas anteriores
+            // falharam, ambas em silêncio — sem erro nenhum, só não
+            // funcionava): left/top já iam nas features do window.open
+            // desde a v1, então a causa mais provável não era "faltava
+            // posicionar na criação" — era o setTimeout de 300ms da v2
+            // ANTES do moveTo/resizeTo, que dá tempo do "user activation"
+            // do clique expirar; sem ele, o Chrome pode recusar mover a
+            // janela pra OUTRO monitor. Agora tudo que precisa do clique
+            // (window.open + moveTo/resizeTo de reforço) roda 100% síncrono,
+            // sem nenhum await/setTimeout no meio — só a CONFERÊNCIA de se
+            // funcionou é que pode esperar um pouco (o SO leva um instante
+            // pra aplicar visualmente o reposicionamento).
+            const left = tela.availLeft ?? tela.left ?? 0;
+            const top = tela.availTop ?? tela.top ?? 0;
+            const width = tela.availWidth ?? tela.width ?? 1280;
+            const height = tela.availHeight ?? tela.height ?? 800;
+            const features = `left=${left},top=${top},screenX=${left},screenY=${top},width=${width},height=${height},menubar=no,toolbar=no,location=no,status=no`;
+
+            const janela = window.open(urlTVParaAbrirEmMonitor, `pdv-tv-senha-${Date.now()}`, features);
             if (!janela) return;
+            try { janela.moveTo(left, top); janela.resizeTo(width, height); } catch (erro) { /* segue pra confirmação abaixo mesmo assim */ }
+
+            // moveTo/resizeTo NÃO lançam erro quando bloqueados ou limitados
+            // pelo navegador — só ficam sem efeito, em silêncio. Confere se
+            // a janela realmente chegou perto de onde devia; se não chegou,
+            // avisa em vez de deixar o operador achando que funcionou.
             setTimeout(() => {
-                try {
-                    janela.moveTo(tela.left, tela.top);
-                    janela.resizeTo(tela.width, tela.height);
-                    // moveTo/resizeTo NÃO lançam erro quando bloqueados ou
-                    // limitados pelo navegador — só ficam sem efeito, em
-                    // silêncio (foi exatamente isso que aconteceu na
-                    // primeira tentativa, sem dar nenhuma pista do motivo).
-                    // Confere se a janela realmente chegou perto de onde
-                    // devia; se não chegou, avisa em vez de deixar o
-                    // operador achando que funcionou.
-                    setTimeout(() => {
-                        const chegouPerto = Math.abs(janela.screenX - tela.left) < 50 && Math.abs(janela.screenY - tela.top) < 50;
-                        if (!chegouPerto) {
-                            console.error('Janela da TV não moveu pro monitor escolhido — posição atual:', janela.screenX, janela.screenY, 'esperado:', tela.left, tela.top);
-                            exibirAviso('⚠️ A janela abriu, mas não consegui mover ela pro monitor escolhido sozinho. Arrasta ela na mão pra lá.', 'TV Senha');
-                        }
-                    }, 200);
-                } catch (erro) {
-                    console.error('Falha ao mover a janela da TV pro monitor escolhido:', erro);
-                    exibirAviso(`⚠️ A janela abriu, mas não consegui mover ela pro monitor escolhido sozinho (${erro.message || erro}). Arrasta ela na mão pra lá.`, 'TV Senha');
+                const chegouPerto = Math.abs(janela.screenX - left) < 50 && Math.abs(janela.screenY - top) < 50;
+                if (!chegouPerto) {
+                    console.error('Janela da TV não moveu pro monitor escolhido — posição atual:', janela.screenX, janela.screenY, 'esperado:', left, top);
+                    exibirAviso('⚠️ A janela abriu, mas não consegui mover ela pro monitor escolhido sozinho. Arrasta ela na mão pra lá.', 'TV Senha');
                 }
-            }, 300);
+            }, 400);
         }
 
         function fecharModalEscolhaMonitor() {
