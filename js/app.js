@@ -1880,8 +1880,27 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             const tela = telasDisponiveisParaEscolhaMonitor[indice];
             fecharModalEscolhaMonitor();
             if (!tela) { abrirJanelaTVSimples(); return; }
-            const features = `left=${tela.left},top=${tela.top},width=${tela.width},height=${tela.height}`;
-            window.open(urlTVParaAbrirEmMonitor, 'pdv-tv-senha', features);
+            // BUG REAL encontrado e corrigido: left/top direto no window.open
+            // não pula de monitor de forma confiável — o Chrome cria a
+            // janela sempre no monitor ATUAL e ignora/limita coordenadas de
+            // outro monitor nesse instante da criação. moveTo/resizeTo
+            // DEPOIS de a janela já existir é o jeito que funciona de
+            // verdade (com a permissão de Window Management já concedida,
+            // já que getScreenDetails() só chegou até aqui se foi
+            // concedida). Nome único a cada clique — um nome fixo reusava a
+            // janela já aberta (se existisse) e ignorava tudo de novo.
+            const janela = window.open(urlTVParaAbrirEmMonitor, `pdv-tv-senha-${Date.now()}`, `width=${tela.width},height=${tela.height}`);
+            if (!janela) return;
+            setTimeout(() => {
+                try {
+                    janela.moveTo(tela.left, tela.top);
+                    janela.resizeTo(tela.width, tela.height);
+                } catch (erro) {
+                    // Alguns navegadores ainda bloqueiam moveTo/resizeTo em
+                    // certas condições — a janela já abriu mesmo assim, só
+                    // não pulou de monitor sozinha; dá pra arrastar na mão.
+                }
+            }, 300);
         }
 
         function fecharModalEscolhaMonitor() {
