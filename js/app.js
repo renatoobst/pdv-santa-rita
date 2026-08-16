@@ -141,6 +141,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             // Pedido sem NENHUM item de cozinha (doce, refri...) vai pro
             // Balcão 02 em vez do Balcão 01 — ver atualizarTelas().
             separarBalcaoDoces: false,
+            // Pop-up avisando toda vez que um pedido é direcionado pro
+            // Balcão 02 (ver finalizarPedido) — ligado por padrão pra não
+            // mudar o comportamento de quem já usa, mas pode incomodar em
+            // evento com muito pedido "só doce/bebida" seguido.
+            avisarBalcaoDoces: true,
             // Desligado = pula direto pro botão "Entregue" (sem tocar som/
             // exigir "Chamar Painel" antes) — ver atualizarTelas().
             chamarAtivoBalcao01: true,
@@ -1526,6 +1531,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
             const chkBalcaoDoces = document.getElementById('cfg-separar-balcao-doces');
             if (chkBalcaoDoces) chkBalcaoDoces.checked = !!configPadroes.separarBalcaoDoces;
+            const chkAvisarBalcaoDoces = document.getElementById('cfg-avisar-balcao-doces');
+            if (chkAvisarBalcaoDoces) chkAvisarBalcaoDoces.checked = configPadroes.avisarBalcaoDoces !== false;
 
             const chkChamarBalcao01 = document.getElementById('cfg-chamar-ativo-balcao01');
             if (chkChamarBalcao01) chkChamarBalcao01.checked = configPadroes.chamarAtivoBalcao01 !== false;
@@ -1732,6 +1739,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             document.getElementById('cfg-padrao-tipo-atendimento').value = configPadroes.tipoAtendimento || '';
             document.getElementById('cfg-padrao-tipo-retirada-global').value = configPadroes.tipoRetiradaGlobal || '';
             document.getElementById('cfg-separar-balcao-doces').checked = !!configPadroes.separarBalcaoDoces;
+            document.getElementById('cfg-avisar-balcao-doces').checked = configPadroes.avisarBalcaoDoces !== false;
             document.getElementById('cfg-chamar-ativo-balcao01').checked = configPadroes.chamarAtivoBalcao01 !== false;
             document.getElementById('cfg-chamar-ativo-balcao-doces').checked = configPadroes.chamarAtivoBalcaoDoces !== false;
             document.getElementById('cfg-pix-chave').value = configPadroes.pixChave || '';
@@ -1757,6 +1765,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 tipoAtendimento: document.getElementById('cfg-padrao-tipo-atendimento').value,
                 tipoRetiradaGlobal: document.getElementById('cfg-padrao-tipo-retirada-global').value,
                 separarBalcaoDoces: document.getElementById('cfg-separar-balcao-doces').checked,
+                avisarBalcaoDoces: document.getElementById('cfg-avisar-balcao-doces').checked,
                 chamarAtivoBalcao01: document.getElementById('cfg-chamar-ativo-balcao01').checked,
                 chamarAtivoBalcaoDoces: document.getElementById('cfg-chamar-ativo-balcao-doces').checked,
                 pixChave: document.getElementById('cfg-pix-chave').value.trim(),
@@ -4487,7 +4496,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (catalogoAlteradoPorEstoque) salvarCatalogo();
             salvarNoBancoLocal();
 
-            if (pedidoEmEdicaoId === null && configPadroes.separarBalcaoDoces && !pedidoTemAlgoDeCozinha(novoPedido.itens)) {
+            if (pedidoEmEdicaoId === null && configPadroes.separarBalcaoDoces && configPadroes.avisarBalcaoDoces !== false && !pedidoTemAlgoDeCozinha(novoPedido.itens)) {
                 exibirAviso(`Pedido #${rotuloPedido(novoPedido)} não tem nada de cozinha — foi direcionado pro Balcão 02 (Doces).`, '🍬 Balcão 02 (Doces)');
             }
 
