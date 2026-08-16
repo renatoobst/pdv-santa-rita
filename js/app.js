@@ -1902,19 +1902,35 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             const height = tela.availHeight ?? tela.height ?? 800;
             const features = `left=${left},top=${top},screenX=${left},screenY=${top},width=${width},height=${height},menubar=no,toolbar=no,location=no,status=no`;
 
-            const janela = window.open(urlTVParaAbrirEmMonitor, `pdv-tv-senha-${Date.now()}`, features);
+            // BUG REAL encontrado e corrigido (3ª tentativa — as 2 anteriores
+            // tentaram mover uma janela JÁ criada pro monitor certo, e o
+            // Chrome recusa isso silenciosamente com bastante frequência,
+            // não importa a técnica usada pra mover. Caminho diferente
+            // agora: manda o monitor escolhido (left/top) na própria URL, e
+            // quem realmente resolve isso é o botão "🖥️ Clique para Tela
+            // Cheia" DENTRO da janela nova — ele chama
+            // requestFullscreen({screen: telaEscolhida}), a forma OFICIAL
+            // da Window Management API de abrir em tela cheia numa tela
+            // ESPECÍFICA, sem depender de mover uma janela solta primeiro
+            // (ver telaAutoAbrir mais abaixo no arquivo). moveTo/resizeTo
+            // aqui viram só uma tentativa extra de baixo custo, não mais a
+            // solução principal.
+            const urlComMonitor = `${urlTVParaAbrirEmMonitor}&monitorLeft=${left}&monitorTop=${top}`;
+            const janela = window.open(urlComMonitor, `pdv-tv-senha-${Date.now()}`, features);
             if (!janela) return;
             try { janela.moveTo(left, top); janela.resizeTo(width, height); } catch (erro) { /* segue pra confirmação abaixo mesmo assim */ }
 
             // moveTo/resizeTo NÃO lançam erro quando bloqueados ou limitados
             // pelo navegador — só ficam sem efeito, em silêncio. Confere se
             // a janela realmente chegou perto de onde devia; se não chegou,
-            // avisa em vez de deixar o operador achando que funcionou.
+            // não é mais um problema grave — só avisa que ainda precisa
+            // clicar em "Tela Cheia" na janela nova pra ir pro monitor
+            // certo (esse clique sim é garantido).
             setTimeout(() => {
                 const chegouPerto = Math.abs(janela.screenX - left) < 50 && Math.abs(janela.screenY - top) < 50;
                 if (!chegouPerto) {
                     console.error('Janela da TV não moveu pro monitor escolhido — posição atual:', janela.screenX, janela.screenY, 'esperado:', left, top);
-                    exibirAviso('⚠️ A janela abriu, mas não consegui mover ela pro monitor escolhido sozinho. Arrasta ela na mão pra lá.', 'TV Senha');
+                    exibirAviso('A janela abriu perto de onde estava. Clica em "🖥️ Clique para Tela Cheia" dentro dela pra ir pro monitor escolhido.', 'TV Senha');
                 }
             }, 400);
         }
@@ -7354,7 +7370,35 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     const btnFull = document.createElement('button');
                     btnFull.innerText = '🖥️ Clique para Tela Cheia';
                     btnFull.style.cssText = 'position:fixed; top:10px; right:10px; z-index:99999; padding:12px 18px; font-size:1rem; font-weight:bold; background:#2563eb; color:white; border:none; border-radius:8px; cursor:pointer; box-shadow:0 4px 10px rgba(0,0,0,0.3);';
-                    btnFull.onclick = () => {
+                    btnFull.onclick = async () => {
+                        // Se veio de "Abrir TV Senha" no Balcão 01/02 com um
+                        // monitor escolhido (ver abrirTVNoMonitorEscolhido em
+                        // app.js), pede tela cheia JÁ NAQUELE monitor via
+                        // requestFullscreen({screen}) — a forma oficial da
+                        // Window Management API pra isso, que NÃO depende de
+                        // mover essa janela pro lugar certo primeiro (mover
+                        // uma janela pronta pra outro monitor é o que vinha
+                        // falhando). getScreenDetails() precisa ser chamado
+                        // de novo AQUI DENTRO porque o objeto de tela não
+                        // atravessa de uma janela pra outra.
+                        const params = new URLSearchParams(location.search);
+                        const monitorLeft = params.get('monitorLeft');
+                        const monitorTop = params.get('monitorTop');
+                        if (monitorLeft !== null && monitorTop !== null && typeof window.getScreenDetails === 'function') {
+                            try {
+                                const detalhes = await window.getScreenDetails();
+                                const telaAlvo = (detalhes.screens || []).find(t =>
+                                    String(t.left) === monitorLeft && String(t.top) === monitorTop
+                                );
+                                if (telaAlvo) {
+                                    await document.documentElement.requestFullscreen({ screen: telaAlvo });
+                                    btnFull.remove();
+                                    return;
+                                }
+                            } catch (erro) {
+                                console.error('Não consegui tela cheia direto no monitor escolhido, caindo pro modo normal:', erro);
+                            }
+                        }
                         document.documentElement.requestFullscreen().then(() => btnFull.remove()).catch(() => {});
                     };
                     document.body.appendChild(btnFull);
