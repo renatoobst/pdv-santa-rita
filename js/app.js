@@ -5138,7 +5138,12 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             };
             const duracoes = [];
             pedidosEntregues.forEach(p => {
-                const inicio = paraMinutos(p.hora);
+                // Usa horaEntradaCozinha quando existe (pedido passou por
+                // Pedidos em Pausa) em vez de p.hora (criação) — senão o
+                // tempo parado em pausa entra na conta e infla a média,
+                // igual já é tratado no resto do app (ex: tela de Produtos
+                // Vendidos por Período, linha ~2129).
+                const inicio = paraMinutos(p.horaEntradaCozinha || p.hora);
                 const fim = paraMinutos(p.horaEntrega);
                 if (inicio === null || fim === null) return;
                 let duracao = fim - inicio;
