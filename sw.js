@@ -3,7 +3,7 @@
 // verdade (pedidos, estoque, caixa) continuam vindo do Supabase em tempo
 // real — isso aqui nunca intercepta chamadas pro Supabase, só evita a tela
 // branca quando o dispositivo perde conexão.
-const CACHE_SHELL = 'pdv-shell-v5';
+const CACHE_SHELL = 'pdv-shell-v6';
 
 const ARQUIVOS_SHELL = [
     './',
@@ -52,7 +52,19 @@ self.addEventListener('fetch', (event) => {
                     caches.open(CACHE_SHELL).then((cache) => cache.put(event.request, copia));
                     return resposta;
                 })
-                .catch(() => caches.match(event.request))
+                .catch(() => caches.match(event.request, { ignoreSearch: true }).then((cacheada) => {
+                    // BUG REAL encontrado e corrigido: sem ignoreSearch, uma
+                    // URL com query string diferente da que foi precacheada
+                    // (ex: ?abrirTela=X) não batia com nada em cache — a
+                    // Promise resolvia undefined, e o NAVEGADOR mostrava a
+                    // própria tela de erro ("Tentar novamente") em vez do
+                    // app abrir offline. Pra qualquer navegação (abrir/
+                    // recarregar a página) que ainda assim não achou nada,
+                    // cai pro shell principal como último recurso — sempre
+                    // abre alguma coisa funcional puxando do cache local.
+                    if (cacheada) return cacheada;
+                    if (event.request.mode === 'navigate') return caches.match('./index.html');
+                }))
         );
     } else {
         // Bibliotecas de CDN (Chart.js, html2pdf etc.): raramente mudam,

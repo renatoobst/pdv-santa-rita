@@ -224,6 +224,14 @@
 
         /* PAINEL DE TV */
         #tela-tv.active { padding: 0; margin: 0; width: 100vw; height: calc(100vh - 65px); background: #000; }
+        /* BUG REAL encontrado e corrigido: o -65px acima existe pra sobrar
+           espaço pro menu (#nav-principal) ficar visível acima da TV. No
+           modo "Tela Cheia" (botão da TV Senha/Multiview, ver 'modo-so-tela'
+           em app.js) o menu inteiro é escondido (display:none) — sem essa
+           regra, sobrava uma faixa de 65px do fundo claro do body embaixo
+           da tela preta ("margem branca embaixo" reportada com a tela em
+           fullscreen de verdade). */
+        body.modo-so-tela #tela-tv.active { height: 100vh; }
         .mc-tv-layout { display: flex; height: 100%; width: 100%; background: #000; color: #fff; border-radius: 0; overflow: hidden; }
         .mc-tv-col { flex: 1; padding: 2%; display: flex; flex-direction: column; overflow-y: auto; box-sizing: border-box; }
         .mc-tv-col.preparando { border-right: 2px solid #334155; }

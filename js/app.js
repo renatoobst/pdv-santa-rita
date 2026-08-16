@@ -7256,6 +7256,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 const btnMostrarMenu = document.getElementById('btn-show-global-menu');
                 if (nav) nav.style.display = 'none';
                 if (btnMostrarMenu) btnMostrarMenu.style.display = 'none';
+                // Marca pro CSS saber que o menu sumiu de vez (ver
+                // "body.modo-so-tela #tela-tv.active" em styles.css) — telas
+                // com altura calculada descontando o menu (ex: TV) precisam
+                // usar a altura cheia agora que ele não ocupa espaço nenhum.
+                document.body.classList.add('modo-so-tela');
 
                 // Dentro de um <iframe> (quadrante do Multiview) não faz
                 // sentido nem funciona pedir tela cheia — só mostra o botão
