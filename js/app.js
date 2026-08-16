@@ -93,6 +93,19 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 registrarLog('online', detalhe, { tela: telaAtual(), barracaId: barracaStateId });
                 tentarEnviarFilaDeLogs();
                 tentarEnviarFilaDeFechamentos();
+                // BUG REAL encontrado e corrigido: voltar a ficar online só
+                // disparava resincronizarSeNecessario (PUXA o estado do
+                // servidor e mescla na memória) — nunca EMPURRAVA de volta.
+                // Um pedido criado offline ficava certinho na tela deste
+                // aparelho (só na memória/cache local) e só chegava mesmo no
+                // servidor — e portanto nos outros aparelhos — na próxima
+                // vez que ALGUMA outra ação chamasse salvarNoBancoLocal() por
+                // acaso. Se o operador só criasse o pedido e não tocasse em
+                // mais nada, ele nunca saía deste aparelho. Agora força uma
+                // gravação aqui também, que já mescla com o servidor antes
+                // de salvar (salvarNoSupabaseAgora), then não corre risco de
+                // sobrescrever nada.
+                if (barracaStateId) salvarNoBancoLocal();
                 if (intervaloTentativaReconexao) { clearInterval(intervaloTentativaReconexao); intervaloTentativaReconexao = null; }
                 offlineDesde = null;
             }
@@ -1285,6 +1298,21 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         // popular o seletor de destino). Cada dispositivo guarda sua própria
         // preferência no localStorage — é config de máquina física, não da
         // barraca (não sincroniza pelo pdv_state).
+        // BUG REAL encontrado e corrigido: a chave de presença/destino era só
+        // usuarioAtual.id. Quando o MESMO usuário loga em 2+ aparelhos ao
+        // mesmo tempo (comum no evento — vários tablets com o mesmo login),
+        // o segundo track() sobrescrevia o primeiro na Presence do Supabase
+        // (só um aparelho sobrava na lista) e o filtro de "não me listar"
+        // comparava só por id de usuário, escondendo os dois aparelhos um
+        // do outro — impossível mandar impressão/aviso de um pro outro.
+        // Agora a chave combina usuário + PDV_CLIENT_ID (aleatório por
+        // aba/sessão, js/config.js) e o rótulo mostrado combina o nome com
+        // a letra fixa do aparelho (obterLetraDispositivo, já usada pra
+        // numerar pedido offline) pra dar pra diferenciar visualmente.
+        function chaveDispositivoRede() {
+            return usuarioAtual ? `${usuarioAtual.id}::${PDV_CLIENT_ID}` : PDV_CLIENT_ID;
+        }
+
         let canalImpressaoRede = null;
         let dispositivosImpressoraOnline = {};
 
@@ -1301,13 +1329,13 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (canalImpressaoRede) return canalImpressaoRede;
 
             canalImpressaoRede = supabaseClient.channel(`pdv-impressao-${barracaStateId}`, {
-                config: { presence: { key: usuarioAtual ? String(usuarioAtual.id) : PDV_CLIENT_ID } }
+                config: { presence: { key: chaveDispositivoRede() } }
             });
 
             canalImpressaoRede
                 .on('broadcast', { event: 'imprimir' }, ({ payload }) => {
                     if (!souImpressoraDeRede() || !usuarioAtual) return;
-                    if (String(payload.destinoUsuarioId) !== String(usuarioAtual.id)) return;
+                    if (payload.destinoChave !== chaveDispositivoRede()) return;
                     document.getElementById('area-impressao').innerHTML = payload.html;
                     window.print();
                 })
@@ -1322,7 +1350,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 })
                 .subscribe(status => {
                     if (status === 'SUBSCRIBED' && souImpressoraDeRede() && usuarioAtual) {
-                        canalImpressaoRede.track({ usuarioNome: usuarioAtual.nome });
+                        canalImpressaoRede.track({ usuarioNome: usuarioAtual.nome, letraDispositivo: obterLetraDispositivo() });
                     }
                 });
 
@@ -1340,7 +1368,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 const destino = destinoImpressaoRemota();
                 if (canal && dispositivosImpressoraOnline[destino]) {
                     const html = document.getElementById('area-impressao').innerHTML;
-                    await canal.send({ type: 'broadcast', event: 'imprimir', payload: { html, destinoUsuarioId: destino } });
+                    await canal.send({ type: 'broadcast', event: 'imprimir', payload: { html, destinoChave: destino } });
                     exibirAviso(`🖨️ Impressão enviada para ${dispositivosImpressoraOnline[destino].usuarioNome}.`);
                     return;
                 }
@@ -1365,11 +1393,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             localStorage.setItem(chaveSouImpressoraRede(), ativo ? '1' : '0');
             const canal = obterCanalImpressaoRede();
             if (canal) {
-                if (ativo && usuarioAtual) canal.track({ usuarioNome: usuarioAtual.nome });
+                if (ativo && usuarioAtual) canal.track({ usuarioNome: usuarioAtual.nome, letraDispositivo: obterLetraDispositivo() });
                 else canal.untrack();
             }
             document.getElementById('status-impressora-rede').innerText = ativo
-                ? `🟢 Recebendo impressões como "${usuarioAtual ? usuarioAtual.nome : ''}".`
+                ? `🟢 Recebendo impressões como "${usuarioAtual ? usuarioAtual.nome : ''}" (Aparelho ${obterLetraDispositivo()}).`
                 : '';
         }
 
@@ -1378,9 +1406,9 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (!select) return;
             const atual = select.value;
             const entradas = Object.entries(dispositivosImpressoraOnline)
-                .filter(([id]) => !usuarioAtual || id !== String(usuarioAtual.id));
+                .filter(([id]) => id !== chaveDispositivoRede());
             select.innerHTML = '<option value="">-- Selecione --</option>' +
-                entradas.map(([id, info]) => `<option value="${id}">${info.usuarioNome || ('Usuário ' + id)}</option>`).join('');
+                entradas.map(([id, info]) => `<option value="${id}">${info.usuarioNome || ('Usuário ' + id)}${info.letraDispositivo ? ' (Aparelho ' + info.letraDispositivo + ')' : ''}</option>`).join('');
             if (entradas.some(([id]) => id === atual)) select.value = atual;
 
             const contagem = document.getElementById('contagem-impressoras-online');
@@ -1412,13 +1440,13 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (canalChamarRede) return canalChamarRede;
 
             canalChamarRede = supabaseClient.channel(`pdv-chamar-${barracaStateId}`, {
-                config: { presence: { key: usuarioAtual ? String(usuarioAtual.id) : PDV_CLIENT_ID } }
+                config: { presence: { key: chaveDispositivoRede() } }
             });
 
             canalChamarRede
                 .on('broadcast', { event: 'chamar' }, ({ payload }) => {
                     if (!souAltoFalanteDeRede() || !usuarioAtual) return;
-                    if (String(payload.destinoUsuarioId) !== String(usuarioAtual.id)) return;
+                    if (payload.destinoChave !== chaveDispositivoRede()) return;
                     tocarBeep();
                     if (vozAnuncioEstaAtiva()) setTimeout(() => falarChamadaPedido(payload.pedidoId, payload.clienteNome), 1700);
                 })
@@ -1433,7 +1461,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 })
                 .subscribe(status => {
                     if (status === 'SUBSCRIBED' && souAltoFalanteDeRede() && usuarioAtual) {
-                        canalChamarRede.track({ usuarioNome: usuarioAtual.nome });
+                        canalChamarRede.track({ usuarioNome: usuarioAtual.nome, letraDispositivo: obterLetraDispositivo() });
                     }
                 });
 
@@ -1449,7 +1477,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 const canal = obterCanalChamarRede();
                 const destino = destinoChamarRemoto();
                 if (canal && dispositivosAltoFalanteOnline[destino]) {
-                    await canal.send({ type: 'broadcast', event: 'chamar', payload: { pedidoId, clienteNome, destinoUsuarioId: destino } });
+                    await canal.send({ type: 'broadcast', event: 'chamar', payload: { pedidoId, clienteNome, destinoChave: destino } });
                     return;
                 }
                 // Sem popup de aviso aqui (diferente de dispararImpressao) —
@@ -1477,11 +1505,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             localStorage.setItem(chaveSouAltoFalanteRede(), ativo ? '1' : '0');
             const canal = obterCanalChamarRede();
             if (canal) {
-                if (ativo && usuarioAtual) canal.track({ usuarioNome: usuarioAtual.nome });
+                if (ativo && usuarioAtual) canal.track({ usuarioNome: usuarioAtual.nome, letraDispositivo: obterLetraDispositivo() });
                 else canal.untrack();
             }
             document.getElementById('status-altofalante-rede').innerText = ativo
-                ? `🟢 Tocando avisos como "${usuarioAtual ? usuarioAtual.nome : ''}".`
+                ? `🟢 Tocando avisos como "${usuarioAtual ? usuarioAtual.nome : ''}" (Aparelho ${obterLetraDispositivo()}).`
                 : '';
         }
 
@@ -1490,9 +1518,9 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (!select) return;
             const atual = select.value;
             const entradas = Object.entries(dispositivosAltoFalanteOnline)
-                .filter(([id]) => !usuarioAtual || id !== String(usuarioAtual.id));
+                .filter(([id]) => id !== chaveDispositivoRede());
             select.innerHTML = '<option value="">-- Selecione --</option>' +
-                entradas.map(([id, info]) => `<option value="${id}">${info.usuarioNome || ('Usuário ' + id)}</option>`).join('');
+                entradas.map(([id, info]) => `<option value="${id}">${info.usuarioNome || ('Usuário ' + id)}${info.letraDispositivo ? ' (Aparelho ' + info.letraDispositivo + ')' : ''}</option>`).join('');
             if (entradas.some(([id]) => id === atual)) select.value = atual;
 
             const contagem = document.getElementById('contagem-altofalantes-online');
@@ -1511,7 +1539,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             document.getElementById('linha-destino-impressao-remota').style.display = chkAtiva.checked ? 'block' : 'none';
             chkSou.checked = souImpressoraDeRede();
             document.getElementById('status-impressora-rede').innerText = chkSou.checked
-                ? `🟢 Recebendo impressões como "${usuarioAtual ? usuarioAtual.nome : ''}".`
+                ? `🟢 Recebendo impressões como "${usuarioAtual ? usuarioAtual.nome : ''}" (Aparelho ${obterLetraDispositivo()}).`
                 : '';
             if (chkAtiva.checked || chkSou.checked) obterCanalImpressaoRede();
             atualizarSelectDestinoImpressao();
@@ -1523,7 +1551,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 document.getElementById('linha-destino-chamar-remoto').style.display = chkChamarRemotoAtivo.checked ? 'block' : 'none';
                 chkSouAltoFalante.checked = souAltoFalanteDeRede();
                 document.getElementById('status-altofalante-rede').innerText = chkSouAltoFalante.checked
-                    ? `🟢 Tocando avisos como "${usuarioAtual ? usuarioAtual.nome : ''}".`
+                    ? `🟢 Tocando avisos como "${usuarioAtual ? usuarioAtual.nome : ''}" (Aparelho ${obterLetraDispositivo()}).`
                     : '';
                 if (chkChamarRemotoAtivo.checked || chkSouAltoFalante.checked) obterCanalChamarRede();
                 atualizarSelectDestinoChamarRede();
@@ -7183,6 +7211,14 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 if (document.visibilityState === 'visible') resincronizarSeNecessario('tela voltou a ficar visível');
             });
             window.addEventListener('online', () => resincronizarSeNecessario('conexão de internet voltou'));
+            // Antes o indicador vermelho só aparecia quando uma chamada ao
+            // Supabase FALHAVA de verdade — em wifi ruim (não totalmente
+            // caído, só muito lento) isso podia demorar vários segundos até
+            // o navegador desistir da requisição. O evento 'offline' do
+            // navegador é imediato (o sistema operacional avisa na hora que
+            // perde a rede), então usa ele pra acender o aviso na hora,
+            // sem esperar nenhuma chamada de rede falhar primeiro.
+            window.addEventListener('offline', () => definirSupabaseDisponivel(false));
 
             // Dispositivo que fica a tela toda ligada sem nunca trocar de
             // aba nem cair de vez (ex: um monitor de Balcão fixo) não bate
