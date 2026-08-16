@@ -710,63 +710,68 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 }
                 if (mesmaEntrada(itemLocal, noServidor)) {
                     const idx = indexRemoto.get(itemLocal.id);
-                    // BUG REAL encontrado e corrigido (3 camadas):
+                    // BUG REAL encontrado e corrigido (5 camadas — histórico
+                    // completo, pra quem for mexer aqui de novo):
                     //
-                    // 1) Local sempre vencia, assumindo "local" = "intenção
-                    // mais recente" — errado com múltiplos dispositivos: um
-                    // aparelho com cópia desatualizada sobrescrevia o
-                    // servidor de volta pro status antigo só por salvar
-                    // depois. Corrigido comparando atualizadoEm — quem for
-                    // mais recente de verdade vence.
+                    // 1) Local sempre vencia — trocado por comparar
+                    // atualizadoEm (quem for mais recente de verdade vence).
                     //
-                    // 2) Isso sozinho ainda deixava passar um caso: tela
-                    // desatualizada (ex: PC que não repintou ainda) mostra
-                    // um pedido já 'entregue' em outro aparelho como se
-                    // ainda estivesse 'preparando'. Um clique em "Chamar
-                    // Painel" nessa tela velha gera um carimbo NOVO de
-                    // verdade (Date.now() de agora), que vencia por
-                    // timestamp mesmo sendo um retrocesso de status —
-                    // "reabrindo" um pedido já entregue e voltando ele pra
-                    // produção. Barrado na origem por chamarNoPainel/
-                    // finalizarEntrega (que já recusam agir num pedido que
-                    // a MEMÓRIA local sabe que está entregue/cancelado), e
-                    // reforçado aqui na mescla: retrocesso de status (peso
-                    // menor) só vence se for uma reabertura DELIBERADA
-                    // (reaberturaEm) — nunca por timestamp sozinho.
+                    // 2) Isso deixava passar "clique fantasma": tela
+                    // desatualizada gera um carimbo NOVO (Date.now()) que
+                    // vence por timestamp mesmo sendo um retrocesso de
+                    // status. Corrigido com PESO_STATUS: retrocesso só vence
+                    // se for reabertura DELIBERADA.
                     //
-                    // 3) A camada 2 só protegia numa direção (bloqueava
-                    // LOCAL de impor um retrocesso sobre o servidor). Bug
-                    // real ao vivo: tablet deu baixa (entregue, T1);
-                    // separadamente o PC, com tela desatualizada, clicou
-                    // "Chamar Painel" nesse MESMO pedido — gerando 'pronto'
-                    // com T2 > T1 (aconteceu depois, mesmo baseado em dado
-                    // velho), sem reaberturaEm. Quando o TABLET recebe esse
-                    // pedido do PC via Realtime, é o tablet quem é "local"
-                    // (já com 'entregue', peso maior) e o push do PC quem é
-                    // "servidor" (peso menor) — a checagem antiga só via
-                    // "local regredindo", nunca "servidor regredindo", e o
-                    // retrocesso vencia por timestamp. Verifica as DUAS
-                    // direções agora: quem tem peso MAIOR vence sempre, a
-                    // menos que o lado com peso MENOR carregue reaberturaEm
-                    // de verdade — só nesse caso volta a decidir por
-                    // atualizadoEm.
+                    // 3) Essa proteção só funcionava numa direção (local
+                    // regredindo). Bug ao vivo: tablet dá baixa (entregue);
+                    // PC desatualizado clica Chamar Painel no MESMO pedido
+                    // (gera 'pronto' com timestamp mais novo). Corrigido pra
+                    // checar as duas direções.
+                    //
+                    // 4) MESMO simétrico, a marca de reabertura dependia dos
+                    // RELÓGIOS dos aparelhos estarem sincronizados entre si
+                    // — relógio adiantado (comum, Windows sem NTP) podia
+                    // fazer uma reabertura "parecer" mais nova que uma baixa
+                    // genuína feita depois, em aparelho com relógio certo.
+                    // Trocado timestamp por um token opaco (não numérico),
+                    // só pra saber se os dois lados vêm da MESMA edição ou
+                    // de edições diferentes.
+                    //
+                    // 5) O token sozinho ainda deixava passar um empate:
+                    // quando os dois lados tinham o MESMO peso (ex:
+                    // 'entregue' vs 'entregue' — um da entrega original,
+                    // outro de um ciclo reaberto-e-reentregue), a decisão
+                    // caía de novo em atualizadoEm puro, voltando a
+                    // depender de relógio. Trocado o token opaco por
+                    // versaoEdicao: um CONTADOR (não timestamp) que só sobe
+                    // a cada edição via finalizarPedido. Regra final: quem
+                    // tem a versão de edição MAIOR vence sempre (é
+                    // literalmente uma edição mais nova, não importa peso
+                    // nem hora); só em EMPATE de versão (mesma "geração" de
+                    // edição, ou nenhuma edição nunca) que o peso decide, e
+                    // só em empate de peso TAMBÉM que atualizadoEm entra —
+                    // aí sim é seguro, porque só resta o caso raro de dois
+                    // aparelhos tocando o pedido quase ao mesmo tempo
+                    // dentro da MESMA geração.
                     if (idx !== -1) {
+                        const versaoLocal = itemLocal.versaoEdicao ?? 0;
+                        const versaoServidor = noServidor.versaoEdicao ?? 0;
                         const pesoLocal = PESO_STATUS[itemLocal.statusPainel] ?? 0;
                         const pesoServidor = PESO_STATUS[noServidor.statusPainel] ?? 0;
 
                         let localMaisNovo;
-                        if (pesoLocal > pesoServidor && !noServidor.reaberturaEm) {
-                            localMaisNovo = true;
-                        } else if (pesoServidor > pesoLocal && !itemLocal.reaberturaEm) {
-                            localMaisNovo = false;
+                        if (versaoLocal !== versaoServidor) {
+                            localMaisNovo = versaoLocal > versaoServidor;
+                        } else if (pesoLocal !== pesoServidor) {
+                            localMaisNovo = pesoLocal > pesoServidor;
                         } else {
-                            // Pesos iguais, ou o lado que regride tem
-                            // reaberturaEm legítima — decide por quem é
-                            // mais recente de verdade. Usa === undefined
-                            // (não "!valor") pra não confundir "não tem
-                            // carimbo" com "carimbo igual a zero" — não
-                            // acontece na prática (Date.now() nunca é 0),
-                            // mas não custa nada blindar.
+                            // Mesma versão de edição E mesmo peso — decide
+                            // por quem é mais recente de verdade. Usa
+                            // === undefined (não "!valor") pra não
+                            // confundir "não tem carimbo" com "carimbo
+                            // igual a zero" — não acontece na prática
+                            // (Date.now() nunca é 0), mas não custa nada
+                            // blindar.
                             localMaisNovo = noServidor.atualizadoEm === undefined
                                 || (itemLocal.atualizadoEm !== undefined && itemLocal.atualizadoEm >= noServidor.atualizadoEm);
                         }
@@ -4333,9 +4338,19 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             // status pra trás (ex: reabrir um pedido já entregue de volta
             // pra "Na Cozinha") — sinaliza pra mesclarPorIdComColisao que
             // esse retrocesso é intencional, não um clique de tela
-            // desatualizada, então pode vencer a mescla normalmente por
-            // data em vez de ser barrado pela proteção de regressão.
-            let reaberturaEmPedido = undefined;
+            // desatualizada, então pode vencer a mescla mesmo tendo peso
+            // menor. CONTADOR (não timestamp) que só sobe a cada edição —
+            // de propósito NÃO usa Date.now(): a versão anterior (token
+            // aleatório, e antes disso um carimbo de hora) dependia da
+            // ORDEM ou do RELÓGIO dos aparelhos, e os dois deram bug real
+            // ao vivo (relógio do PC adiantado fazia uma reabertura dele
+            // "parecer" mais nova que uma baixa genuína feita depois,
+            // token aleatório empatava quando os dois lados chegavam no
+            // mesmo peso por caminhos diferentes). Um contador que só
+            // aumenta resolve os dois: quem tem o número maior teve uma
+            // edição mais nova de verdade, ponto — não importa hora nem
+            // peso.
+            let versaoEdicaoPedido = undefined;
 
             if (pedidoEmEdicaoId !== null) {
                 statusPainelCalculado = document.getElementById('status-pedido-edicao').value;
@@ -4351,9 +4366,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     veioDePausaPedido = !!pedidoExistente.veioDePausa;
                     numeroProvisorioPedido = !!pedidoExistente.numeroProvisorio;
                     letraDispositivoPedido = pedidoExistente.letraDispositivo || null;
-                    if ((PESO_STATUS[statusPainelCalculado] ?? 0) < (PESO_STATUS[pedidoExistente.statusPainel] ?? 0)) {
-                        reaberturaEmPedido = Date.now();
-                    }
+                    versaoEdicaoPedido = (pedidoExistente.versaoEdicao ?? 0) + 1;
                 }
             } else {
                 const itensAgora = carrinho.filter(i => i.fase === 'agora');
@@ -4412,7 +4425,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 veioDePausa: veioDePausaPedido,
                 numeroProvisorio: numeroProvisorioPedido,
                 letraDispositivo: letraDispositivoPedido,
-                reaberturaEm: reaberturaEmPedido,
+                versaoEdicao: versaoEdicaoPedido,
                 // Carimbo de "agora" em toda criação/edição — usado pela
                 // mescla (mesclarPorIdComColisao) pra saber qual versão de
                 // um pedido é mais recente de verdade quando dois
@@ -4881,14 +4894,9 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             p.veioDePausa = true;
             if (!p.horaEntradaCozinha) p.horaEntradaCozinha = horaAtual;
             p.atualizadoEm = Date.now();
-            // Mesmo motivo de chamarNoPainel/finalizarEntrega: expira a
-            // marca de reabertura deliberada assim que outro fluxo normal
-            // mexe no pedido (ex: reabriu com itens "mais_tarde" e depois
-            // mandou pra produção por aqui).
-            p.reaberturaEm = undefined;
 
             salvarNoBancoLocal();
-            atualizarTelas(); 
+            atualizarTelas();
         }
 
         // Fala "Pedido número X, Fulano" em voz alta (Web Speech API). O beep
@@ -4995,23 +5003,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             }
             p.statusPainel = 'pronto';
             p.atualizadoEm = Date.now();
-            // BUG REAL encontrado e corrigido: reaberturaEm nunca era
-            // limpo depois de setado (editarPedido/finalizarPedido só o
-            // GRAVA, chamarNoPainel/finalizarEntrega mutam o pedido "in
-            // place" e não tinham motivo pra mexer nele). Resultado:
-            // depois de QUALQUER reabertura, esse pedido ficava com a
-            // proteção contra clique fantasma DESLIGADA pro resto da vida
-            // dele — mesclarPorIdComColisao só pula pro "vence quem tem
-            // peso maior, sempre" quando o lado com peso menor NÃO tem
-            // reaberturaEm; com a marca presa pra sempre, toda mescla
-            // futura desse pedido caía no fallback por timestamp, e
-            // qualquer clique fantasma novo (mesmo sem nenhuma reabertura
-            // de verdade acontecendo agora) voltava a vencer por ter
-            // carimbo mais novo. reaberturaEm marca "este pedido está NO
-            // MEIO de uma reabertura deliberada agora" — uma vez que o
-            // fluxo normal retoma (chamar painel de novo), essa marca
-            // expira.
-            p.reaberturaEm = undefined;
+            // NÃO mexe em p.versaoEdicao aqui — ele só é gerado por
+            // finalizarPedido (edição deliberada) e deve continuar
+            // propagando sem mudar por qualquer ação de fluxo normal (ver
+            // mesclarPorIdComColisao).
             dispararAvisoSonoro(rotuloPedido(p), p.cliente);
             salvarNoBancoLocal();
             atualizarTelas();
@@ -5031,11 +5026,6 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             p.statusPainel = 'entregue';
             p.horaEntrega = horaAtual;
             p.atualizadoEm = Date.now();
-            // Mesmo motivo de chamarNoPainel — ver comentário lá: expira a
-            // marca de reabertura deliberada assim que o fluxo normal
-            // retoma, senão a proteção contra clique fantasma fica
-            // desligada pra sempre nesse pedido depois da 1ª reabertura.
-            p.reaberturaEm = undefined;
 
             salvarNoBancoLocal();
             atualizarTelas(); 
@@ -5073,8 +5063,6 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             p.statusPainel = 'cancelado';
             p.motivoCancelamento = motivo;
             p.atualizadoEm = Date.now();
-            // Mesmo motivo de chamarNoPainel/finalizarEntrega/moverParaAgora.
-            p.reaberturaEm = undefined;
             return catalogoAlteradoPorEstoque;
         }
 
