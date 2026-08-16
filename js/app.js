@@ -1895,10 +1895,23 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 try {
                     janela.moveTo(tela.left, tela.top);
                     janela.resizeTo(tela.width, tela.height);
+                    // moveTo/resizeTo NÃO lançam erro quando bloqueados ou
+                    // limitados pelo navegador — só ficam sem efeito, em
+                    // silêncio (foi exatamente isso que aconteceu na
+                    // primeira tentativa, sem dar nenhuma pista do motivo).
+                    // Confere se a janela realmente chegou perto de onde
+                    // devia; se não chegou, avisa em vez de deixar o
+                    // operador achando que funcionou.
+                    setTimeout(() => {
+                        const chegouPerto = Math.abs(janela.screenX - tela.left) < 50 && Math.abs(janela.screenY - tela.top) < 50;
+                        if (!chegouPerto) {
+                            console.error('Janela da TV não moveu pro monitor escolhido — posição atual:', janela.screenX, janela.screenY, 'esperado:', tela.left, tela.top);
+                            exibirAviso('⚠️ A janela abriu, mas não consegui mover ela pro monitor escolhido sozinho. Arrasta ela na mão pra lá.', 'TV Senha');
+                        }
+                    }, 200);
                 } catch (erro) {
-                    // Alguns navegadores ainda bloqueiam moveTo/resizeTo em
-                    // certas condições — a janela já abriu mesmo assim, só
-                    // não pulou de monitor sozinha; dá pra arrastar na mão.
+                    console.error('Falha ao mover a janela da TV pro monitor escolhido:', erro);
+                    exibirAviso(`⚠️ A janela abriu, mas não consegui mover ela pro monitor escolhido sozinho (${erro.message || erro}). Arrasta ela na mão pra lá.`, 'TV Senha');
                 }
             }, 300);
         }
