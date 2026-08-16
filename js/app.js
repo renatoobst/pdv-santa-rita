@@ -620,7 +620,20 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         const PESO_STATUS = { 'nenhum': 0, 'preparando': 1, 'pronto': 2, 'entregue': 3, 'cancelado': 3 };
 
         function mesclarPorIdComColisao(locais, remotos) {
+            // OTIMIZAÇÃO: antes disto, achar a posição de cada item usava
+            // resultado.findIndex(...) DENTRO do forEach de locais — um
+            // loop dentro de outro (O(N²)). Com a lista de pedidos do dia
+            // crescendo (evento de vários dias, centenas de entradas) e
+            // essa função rodando a cada salvamento e a cada sincronização,
+            // isso virou lentidão perceptível bem na hora de "dar baixa"
+            // no Balcão. indexRemoto guarda a posição de cada id em
+            // resultado (que começa como cópia de remotos e só CRESCE por
+            // push — nunca reordena os itens existentes, então os índices
+            // salvos aqui continuam válidos até o fim) pra achar o item em
+            // tempo constante em vez de percorrer a lista de novo pra cada
+            // item local.
             const mapaRemoto = new Map(remotos.map(item => [item.id, item]));
+            const indexRemoto = new Map(remotos.map((item, index) => [item.id, index]));
             const resultado = [...remotos];
             let proximoIdLivre = Math.max(0, ...remotos.map(p => Number(p.id) || 0), ...locais.map(p => Number(p.id) || 0)) + 1;
             let houveColisao = false;
@@ -632,7 +645,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     return;
                 }
                 if (mesmaEntrada(itemLocal, noServidor)) {
-                    const idx = resultado.findIndex(item => item.id === itemLocal.id);
+                    const idx = indexRemoto.get(itemLocal.id);
                     // BUG REAL encontrado e corrigido (2 camadas):
                     //
                     // 1) Local sempre vencia, assumindo "local" = "intenção
@@ -4988,6 +5001,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
         // Único critério pra "tem item de verdade na cozinha agora": fase
         function atualizarTelas() {
+            // Calculado uma vez só e reaproveitado abaixo (no loop principal
+            // e no cálculo de tempo médio de entrega) — antes cada chamada
+            // de atualizarTelas() rodava esse filtro sobre pedidosGerais
+            // INTEIRO duas vezes seguidas, à toa.
+            const pedidosAbertosAgora = pedidosDosCaixasAbertos();
             let htmlCozinha = '', htmlBalcao = '', htmlBalcaoDoces = '', htmlAgenda = '', htmlPrepTV = '';
             let countCoz = 0, countBalc = 0, countBalcDoces = 0, countAgend = 0;
             let prontos = [], entregues = [];
@@ -5009,7 +5027,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             // saía da Cozinha/Balcão, mesmo com "Ver Todos os Pedidos" e o
             // Dashboard já mostrando tudo certo (aqueles já usavam
             // pedidosDosCaixasAbertos). Agora usa a mesma fonte.
-            pedidosDosCaixasAbertos().forEach(p => {
+            pedidosAbertosAgora.forEach(p => {
                 if(p.statusPainel === 'cancelado') return;
                 
                 // Exclui 'entregue' junto com 'mais_tarde' — senão, quando uma
@@ -5252,7 +5270,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             const elTempoBalcaoDoces = document.querySelector('#tempo-medio-entrega-balcao-doces .valor-tempo-medio-entrega');
             if (elTempoBalcao01 || elTempoBalcaoDoces) {
                 const entreguesBalcao01 = [], entreguesBalcaoDoces = [];
-                pedidosDosCaixasAbertos().forEach(p => {
+                pedidosAbertosAgora.forEach(p => {
                     if (p.statusPainel !== 'entregue') return;
                     const vaiPraDoces = configPadroes.separarBalcaoDoces && !pedidoTemAlgoDeCozinha(p.itens);
                     (vaiPraDoces ? entreguesBalcaoDoces : entreguesBalcao01).push(p);
