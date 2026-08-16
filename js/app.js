@@ -237,13 +237,28 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             };
         }
 
+        // OTIMIZAÇÃO: salvarCacheLocal() é chamada em toda ação local E toda
+        // vez que chega estado de outro aparelho (aplicarEstado/
+        // salvarNoBancoLocal) — numa rajada de cliques seguidos (ex: dar
+        // baixa em vários pedidos rápido), cada uma fazia JSON.stringify +
+        // localStorage.setItem na hora, de forma síncrona. Debounce de 2s:
+        // só grava de verdade 2s depois da ÚLTIMA chamada, cancelando o
+        // agendamento anterior a cada nova chamada — numa rajada, só grava
+        // 1 vez no final, não 1 vez por clique. Não tem risco de perder
+        // dado real: o que importa (Supabase) já é salvo por
+        // salvarNoSupabaseAgora separadamente; isso aqui é só o cache local
+        // de fallback pra pintar a tela rápido no próximo boot.
+        let timeoutCacheLocal = null;
         function salvarCacheLocal() {
-            // Cache com escopo por barraca (chaveCacheEstado inclui o barracaStateId),
-            // para que duas barracas usadas no mesmo navegador/dispositivo nunca
-            // se misturem no cache local — só o que vem do Supabase é compartilhado,
-            // e mesmo assim cada barraca tem sua própria linha lá.
-            localStorage.setItem(chaveCacheEstado(barracaStateId), JSON.stringify(montarEstadoAtual()));
-            localStorage.setItem(chaveCacheAtalhos(barracaStateId), JSON.stringify(atalhosConfig));
+            clearTimeout(timeoutCacheLocal);
+            timeoutCacheLocal = setTimeout(() => {
+                // Cache com escopo por barraca (chaveCacheEstado inclui o barracaStateId),
+                // para que duas barracas usadas no mesmo navegador/dispositivo nunca
+                // se misturem no cache local — só o que vem do Supabase é compartilhado,
+                // e mesmo assim cada barraca tem sua própria linha lá.
+                localStorage.setItem(chaveCacheEstado(barracaStateId), JSON.stringify(montarEstadoAtual()));
+                localStorage.setItem(chaveCacheAtalhos(barracaStateId), JSON.stringify(atalhosConfig));
+            }, 2000);
         }
 
         // Pinta a tela imediatamente com o que já está em cache local desta
@@ -630,10 +645,21 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
         // Duas entradas (pedido OU fechamento de caixa) são "a mesma coisa" só
         // se a chaveUnica bater. Registros salvos ANTES dessa chave existir
-        // (de antes desta correção) caem no fallback: só considera igual se o
-        // conteúdo for IDÊNTICO — qualquer diferença já é tratada como
+        // (~57 pedidos deste evento) caem no fallback: só considera igual se
+        // o conteúdo for IDÊNTICO — qualquer diferença já é tratada como
         // colisão de verdade (mais seguro renumerar um registro antigo por
         // engano do que misturar dois registros diferentes num só).
+        //
+        // TENTATIVA (revertida) de trocar isso por "id + atualizadoEm" pra
+        // ganhar performance: o fuzz test (fuzz_sync.js) pegou na hora um
+        // caso real de perda de pedido — dois pedidos SEM chaveUnica (ambos
+        // também sem atualizadoEm, plausível pra registros antigos o
+        // bastante) com o mesmo id (colisão de verdade) tinham
+        // atualizadoEm igual (undefined === undefined) e eram tratados
+        // como "a mesma entrada", apagando um dos dois na mesclagem. Como
+        // esse fallback só roda pra ~57 pedidos que não crescem mais (todo
+        // pedido novo já nasce com chaveUnica), o ganho de performance era
+        // pequeno e o risco não compensava — mantido como estava.
         function mesmaEntrada(a, b) {
             if (a.chaveUnica && b.chaveUnica) return a.chaveUnica === b.chaveUnica;
             return JSON.stringify(a) === JSON.stringify(b);
@@ -2018,7 +2044,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (lista.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 20px; color: gray;">Nenhum pedido encontrado.</td></tr>';
             } else {
-                lista.forEach(p => {
+                // OTIMIZAÇÃO: monta um array de strings e escreve no DOM
+                // uma vez só no final, em vez de tbody.innerHTML += a cada
+                // pedido (que reconstrói a tabela inteira do zero a cada
+                // iteração — ver mesma correção em atualizarFiltrosGestao).
+                tbody.innerHTML = lista.map(p => {
                     let statusTag = '';
                     if (p.statusPainel === 'cancelado') statusTag = `<span style="background:var(--danger); color:white; padding:3px 6px; border-radius:4px; font-weight:bold;" title="${p.motivoCancelamento ? 'Motivo: ' + p.motivoCancelamento : 'Motivo não registrado'}">CANCELADO</span>`;
                     else if (p.itens.some(i => i.fase === 'mais_tarde')) statusTag = '<span style="background:var(--info); color:white; padding:3px 6px; border-radius:4px; font-weight:bold;">📦 P. MAIS TARDE</span>';
@@ -2045,7 +2075,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
                     const tempoPreparo = calcularDiferencaMinutos(p.horaEntradaCozinha || p.hora, p.horaEntrega);
 
-                    tbody.innerHTML += `
+                    return `
                         <tr style="border-bottom: 1px solid #e5e7eb; ${p.statusPainel === 'cancelado' ? 'opacity: 0.5;' : ''}">
                             <td style="padding: 8px; font-weight: bold;">#${rotuloPedido(p)}</td>
                             <td style="font-weight:bold; color:#374151;">${p.hora}</td>
@@ -2059,7 +2089,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                             <td>${acoes}</td>
                         </tr>
                     `;
-                });
+                }).join('');
             }
         }
 
@@ -2510,7 +2540,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 return;
             }
 
-            lista.forEach(p => {
+            // OTIMIZAÇÃO: monta um array de strings e escreve no DOM uma vez
+            // só no final, em vez de tbody.innerHTML += a cada produto (que
+            // reconstrói a tabela inteira do zero a cada iteração).
+            tbody.innerHTML = lista.map(p => {
                 let desc = p.isCombo ? `<br><small style="color:var(--info);">↳ Composto por: ${p.itensCombo.map(i => {
                     if(i.tipo === 'categoria') return `${i.qtd}x Escolha de ${i.ref}`;
                     else { let subP = produtosDB.find(x=>x.id===i.ref); return `${i.qtd}x ${subP?subP.nome:'Fixo'}`; }
@@ -2549,7 +2582,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     txtLucro = `<span style="color:${lucro >= 0 ? '#065f46' : 'var(--danger)'};">R$ ${lucro.toFixed(2)}</span>${incompleto ? ' ⚠️' : ''}`;
                 }
 
-                tbody.innerHTML += `
+                return `
                     <tr draggable="true" ondragstart="tratarDragStartProduto(event, ${p.id})" ondragover="tratarDragOverProduto(event)" ondrop="tratarDropProduto(event, ${p.id})" ondragend="tratarDragEndProduto(event)" style="border-bottom: 1px solid #f3f4f6; cursor: grab; ${p.ativo === false ? 'opacity: 0.6; background:#fef2f2;' : ''}">
                         <td style="padding: 10px; font-weight: bold;"><span style="color:gray; cursor:grab;" title="Arraste para reordenar (dentro da mesma categoria)">☰</span> #${p.id}</td>
                         <td>${imgThumb}</td>
@@ -2567,7 +2600,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                             <button class="btn btn-danger" style="padding: 4px; font-size: 0.8rem;" onclick="apagarProduto(${p.id})">🗑️</button>
                         </td>
                     </tr>`;
-            });
+            }).join('');
         }
 
         // Visão dedicada de custo/margem — a tabela de Produtos (11 colunas,
@@ -5518,7 +5551,18 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
 
             if (pedidosFiltrados.length === 0) return tbody.innerHTML = '<tr><td colspan="10" style="padding: 15px; text-align: center; color: gray;">Nenhum pedido encontrado.</td></tr>';
 
-            pedidosFiltrados.forEach(p => {
+            // BUG DE PERFORMANCE encontrado e corrigido: usava
+            // `tbody.innerHTML += linha` DENTRO do forEach — a cada
+            // iteração o navegador serializa a tabela inteira de volta pra
+            // string, concatena a linha nova e reconstrói tudo do zero.
+            // Com 300+ pedidos (evento de vários dias, sem filtro nenhum
+            // ativo por padrão) isso significava até 300 reconstruções
+            // completas da tabela, cada uma maior que a anterior — o
+            // real motivo do travamento ao abrir/atualizar a tela de
+            // Gestão. Agora monta um array de strings e escreve no DOM
+            // UMA vez só no final — mesmo HTML final, uma reconstrução em
+            // vez de 300.
+            const linhasHtml = pedidosFiltrados.map(p => {
                 let statusHtml = ''; let acoesHtml = '';
                 let btnImprimir = `<button onclick="reimprimirPedido(${p.id})" class="btn" style="background:#3b82f6; color:white; padding: 4px 8px; font-size: 0.8rem; margin-right: 5px;" title="Reimprimir">🖨️</button><button onclick="baixarPDFPedido(${p.id})" class="btn" style="background:#b91c1c; color:white; padding: 4px 8px; font-size: 0.8rem; margin-right: 5px;" title="Baixar em PDF">📄</button>`;
 
@@ -5544,7 +5588,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 const caixaDoPedido = caixasAbertos.find(c => c.id === p.caixaId);
                 const nomeCaixaPedido = caixaDoPedido ? caixaDoPedido.usuarioNome : '-';
 
-                tbody.innerHTML += `<tr style="border-bottom: 1px solid #f3f4f6; ${p.statusPainel === 'cancelado' ? 'opacity:0.5;' : ''}">
+                return `<tr style="border-bottom: 1px solid #f3f4f6; ${p.statusPainel === 'cancelado' ? 'opacity:0.5;' : ''}">
                     <td style="padding: 12px; font-weight: bold;">#${rotuloPedido(p)}</td>
                     <td style="font-size: 0.8rem; font-weight: bold; color: #4b5563;">${nomeCaixaPedido}</td>
                     <td style="font-size: 0.75rem; color: #4b5563;">
@@ -5557,6 +5601,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     <td style="font-size: 0.85rem; max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${resumoItens}">${resumoItens}</td>
                     <td>${statusHtml}</td><td style="font-weight: bold; color: var(--success);">R$ ${p.total.toFixed(2)}</td><td>${acoesHtml}</td></tr>`;
             });
+            tbody.innerHTML = linhasHtml.join('');
         }
 
         async function abrirCaixaPrompt() {
@@ -5947,8 +5992,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 return tbody.innerHTML = `<tr><td colspan="9" style="padding: 20px; text-align: center; color: gray;">${historicoCaixasDB.length === 0 ? 'Nenhum caixa foi fechado ainda.' : 'Nenhum fechamento no período filtrado.'}</td></tr>`;
             }
 
-            lista.forEach(c => {
-                tbody.innerHTML += `
+            // OTIMIZAÇÃO: monta um array de strings e escreve no DOM uma vez
+            // só no final, em vez de tbody.innerHTML += a cada fechamento.
+            tbody.innerHTML = lista.map(c => {
+                return `
                     <tr style="border-bottom: 1px solid #e5e7eb;">
                         <td style="text-align:center;"><input type="checkbox" class="chk-fechamento-selecionado" ${fechamentosSelecionadosParaRelatorio.has(c.id) ? 'checked' : ''} onchange="alternarSelecaoFechamento(${c.id}, this.checked)"></td>
                         <td style="padding: 12px; font-weight: bold;">#${c.id}</td>
@@ -5967,7 +6014,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                         </td>
                     </tr>
                 `;
-            });
+            }).join('');
         }
 
         // --- Relatório combinado de vários fechamentos de caixa ---
