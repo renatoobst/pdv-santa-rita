@@ -3,7 +3,7 @@
 // verdade (pedidos, estoque, caixa) continuam vindo do Supabase em tempo
 // real — isso aqui nunca intercepta chamadas pro Supabase, só evita a tela
 // branca quando o dispositivo perde conexão.
-const CACHE_SHELL = 'pdv-shell-v4';
+const CACHE_SHELL = 'pdv-shell-v5';
 
 const ARQUIVOS_SHELL = [
     './',
@@ -13,7 +13,7 @@ const ARQUIVOS_SHELL = [
     './js/auth.js',
     './js/barracas.js',
     './manifest.json',
-    './assets/icon.svg'
+    './assets/logo-santa-rita.jpg'
 ];
 
 self.addEventListener('install', (event) => {
