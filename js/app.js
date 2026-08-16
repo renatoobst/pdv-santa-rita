@@ -710,7 +710,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 }
                 if (mesmaEntrada(itemLocal, noServidor)) {
                     const idx = indexRemoto.get(itemLocal.id);
-                    // BUG REAL encontrado e corrigido (2 camadas):
+                    // BUG REAL encontrado e corrigido (3 camadas):
                     //
                     // 1) Local sempre vencia, assumindo "local" = "intenção
                     // mais recente" — errado com múltiplos dispositivos: um
@@ -727,24 +727,49 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     // verdade (Date.now() de agora), que vencia por
                     // timestamp mesmo sendo um retrocesso de status —
                     // "reabrindo" um pedido já entregue e voltando ele pra
-                    // produção. Barrado hoje na origem por chamarNoPainel/
+                    // produção. Barrado na origem por chamarNoPainel/
                     // finalizarEntrega (que já recusam agir num pedido que
-                    // a MEMÓRIA local sabe que está entregue/cancelado),
-                    // mas reforça aqui também, na mescla: retrocesso de
-                    // status (peso menor) só vence se for uma reabertura
-                    // DELIBERADA (reaberturaEm marcado por editarPedido/
-                    // finalizarPedido) — nunca por timestamp sozinho.
+                    // a MEMÓRIA local sabe que está entregue/cancelado), e
+                    // reforçado aqui na mescla: retrocesso de status (peso
+                    // menor) só vence se for uma reabertura DELIBERADA
+                    // (reaberturaEm) — nunca por timestamp sozinho.
+                    //
+                    // 3) A camada 2 só protegia numa direção (bloqueava
+                    // LOCAL de impor um retrocesso sobre o servidor). Bug
+                    // real ao vivo: tablet deu baixa (entregue, T1);
+                    // separadamente o PC, com tela desatualizada, clicou
+                    // "Chamar Painel" nesse MESMO pedido — gerando 'pronto'
+                    // com T2 > T1 (aconteceu depois, mesmo baseado em dado
+                    // velho), sem reaberturaEm. Quando o TABLET recebe esse
+                    // pedido do PC via Realtime, é o tablet quem é "local"
+                    // (já com 'entregue', peso maior) e o push do PC quem é
+                    // "servidor" (peso menor) — a checagem antiga só via
+                    // "local regredindo", nunca "servidor regredindo", e o
+                    // retrocesso vencia por timestamp. Verifica as DUAS
+                    // direções agora: quem tem peso MAIOR vence sempre, a
+                    // menos que o lado com peso MENOR carregue reaberturaEm
+                    // de verdade — só nesse caso volta a decidir por
+                    // atualizadoEm.
                     if (idx !== -1) {
                         const pesoLocal = PESO_STATUS[itemLocal.statusPainel] ?? 0;
                         const pesoServidor = PESO_STATUS[noServidor.statusPainel] ?? 0;
-                        const ehRegressaoAcidental = pesoLocal < pesoServidor && !itemLocal.reaberturaEm;
 
-                        // Usa === undefined (não "!valor") pra não confundir
-                        // "não tem carimbo" com "tem carimbo igual a zero" —
-                        // não acontece na prática (Date.now() nunca é 0), mas
-                        // não custa nada blindar.
-                        const localMaisNovo = !ehRegressaoAcidental && (noServidor.atualizadoEm === undefined
-                            || (itemLocal.atualizadoEm !== undefined && itemLocal.atualizadoEm >= noServidor.atualizadoEm));
+                        let localMaisNovo;
+                        if (pesoLocal > pesoServidor && !noServidor.reaberturaEm) {
+                            localMaisNovo = true;
+                        } else if (pesoServidor > pesoLocal && !itemLocal.reaberturaEm) {
+                            localMaisNovo = false;
+                        } else {
+                            // Pesos iguais, ou o lado que regride tem
+                            // reaberturaEm legítima — decide por quem é
+                            // mais recente de verdade. Usa === undefined
+                            // (não "!valor") pra não confundir "não tem
+                            // carimbo" com "carimbo igual a zero" — não
+                            // acontece na prática (Date.now() nunca é 0),
+                            // mas não custa nada blindar.
+                            localMaisNovo = noServidor.atualizadoEm === undefined
+                                || (itemLocal.atualizadoEm !== undefined && itemLocal.atualizadoEm >= noServidor.atualizadoEm);
+                        }
                         resultado[idx] = localMaisNovo ? itemLocal : noServidor;
                     }
                 } else {
