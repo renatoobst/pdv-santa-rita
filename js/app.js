@@ -1705,7 +1705,21 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if(idAba === 'tela-barracas') renderizarPainelBarracas();
             if(idAba === 'tela-gestao-usuarios') renderizarTelaGestaoUsuarios();
             if(idAba === 'tela-dashboard-geral') carregarDashboardGeral();
-            if(idAba === 'tela-configuracoes') aplicarConfiguracoesImpressaoRedeNaTela();
+            // BUG REAL encontrado e corrigido: "Padrão: Forma de Pagamento/
+            // Tipo de Retirada/Modo de Retirada" ficam num modal SEPARADO
+            // (#modal-config-pedido, aberto pelo ⚙️ da tela de Pedido) —
+            // só esse modal chamava carregarFormularioConfiguracoes(), que
+            // é quem de fato preenche esses 3 campos a partir do
+            // configPadroes atual. Quem entrava direto na tela de
+            // Configurações (sem nunca ter aberto aquele modal nesta aba
+            // do navegador) mexia em QUALQUER outra coisa aqui (Pix, taxa
+            // de cartão, Balcão Doces...) e disparava
+            // salvarConfiguracoesPadrao() — que lê os 3 campos daquele
+            // modal TAMBÉM, mas eles ainda estavam em branco (nunca
+            // carregados) e zeravam os "Padrão" salvos por outro
+            // aparelho, "de vez em quando", sem motivo óbvio nenhum pra
+            // quem via de fora. Agora os dois lugares carregam juntos.
+            if(idAba === 'tela-configuracoes') { aplicarConfiguracoesImpressaoRedeNaTela(); carregarFormularioConfiguracoes(); }
             if(idAba === 'tela-produtos-periodo') carregarHistoricoCaixas();
             if(idAba === 'tela-logs-sistema') carregarLogsSistema();
         }
