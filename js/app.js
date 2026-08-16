@@ -369,18 +369,40 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             ultimaAtualizacaoRemota = estado.salvoEm || null;
             salvarCacheLocal();
 
+            // BUG DE PERFORMANCE encontrado e corrigido: este bloco reconstrói
+            // de uma vez o cardápio inteiro, a tabela de produtos inteira,
+            // Cozinha/Balcão/Doces/Agenda/TV, a tela de Gestão e o histórico
+            // de caixas — SEMPRE que QUALQUER outro aparelho muda qualquer
+            // coisa (novo pedido, dar baixa, chamar painel...), mesmo que
+            // este aparelho esteja parado numa tela que nada tem a ver com
+            // a mudança. Rodava tudo síncrono, dentro do próprio callback do
+            // Realtime — explica o relato de "dei baixa no tablet e o PC
+            // travou": o PC não estava processando o SEU clique, estava
+            // recebendo e repintando tudo de uma vez por causa do clique de
+            // OUTRO aparelho. A mescla acima (que garante o dado certo) já
+            // terminou nesse ponto — só falta pintar a tela, e isso pode
+            // esperar o próximo quadro em vez de travar o quadro atual,
+            // mesmo padrão já usado em atualizarTelas(). O try/catch
+            // interno substitui a proteção do try/catch de fora, que não
+            // alcança mais este código depois de adiado.
             if (atualizarUI && calcularAssinaturaEstadoParaTela() !== assinaturaAntes) {
-                atualizarInterfaceCaixa();
-                renderizarMenu(categoriaFiltroAtual);
-                renderizarTabelaProdutos();
-                atualizarTelas();
-                atualizarFiltrosGestao();
-                renderizarHistoricoCaixas();
-                renderizarPainelAtalhos();
-                const modalConfig = document.getElementById('modal-config-pedido');
-                if (modalConfig && modalConfig.style.display === 'flex') carregarFormularioConfiguracoes();
-                const relatorio = document.getElementById('tela-relatorio');
-                if (relatorio && relatorio.classList.contains('active')) atualizarDashboard();
+                requestAnimationFrame(() => {
+                    try {
+                        atualizarInterfaceCaixa();
+                        renderizarMenu(categoriaFiltroAtual);
+                        renderizarTabelaProdutos();
+                        atualizarTelas();
+                        atualizarFiltrosGestao();
+                        renderizarHistoricoCaixas();
+                        renderizarPainelAtalhos();
+                        const modalConfig = document.getElementById('modal-config-pedido');
+                        if (modalConfig && modalConfig.style.display === 'flex') carregarFormularioConfiguracoes();
+                        const relatorio = document.getElementById('tela-relatorio');
+                        if (relatorio && relatorio.classList.contains('active')) atualizarDashboard();
+                    } catch (erro) {
+                        console.error('Falha ao repintar a tela após aplicar estado remoto:', erro);
+                    }
+                });
             }
             } catch (erro) {
                 console.error('Falha ao aplicar estado remoto — dispositivo pode ficar temporariamente fora de sincronia até o próximo F5:', erro);
