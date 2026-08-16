@@ -4378,17 +4378,32 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (catalogoAlteradoPorEstoque) salvarCatalogo();
             salvarNoBancoLocal();
 
-            gerarHTMLImpressao(novoPedido);
-            dispararImpressao();
-
             if (pedidoEmEdicaoId === null && configPadroes.separarBalcaoDoces && !pedidoTemAlgoDeCozinha(novoPedido.itens)) {
                 exibirAviso(`Pedido #${rotuloPedido(novoPedido)} não tem nada de cozinha — foi direcionado pro Balcão 02 (Doces).`, '🍬 Balcão 02 (Doces)');
             }
 
             limparCarrinho();
-            renderizarMenu(categoriaFiltroAtual); 
-            renderizarTabelaProdutos(); 
+            renderizarMenu(categoriaFiltroAtual);
+            renderizarTabelaProdutos();
             atualizarTelas();
+
+            // BUG REAL encontrado e corrigido: gerarHTMLImpressao/
+            // dispararImpressao rodavam ANTES de limpar o carrinho e
+            // atualizar a tela. dispararImpressao chama window.print() (sem
+            // impressão de rede configurada, que é o caso mais comum) —
+            // isso ABRE O DIÁLOGO NATIVO DE IMPRESSÃO E TRAVA A PÁGINA
+            // INTEIRA até ele ser fechado. Resultado: toda vez que um pedido
+            // era lançado, o app parecia travado por vários segundos (o
+            // carrinho não limpava, a tela não atualizava) até o diálogo de
+            // impressão aparecer/ser dispensado — em alguns aparelhos isso
+            // demorava bem mais que isso. Como o recibo já foi montado a
+            // partir de novoPedido (não depende do carrinho nem da tela),
+            // não tem problema nenhum imprimir por último: o operador já vê
+            // o pedido lançado e a tela atualizada na hora, e a impressão
+            // (que pode legitimamente demorar) acontece depois, sem
+            // bloquear a percepção de "o pedido foi criado".
+            gerarHTMLImpressao(novoPedido);
+            dispararImpressao();
         }
 
         // Retorna o HTML do recibo (sem escrever em lugar nenhum) — usado
@@ -5209,6 +5224,26 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 if(p.statusPainel === 'entregue') entregues.push(p);
             });
 
+            // BUG DE PERFORMANCE encontrado e corrigido: daqui pra baixo é só
+            // ESCREVER no DOM (innerHTML de Cozinha/Balcão/Doces/Agenda/TV +
+            // 3 tabelas de sidebar) — a parte cara de verdade, porque cada
+            // innerHTML força o navegador a reconstruir e repintar aquele
+            // pedaço da tela. Antes tudo isso rodava de forma síncrona,
+            // dentro da MESMA função que o clique do usuário chama (ex:
+            // finalizarEntrega, ou trocar de aba em mudarAba) — o navegador
+            // ficava "preso" fazendo 8 reconstruções de tela seguidas antes
+            // de devolver o controle, e é isso que sentia como travamento ao
+            // dar baixa ou ao trocar de tela, mesmo em aparelho potente (o
+            // problema nunca foi "aparelho fraco", era trabalho síncrono
+            // demais de uma vez). O cálculo acima (montar os HTMLs e contar)
+            // continua rodando na hora — é rápido, só junta texto. Só a
+            // ESCRITA no DOM é adiada por um requestAnimationFrame, o que dá
+            // ao navegador uma chance de respirar (processar toque, animar
+            // botão pressionado) entre o clique e a repintura da tela. Nada
+            // deixa de ser atualizado — só passa a acontecer no próximo
+            // quadro em vez de travar o quadro atual.
+            requestAnimationFrame(() => {
+
             // MONTA A SIDEBAR DA COZINHA (SOMENTE PRODUTOS EM PREPARO ATIVO)
             const corpoResumoCozinha = document.getElementById('corpo-resumo-cozinha');
             if (corpoResumoCozinha) {
@@ -5417,6 +5452,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (telaProdutosPeriodo && telaProdutosPeriodo.classList.contains('active')) {
                 renderizarProdutosPorPeriodo();
             }
+
+            });
         }
 
         function atualizarFiltrosGestao() {
