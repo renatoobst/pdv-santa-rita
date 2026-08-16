@@ -4881,6 +4881,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             p.veioDePausa = true;
             if (!p.horaEntradaCozinha) p.horaEntradaCozinha = horaAtual;
             p.atualizadoEm = Date.now();
+            // Mesmo motivo de chamarNoPainel/finalizarEntrega: expira a
+            // marca de reabertura deliberada assim que outro fluxo normal
+            // mexe no pedido (ex: reabriu com itens "mais_tarde" e depois
+            // mandou pra produção por aqui).
+            p.reaberturaEm = undefined;
 
             salvarNoBancoLocal();
             atualizarTelas(); 
@@ -5068,6 +5073,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             p.statusPainel = 'cancelado';
             p.motivoCancelamento = motivo;
             p.atualizadoEm = Date.now();
+            // Mesmo motivo de chamarNoPainel/finalizarEntrega/moverParaAgora.
+            p.reaberturaEm = undefined;
             return catalogoAlteradoPorEstoque;
         }
 

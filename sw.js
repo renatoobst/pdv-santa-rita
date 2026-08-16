@@ -3,7 +3,7 @@
 // verdade (pedidos, estoque, caixa) continuam vindo do Supabase em tempo
 // real — isso aqui nunca intercepta chamadas pro Supabase, só evita a tela
 // branca quando o dispositivo perde conexão.
-const CACHE_SHELL = 'pdv-shell-v3';
+const CACHE_SHELL = 'pdv-shell-v4';
 
 const ARQUIVOS_SHELL = [
     './',
