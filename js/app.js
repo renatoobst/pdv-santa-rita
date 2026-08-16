@@ -1372,7 +1372,16 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     exibirAviso(`🖨️ Impressão enviada para ${dispositivosImpressoraOnline[destino].usuarioNome}.`);
                     return;
                 }
-                exibirAviso('⚠️ Impressora de rede escolhida não está disponível agora. Imprimindo aqui mesmo.');
+                // BUG REAL encontrado e corrigido: esse aviso é um modal
+                // BLOQUEANTE (precisa clicar "OK" pra sumir) — disparava em
+                // TODA impressão sempre que o destino salvo não batia com
+                // nenhum aparelho online agora (ex: depois da mudança na
+                // chave de identificação de aparelho, todo destino salvo
+                // antes ficou "órfão" e nunca mais bate). Resultado: parou
+                // de imprimir direto, virou "clica OK toda vez pra
+                // imprimir" — inaceitável no meio do movimento. Segue
+                // direto pra impressão local, sem interromper; só loga.
+                console.warn('Impressora de rede escolhida não está disponível agora — imprimindo localmente.');
             }
             window.print();
         }
