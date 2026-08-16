@@ -1838,6 +1838,56 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
         // Balcão — mais rápido que ir em Configurações pra ligar/desligar no
         // meio do corre. Sincroniza com todos os dispositivos (é
         // configPadroes) igual o toggle de Separar Balcão Doces.
+        // Abre a TV Senha (tela-tv) numa janela separada — até agora a
+        // única forma de fazer isso era digitar a URL com ?abrirTela=tela-tv
+        // na mão. Se o navegador suportar a Window Management API (Chrome/
+        // Edge desktop — a maioria dos tablets não suporta, e tudo bem,
+        // cai pro comportamento simples de sempre) e houver mais de um
+        // monitor conectado, deixa escolher em qual monitor a janela abre.
+        let telasDisponiveisParaEscolhaMonitor = [];
+        let urlTVParaAbrirEmMonitor = '';
+
+        function abrirJanelaTVSimples() {
+            const urlTV = `${location.origin}${location.pathname}?abrirTela=tela-tv`;
+            window.open(urlTV, 'pdv-tv-senha', 'width=1280,height=800');
+        }
+
+        async function abrirTVEmMonitor() {
+            if (typeof window.getScreenDetails !== 'function') { abrirJanelaTVSimples(); return; }
+            try {
+                const detalhes = await window.getScreenDetails();
+                const telas = detalhes.screens || [];
+                if (telas.length <= 1) { abrirJanelaTVSimples(); return; }
+
+                telasDisponiveisParaEscolhaMonitor = telas;
+                urlTVParaAbrirEmMonitor = `${location.origin}${location.pathname}?abrirTela=tela-tv`;
+                const corpo = document.getElementById('lista-escolha-monitor');
+                if (!corpo) { abrirJanelaTVSimples(); return; }
+                corpo.innerHTML = telas.map((tela, i) => `
+                    <button type="button" class="btn btn-primary" style="width:100%; margin-bottom:8px; text-align:left;" onclick="abrirTVNoMonitorEscolhido(${i})">
+                        🖥️ Monitor ${i + 1}${tela.isPrimary ? ' (principal)' : ''} — ${tela.width}×${tela.height}
+                    </button>
+                `).join('');
+                document.getElementById('modal-escolha-monitor').style.display = 'flex';
+            } catch (erro) {
+                // Permissão negada ou API bloqueada nesta janela — abre do
+                // jeito simples mesmo, sem travar o operador numa tela vazia.
+                abrirJanelaTVSimples();
+            }
+        }
+
+        function abrirTVNoMonitorEscolhido(indice) {
+            const tela = telasDisponiveisParaEscolhaMonitor[indice];
+            fecharModalEscolhaMonitor();
+            if (!tela) { abrirJanelaTVSimples(); return; }
+            const features = `left=${tela.left},top=${tela.top},width=${tela.width},height=${tela.height}`;
+            window.open(urlTVParaAbrirEmMonitor, 'pdv-tv-senha', features);
+        }
+
+        function fecharModalEscolhaMonitor() {
+            document.getElementById('modal-escolha-monitor').style.display = 'none';
+        }
+
         function alternarChamarAtivo(qual) {
             const chave = qual === 'balcaoDoces' ? 'chamarAtivoBalcaoDoces' : 'chamarAtivoBalcao01';
             const novoValor = !(configPadroes[chave] !== false);
@@ -7444,6 +7494,9 @@ window.gerarPDFProdutosPeriodo = gerarPDFProdutosPeriodo;
 window.renderizarMargemLucro = renderizarMargemLucro;
 window.gerarPDFMargemLucro = gerarPDFMargemLucro;
 window.carregarLogsSistema = carregarLogsSistema;
+window.abrirTVEmMonitor = abrirTVEmMonitor;
+window.abrirTVNoMonitorEscolhido = abrirTVNoMonitorEscolhido;
+window.fecharModalEscolhaMonitor = fecharModalEscolhaMonitor;
 
 // PWA: registra o service worker (sw.js) só cuida do "shell" do app pra ele
 // abrir mesmo sem internet — os dados de verdade continuam vindo do

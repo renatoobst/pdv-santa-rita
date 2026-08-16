@@ -52,6 +52,15 @@
         </div>
     </div>
 
+    <div id="modal-escolha-monitor" class="modal-geral">
+        <div class="modal-content" style="text-align:center; width:380px; max-width:95%;">
+            <h3 style="margin-top:0; color:#0891b2;">🖥️ Escolher Monitor pra TV Senha</h3>
+            <p style="color:#6b7280; font-size:0.85rem; margin-bottom:14px;">Mais de um monitor foi detectado. Escolha em qual a Tela de Senha vai abrir.</p>
+            <div id="lista-escolha-monitor"></div>
+            <button class="btn btn-neutro" style="width:100%; margin-top:6px;" onclick="fecharModalEscolhaMonitor()">Cancelar</button>
+        </div>
+    </div>
+
     <div id="modal-pix-qrcode" class="modal-geral">
         <div class="modal-content" style="text-align:center; width:380px; max-width:95%;">
             <h3 style="margin-top:0; color:#0d9488;">📱 Pix — QR Code</h3>
@@ -624,6 +633,7 @@
                         <span class="txt-volume-anuncio">100%</span>
                     </div>
                     <button class="btn" style="background:#16a34a; color:white;" onclick="abrirModalPedidosEntregues()" title="Ver todos os pedidos já entregues">✅ Pedidos Já Entregues</button>
+                    <button class="btn" style="background:#0891b2; color:white;" onclick="abrirTVEmMonitor()" title="Abre a Tela de Senha (TV) numa janela separada — se o navegador suportar, deixa escolher em qual monitor">🖥️ Abrir TV Senha</button>
                     <div class="controle-zoom-tela">
                         <button onclick="ajustarZoomTela('conteudo-zoom-entrega', -10)">➖</button>
                         <span id="txt-zoom-conteudo-zoom-entrega">100%</span>
