@@ -4990,6 +4990,23 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             }
             p.statusPainel = 'pronto';
             p.atualizadoEm = Date.now();
+            // BUG REAL encontrado e corrigido: reaberturaEm nunca era
+            // limpo depois de setado (editarPedido/finalizarPedido só o
+            // GRAVA, chamarNoPainel/finalizarEntrega mutam o pedido "in
+            // place" e não tinham motivo pra mexer nele). Resultado:
+            // depois de QUALQUER reabertura, esse pedido ficava com a
+            // proteção contra clique fantasma DESLIGADA pro resto da vida
+            // dele — mesclarPorIdComColisao só pula pro "vence quem tem
+            // peso maior, sempre" quando o lado com peso menor NÃO tem
+            // reaberturaEm; com a marca presa pra sempre, toda mescla
+            // futura desse pedido caía no fallback por timestamp, e
+            // qualquer clique fantasma novo (mesmo sem nenhuma reabertura
+            // de verdade acontecendo agora) voltava a vencer por ter
+            // carimbo mais novo. reaberturaEm marca "este pedido está NO
+            // MEIO de uma reabertura deliberada agora" — uma vez que o
+            // fluxo normal retoma (chamar painel de novo), essa marca
+            // expira.
+            p.reaberturaEm = undefined;
             dispararAvisoSonoro(rotuloPedido(p), p.cliente);
             salvarNoBancoLocal();
             atualizarTelas();
@@ -5009,6 +5026,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             p.statusPainel = 'entregue';
             p.horaEntrega = horaAtual;
             p.atualizadoEm = Date.now();
+            // Mesmo motivo de chamarNoPainel — ver comentário lá: expira a
+            // marca de reabertura deliberada assim que o fluxo normal
+            // retoma, senão a proteção contra clique fantasma fica
+            // desligada pra sempre nesse pedido depois da 1ª reabertura.
+            p.reaberturaEm = undefined;
 
             salvarNoBancoLocal();
             atualizarTelas(); 
