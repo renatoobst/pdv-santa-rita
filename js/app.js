@@ -388,17 +388,33 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (atualizarUI && calcularAssinaturaEstadoParaTela() !== assinaturaAntes) {
                 requestAnimationFrame(() => {
                     try {
+                        // Cozinha/Balcão/Doces/Agenda/TV (dentro de
+                        // atualizarTelas) e o badge de caixa continuam
+                        // SEMPRE atualizados, em qualquer tela — são os que
+                        // precisam estar sempre certos, mesmo numa tela que
+                        // não é a deles (badge de contagem, TV vista de
+                        // longe). O resto (cardápio, tabela de produtos,
+                        // Gestão, histórico de caixa, atalhos) só importa
+                        // pra quem está OLHANDO aquela tela agora — e
+                        // mudarAba já força atualização na hora que o
+                        // usuário entra nela (mesmo padrão já usado aqui
+                        // embaixo pro modal de config e pro Dashboard).
+                        // Reconstruir isso tudo em todo aparelho a cada
+                        // mudança de QUALQUER outro aparelho, mesmo parado
+                        // numa tela sem nada a ver, era trabalho puro
+                        // jogado fora — e pesado (cardápio e tabela de
+                        // produtos têm foto).
                         atualizarInterfaceCaixa();
-                        renderizarMenu(categoriaFiltroAtual);
-                        renderizarTabelaProdutos();
                         atualizarTelas();
-                        atualizarFiltrosGestao();
-                        renderizarHistoricoCaixas();
-                        renderizarPainelAtalhos();
+                        const tela = telaAtual();
+                        if (tela === 'tela-pedido') renderizarMenu(categoriaFiltroAtual);
+                        if (tela === 'tela-produtos') renderizarTabelaProdutos();
+                        if (tela === 'tela-gestao') atualizarFiltrosGestao();
+                        if (tela === 'tela-fechamento-caixa' || tela === 'tela-produtos-periodo') renderizarHistoricoCaixas();
+                        if (tela === 'tela-atalhos') renderizarPainelAtalhos();
                         const modalConfig = document.getElementById('modal-config-pedido');
                         if (modalConfig && modalConfig.style.display === 'flex') carregarFormularioConfiguracoes();
-                        const relatorio = document.getElementById('tela-relatorio');
-                        if (relatorio && relatorio.classList.contains('active')) atualizarDashboard();
+                        if (tela === 'tela-relatorio') atualizarDashboard();
                     } catch (erro) {
                         console.error('Falha ao repintar a tela após aplicar estado remoto:', erro);
                     }
