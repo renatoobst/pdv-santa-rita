@@ -5329,6 +5329,11 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             // Só usado quando configPadroes.separarBalcaoDoces está ligado —
             // ver bloco do Balcão logo abaixo.
             let resumoBalcaoDoces = {};
+            // Itens auxiliares (pedido misto — ver modoAuxiliar) somados
+            // à parte de resumoBalcaoDoces, pra não contar a mesma unidade
+            // duas vezes no "Total" do resumo (ela já está em
+            // resumoBalcaoCozinha, já que o pedido misto inteiro conta lá).
+            let resumoBalcaoDocesAuxiliar = {};
 
             // BUG REAL encontrado e corrigido: este loop lia pedidosGerais
             // inteiro, sem filtrar por caixa aberto. Presumia que todo
@@ -5500,7 +5505,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                         const itensSoLeituraAuxiliar = iAgoraPendentes.map(item => {
                             if (item.isCombo) {
                                 return (item.itensComboEscolhidos || []).filter(sub => !sub.cozinha).map(sub => {
-                                    resumoBalcaoDoces[sub.nome] = (resumoBalcaoDoces[sub.nome] || 0) + 1;
+                                    resumoBalcaoDocesAuxiliar[sub.nome] = (resumoBalcaoDocesAuxiliar[sub.nome] || 0) + 1;
                                     return `
                                     <div style="border-bottom:1px dashed #fca5a5; padding:6px 0;">
                                         <b>1x ${sub.nome}</b> <small style="color:gray;">(Do ${item.nome})</small>${item.obs ? `<br><i style="color:#dc2626;font-size:0.8rem;">Obs: ${item.obs}</i>` : ''}
@@ -5509,7 +5514,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                                 }).join('');
                             }
                             if (item.cozinha) return '';
-                            resumoBalcaoDoces[item.nome] = (resumoBalcaoDoces[item.nome] || 0) + item.qtd;
+                            resumoBalcaoDocesAuxiliar[item.nome] = (resumoBalcaoDocesAuxiliar[item.nome] || 0) + item.qtd;
                             return `
                                 <div style="border-bottom:1px dashed #fca5a5; padding:6px 0;">
                                     <b>${item.qtd}x ${item.nome}</b>${item.obs ? `<br><i style="color:#dc2626;font-size:0.8rem;">Obs: ${item.obs}</i>` : ''}
@@ -5721,26 +5726,57 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 }
             }
 
-            // MONTA A SIDEBAR DO BALCÃO 02 (DOCES) — mais simples que a do
-            // Balcão 01 (não tem "ficha" separado, só quantidade ativa
-            // mesmo), ajuda quem está lá a saber o que já pode levar pro
-            // Balcão 01 se precisar.
+            // MONTA A SIDEBAR DO BALCÃO 02 (DOCES) — mostra Balcão 1, Balcão
+            // 02 e a soma dos dois, item por item. "Balcão 1" aqui é
+            // resumoBalcaoCozinha (já inclui os itens de balcão de pedido
+            // MISTO, já que o pedido inteiro conta lá quando fica
+            // funcional no 01). "Balcão 02" é o que é funcional lá (pedido
+            // só-doce) MAIS o que é só referência auxiliar (pedido misto).
+            // "Total" NÃO soma os dois direto — isso duplicaria a
+            // quantidade auxiliar (ela já está contada dentro de "Balcão
+            // 1"); total = funcional do 01 + funcional do 02, sem a parte
+            // auxiliar (que é só uma cópia de referência, não uma unidade
+            // extra de verdade).
             const corpoResumoBalcaoDoces = document.getElementById('corpo-resumo-balcao-doces');
             if (corpoResumoBalcaoDoces) {
-                const nomesDoces = Object.keys(resumoBalcaoDoces);
-                if (nomesDoces.length === 0) {
+                const todosNomes = new Set([
+                    ...Object.keys(resumoBalcaoCozinha),
+                    ...Object.keys(resumoBalcaoDoces),
+                    ...Object.keys(resumoBalcaoDocesAuxiliar)
+                ]);
+                if (todosNomes.size === 0) {
                     corpoResumoBalcaoDoces.innerHTML = '<p style="color:gray; font-size:0.8rem;">Nenhum item ativo.</p>';
                 } else {
+                    const linhas = Array.from(todosNomes).map(nome => {
+                        const qtdBalcao1 = resumoBalcaoCozinha[nome] || 0;
+                        const qtdBalcao2Funcional = resumoBalcaoDoces[nome] || 0;
+                        const qtdBalcao2Auxiliar = resumoBalcaoDocesAuxiliar[nome] || 0;
+                        const qtdBalcao2 = qtdBalcao2Funcional + qtdBalcao2Auxiliar;
+                        const total = qtdBalcao1 + qtdBalcao2Funcional;
+                        return { nome, qtdBalcao1, qtdBalcao2, total };
+                    }).filter(l => l.total > 0 || l.qtdBalcao2 > 0);
+
+                    linhas.sort((a, b) => b.total - a.total);
+
                     let htmlTabelaDoces = `
                         <table class="tabela-resumo-canto">
-                            <thead><tr><th style="text-align:left;">Item / Produto</th><th>qtd</th></tr></thead>
+                            <thead>
+                                <tr>
+                                    <th style="text-align:left;">Item / Produto</th>
+                                    <th title="Quantidade em pedidos funcionais no Balcão 01 (inclui a parte de balcão de pedido misto)">Balcão 1</th>
+                                    <th title="Quantidade relevante ao Balcão 02 — inclui pedido só-doce e a referência auxiliar de pedido misto">Balcão 2</th>
+                                    <th title="Soma real, sem contar duas vezes a referência auxiliar">total</th>
+                                </tr>
+                            </thead>
                             <tbody>
                     `;
-                    nomesDoces.sort((a, b) => resumoBalcaoDoces[b] - resumoBalcaoDoces[a]).forEach(nome => {
+                    linhas.forEach(l => {
                         htmlTabelaDoces += `
                             <tr>
-                                <td><b>${nome}</b></td>
-                                <td style="text-align:center; font-weight:900; background:#dcfce7; color:#15803d;">${resumoBalcaoDoces[nome]}</td>
+                                <td><b>${l.nome}</b></td>
+                                <td style="text-align:center; font-weight:bold; color:#1e40af;">${l.qtdBalcao1 || '-'}</td>
+                                <td style="text-align:center; font-weight:bold; color:#dc2626;">${l.qtdBalcao2 || '-'}</td>
+                                <td style="text-align:center; font-weight:900; background:#dcfce7; color:#15803d;">${l.total}</td>
                             </tr>
                         `;
                     });
