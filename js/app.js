@@ -159,6 +159,13 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             // mudar o comportamento de quem já usa, mas pode incomodar em
             // evento com muito pedido "só doce/bebida" seguido.
             avisarBalcaoDoces: true,
+            // Ligado = pedido sem item de cozinha aparece NOS DOIS: normal
+            // (funcional) no Balcão 01, e também no Balcão 02 — mas lá só
+            // como referência visual (vermelho, sem botão de Chamar/
+            // Entregar), pra ajudar a equipe do Balcão 02 a ver o que falta
+            // entregar sem duplicar quem realmente controla o pedido — ver
+            // atualizarTelas(). Só faz efeito com separarBalcaoDoces ligado.
+            balcaoDocesModoAuxiliar: false,
             // Desligado = pula direto pro botão "Entregue" (sem tocar som/
             // exigir "Chamar Painel" antes) — ver atualizarTelas().
             chamarAtivoBalcao01: true,
@@ -1570,6 +1577,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             if (chkBalcaoDoces) chkBalcaoDoces.checked = !!configPadroes.separarBalcaoDoces;
             const chkAvisarBalcaoDoces = document.getElementById('cfg-avisar-balcao-doces');
             if (chkAvisarBalcaoDoces) chkAvisarBalcaoDoces.checked = configPadroes.avisarBalcaoDoces !== false;
+            const chkBalcaoDocesAuxiliar = document.getElementById('cfg-balcao-doces-modo-auxiliar');
+            if (chkBalcaoDocesAuxiliar) chkBalcaoDocesAuxiliar.checked = !!configPadroes.balcaoDocesModoAuxiliar;
 
             const chkChamarBalcao01 = document.getElementById('cfg-chamar-ativo-balcao01');
             if (chkChamarBalcao01) chkChamarBalcao01.checked = configPadroes.chamarAtivoBalcao01 !== false;
@@ -1817,6 +1826,12 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 tipoRetiradaGlobal: document.getElementById('cfg-padrao-tipo-retirada-global').value,
                 separarBalcaoDoces: document.getElementById('cfg-separar-balcao-doces').checked,
                 avisarBalcaoDoces: document.getElementById('cfg-avisar-balcao-doces').checked,
+                // Campo novo — se algum aparelho ainda estiver com o
+                // index.html antigo em cache (sem esse checkbox) mas já com
+                // este app.js novo, o elemento não existe e .checked
+                // quebraria a função inteira. Cai pro valor já salvo em vez
+                // de travar salvarConfiguracoesPadrao() pra QUALQUER config.
+                balcaoDocesModoAuxiliar: document.getElementById('cfg-balcao-doces-modo-auxiliar')?.checked ?? configPadroes.balcaoDocesModoAuxiliar,
                 chamarAtivoBalcao01: document.getElementById('cfg-chamar-ativo-balcao01').checked,
                 chamarAtivoBalcaoDoces: document.getElementById('cfg-chamar-ativo-balcao-doces').checked,
                 pixChave: document.getElementById('cfg-pix-chave').value.trim(),
@@ -4649,7 +4664,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             salvarNoBancoLocal();
 
             if (pedidoEmEdicaoId === null && configPadroes.separarBalcaoDoces && configPadroes.avisarBalcaoDoces !== false && !pedidoTemAlgoDeCozinha(novoPedido.itens)) {
-                exibirAviso(`Pedido #${rotuloPedido(novoPedido)} não tem nada de cozinha — foi direcionado pro Balcão 02 (Doces).`, '🍬 Balcão 02 (Doces)');
+                const mensagemBalcaoDoces = configPadroes.balcaoDocesModoAuxiliar
+                    ? `Pedido #${rotuloPedido(novoPedido)} não tem nada de cozinha — segue normal no Balcão 01, e também aparece como referência (vermelho) no Balcão 02.`
+                    : `Pedido #${rotuloPedido(novoPedido)} não tem nada de cozinha — foi direcionado pro Balcão 02 (Doces).`;
+                exibirAviso(mensagemBalcaoDoces, '🍬 Balcão 02 (Doces)');
             }
 
             limparCarrinho();
@@ -5384,9 +5402,18 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     // sem NADA de cozinha vai pro Balcão 02 (Doces) em vez do
                     // Balcão 01. Desligado = tudo cai no Balcão 01, como
                     // sempre foi (ver pedidoTemAlgoDeCozinha acima).
-                    const vaiPraBalcaoDoces = configPadroes.separarBalcaoDoces && !pedidoTemAlgoDeCozinha(iAgoraPendentes);
+                    const semNadaDeCozinha = !pedidoTemAlgoDeCozinha(iAgoraPendentes);
+                    // Modo auxiliar (balcaoDocesModoAuxiliar): o Balcão 02
+                    // deixa de ser exclusivo — o pedido sem cozinha continua
+                    // 100% funcional (Chamar/Entregar) no Balcão 01, e ganha
+                    // SÓ um card extra, vermelho e sem botão nenhum, no
+                    // Balcão 02 — pedida pelo usuário pra ajudar a equipe do
+                    // 02 a ver o que falta entregar sem duplicar controle.
+                    const modoAuxiliar = configPadroes.separarBalcaoDoces && configPadroes.balcaoDocesModoAuxiliar && semNadaDeCozinha;
+                    const vaiPraBalcaoDoces = configPadroes.separarBalcaoDoces && semNadaDeCozinha && !modoAuxiliar;
                     const resumoAlvo = vaiPraBalcaoDoces ? resumoBalcaoDoces : resumoBalcaoCozinha;
                     if (vaiPraBalcaoDoces) countBalcDoces++; else countBalc++;
+                    if (modoAuxiliar) countBalcDoces++; // conta o card extra (só referência) no 02
 
                     // "Chamar" desligado (Configurações) = pula direto pro
                     // botão de entregar, sem tocar som nem exigir o passo de
@@ -5455,6 +5482,34 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                         <div class="lista-itens" style="margin-top:0;">${itensDetalhadosBalcao}</div>
                         ${btn}</div>`;
                     if (vaiPraBalcaoDoces) htmlBalcaoDoces += cardHtmlBalcao; else htmlBalcao += cardHtmlBalcao;
+
+                    if (modoAuxiliar) {
+                        // Card só de referência — SEM onclick nenhum (nem
+                        // Chamar/Entregar, nem Trocar sabor), pra deixar bem
+                        // claro que quem controla o pedido é o Balcão 01;
+                        // aqui é só pra facilitar separar o que falta.
+                        const itensSoLeituraAuxiliar = iAgoraPendentes.map(item => {
+                            if (item.isCombo) {
+                                return item.itensComboEscolhidos.map(sub => `
+                                    <div style="border-bottom:1px dashed #fca5a5; padding:6px 0;">
+                                        <b>1x ${sub.nome}</b> <small style="color:gray;">(Do ${item.nome})</small>${item.obs ? `<br><i style="color:#dc2626;font-size:0.8rem;">Obs: ${item.obs}</i>` : ''}
+                                    </div>
+                                `).join('');
+                            }
+                            return `
+                                <div style="border-bottom:1px dashed #fca5a5; padding:6px 0;">
+                                    <b>${item.qtd}x ${item.nome}</b>${item.obs ? `<br><i style="color:#dc2626;font-size:0.8rem;">Obs: ${item.obs}</i>` : ''}
+                                </div>
+                            `;
+                        }).join('');
+                        htmlBalcaoDoces += `
+                            <div class="card-pedido" style="background:#fef2f2; border-color:#fecaca;"><div class="status-bar" style="background:#dc2626;"></div>
+                            <div style="display:flex; justify-content:space-between;"><h3 style="color:#991b1b;">#${rotuloPedido(p)} - ${p.cliente}</h3><span>Entrada: ${p.hora}</span></div>
+                            <div style="font-size: 0.85rem; font-weight: bold; color: var(--primary); margin-top: -5px; margin-bottom: 5px;">[ ${p.tipoAtendimento || 'Levar (Viagem)'} ]</div>
+                            <div class="lista-itens" style="margin-top:0;">${itensSoLeituraAuxiliar}</div>
+                            <p style="text-align:center; font-size:0.75rem; color:#991b1b; font-weight:bold; margin:6px 0 0;">🔴 Só referência — controle no Balcão 01</p>
+                            </div>`;
+                    }
                 }
 
                 if(iDepois.length > 0) {
@@ -5586,7 +5641,10 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 const entreguesBalcao01 = [], entreguesBalcaoDoces = [];
                 pedidosAbertosAgora.forEach(p => {
                     if (p.statusPainel !== 'entregue') return;
-                    const vaiPraDoces = configPadroes.separarBalcaoDoces && !pedidoTemAlgoDeCozinha(p.itens);
+                    // No modo auxiliar quem entrega de verdade é o Balcão
+                    // 01 (o card do 02 nem tem botão de entregar) — conta
+                    // pro tempo médio dele, não do 02.
+                    const vaiPraDoces = configPadroes.separarBalcaoDoces && !configPadroes.balcaoDocesModoAuxiliar && !pedidoTemAlgoDeCozinha(p.itens);
                     (vaiPraDoces ? entreguesBalcaoDoces : entreguesBalcao01).push(p);
                 });
                 if (elTempoBalcao01) elTempoBalcao01.innerText = formatarTempoMedioEntrega(entreguesBalcao01);

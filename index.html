@@ -1262,6 +1262,11 @@
                     Avisar (pop-up) quando um pedido for direcionado pro Balcão 02
                 </label>
                 <p style="font-size: 0.78rem; color: #6b7280; margin: 6px 0 0 24px;">Desligado = o pedido continua indo pro Balcão 02 normalmente, só não aparece mais o aviso na tela a cada vez.</p>
+                <label class="item-checkbox-ingrediente" style="margin-top: 10px;">
+                    <input type="checkbox" id="cfg-balcao-doces-modo-auxiliar" onchange="salvarConfiguracoesPadrao()">
+                    Balcão 02 como auxiliar (não substitui o Balcão 01)
+                </label>
+                <p style="font-size: 0.78rem; color: #6b7280; margin: 6px 0 0 24px;">Ligado = o pedido sem item de cozinha aparece NOS DOIS: normal (com Chamar/Entregar) no Balcão 01, e também no Balcão 02 — mas lá em vermelho, sem botão nenhum, só pra ajudar a equipe do Balcão 02 a ver o que falta entregar. Quem chama/entrega continua sendo o Balcão 01. Desligado = como sempre foi: o pedido some do Balcão 01 e vai só pro Balcão 02, funcional lá.</p>
             </div>
 
             <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); max-width: 700px; margin-top: 20px;">
