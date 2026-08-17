@@ -5403,14 +5403,21 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     // Balcão 01. Desligado = tudo cai no Balcão 01, como
                     // sempre foi (ver pedidoTemAlgoDeCozinha acima).
                     const semNadaDeCozinha = !pedidoTemAlgoDeCozinha(iAgoraPendentes);
-                    // Modo auxiliar (balcaoDocesModoAuxiliar): o Balcão 02
-                    // deixa de ser exclusivo — o pedido sem cozinha continua
-                    // 100% funcional (Chamar/Entregar) no Balcão 01, e ganha
-                    // SÓ um card extra, vermelho e sem botão nenhum, no
-                    // Balcão 02 — pedida pelo usuário pra ajudar a equipe do
-                    // 02 a ver o que falta entregar sem duplicar controle.
-                    const modoAuxiliar = configPadroes.separarBalcaoDoces && configPadroes.balcaoDocesModoAuxiliar && semNadaDeCozinha;
-                    const vaiPraBalcaoDoces = configPadroes.separarBalcaoDoces && semNadaDeCozinha && !modoAuxiliar;
+                    const vaiPraBalcaoDoces = configPadroes.separarBalcaoDoces && semNadaDeCozinha;
+                    // Modo auxiliar (balcaoDocesModoAuxiliar): NÃO é sobre
+                    // pedido só-doce (esse já vai inteiro pro Balcão 02
+                    // acima, sem mudança nenhuma) — é sobre pedido MISTO
+                    // (tem lanche/cozinha JUNTO com doce/bebida). Esse
+                    // continua 100% funcional só no Balcão 01 (quem tem
+                    // item de cozinha nunca sai de lá), mas ganha um card
+                    // EXTRA no Balcão 02 — vermelho, sem botão, só com os
+                    // itens que NÃO são de cozinha desse pedido — pra
+                    // equipe do 02 já separar/preparar sem esperar o
+                    // pedido inteiro terminar na cozinha.
+                    const temAlgoDeBalcao = iAgoraPendentes.some(item => item.isCombo
+                        ? (item.itensComboEscolhidos || []).some(sub => !sub.cozinha)
+                        : !item.cozinha);
+                    const modoAuxiliar = configPadroes.separarBalcaoDoces && configPadroes.balcaoDocesModoAuxiliar && !semNadaDeCozinha && temAlgoDeBalcao;
                     const resumoAlvo = vaiPraBalcaoDoces ? resumoBalcaoDoces : resumoBalcaoCozinha;
                     if (vaiPraBalcaoDoces) countBalcDoces++; else countBalc++;
                     if (modoAuxiliar) countBalcDoces++; // conta o card extra (só referência) no 02
@@ -5486,16 +5493,23 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                     if (modoAuxiliar) {
                         // Card só de referência — SEM onclick nenhum (nem
                         // Chamar/Entregar, nem Trocar sabor), pra deixar bem
-                        // claro que quem controla o pedido é o Balcão 01;
-                        // aqui é só pra facilitar separar o que falta.
+                        // claro que quem controla o pedido é o Balcão 01.
+                        // Só os itens/sub-itens de combo que NÃO precisam de
+                        // cozinha entram aqui — os de cozinha desse mesmo
+                        // pedido não aparecem, não é problema do Balcão 02.
                         const itensSoLeituraAuxiliar = iAgoraPendentes.map(item => {
                             if (item.isCombo) {
-                                return item.itensComboEscolhidos.map(sub => `
+                                return (item.itensComboEscolhidos || []).filter(sub => !sub.cozinha).map(sub => {
+                                    resumoBalcaoDoces[sub.nome] = (resumoBalcaoDoces[sub.nome] || 0) + 1;
+                                    return `
                                     <div style="border-bottom:1px dashed #fca5a5; padding:6px 0;">
                                         <b>1x ${sub.nome}</b> <small style="color:gray;">(Do ${item.nome})</small>${item.obs ? `<br><i style="color:#dc2626;font-size:0.8rem;">Obs: ${item.obs}</i>` : ''}
                                     </div>
-                                `).join('');
+                                `;
+                                }).join('');
                             }
+                            if (item.cozinha) return '';
+                            resumoBalcaoDoces[item.nome] = (resumoBalcaoDoces[item.nome] || 0) + item.qtd;
                             return `
                                 <div style="border-bottom:1px dashed #fca5a5; padding:6px 0;">
                                     <b>${item.qtd}x ${item.nome}</b>${item.obs ? `<br><i style="color:#dc2626;font-size:0.8rem;">Obs: ${item.obs}</i>` : ''}
