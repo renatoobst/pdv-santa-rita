@@ -3974,7 +3974,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             boxMisto.style.display = 'none';
 
             const btnQrCodePix = document.getElementById('btn-gerar-qrcode-pix');
-            if (btnQrCodePix) btnQrCodePix.style.display = (forma === 'Pix' || forma === 'Pix Direto') ? 'block' : 'none';
+            if (btnQrCodePix) btnQrCodePix.style.display = (forma === 'Pix Direto') ? 'block' : 'none';
 
             if(forma === 'Dinheiro') {
                 boxDinheiro.style.display = 'block'; 
