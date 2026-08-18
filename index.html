@@ -1305,7 +1305,13 @@
                         <input type="text" id="cfg-pix-cidade" placeholder="Ex: Sao Paulo" maxlength="15" onchange="salvarConfiguracoesPadrao()">
                     </div>
                 </div>
-                <p style="font-size: 0.78rem; color: #6b7280; margin: 4px 0 0;">Nome/cidade sem acento e sem caracteres especiais (regra do Banco Central para o QR Code) — o app ajusta sozinho ao gerar.</p>
+                <div class="row-inputs">
+                    <div style="flex:1;">
+                        <label style="font-size:0.8rem; font-weight:bold;">Identificador (aparece no extrato bancário):</label>
+                        <input type="text" id="cfg-pix-identificador" placeholder="Ex: Venda Hamburguer" maxlength="25" onchange="salvarConfiguracoesPadrao()">
+                    </div>
+                </div>
+                <p style="font-size: 0.78rem; color: #6b7280; margin: 4px 0 0;">Nome/cidade/identificador sem acento e sem caracteres especiais (regra do Banco Central para o QR Code) — o app ajusta sozinho ao gerar.</p>
             </div>
 
             <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); max-width: 700px; margin-top: 20px;">

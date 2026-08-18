@@ -175,6 +175,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             pixChave: '',
             pixNomeRecebedor: '',
             pixCidadeRecebedor: '',
+            pixIdentificador: '',
             // Taxa (%) que a maquininha desconta em cada forma — usado só
             // pra calcular Lucro Real no Dashboard/Fechamento de Caixa (ver
             // calcularCustoProducaoTotal/obterDadosRelatorioCaixa). Pix
@@ -1590,6 +1591,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 inputPixChave.value = configPadroes.pixChave || '';
                 document.getElementById('cfg-pix-nome').value = configPadroes.pixNomeRecebedor || '';
                 document.getElementById('cfg-pix-cidade').value = configPadroes.pixCidadeRecebedor || '';
+                document.getElementById('cfg-pix-identificador').value = configPadroes.pixIdentificador || '';
             }
         }
 
@@ -1805,6 +1807,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             document.getElementById('cfg-pix-chave').value = configPadroes.pixChave || '';
             document.getElementById('cfg-pix-nome').value = configPadroes.pixNomeRecebedor || '';
             document.getElementById('cfg-pix-cidade').value = configPadroes.pixCidadeRecebedor || '';
+            document.getElementById('cfg-pix-identificador').value = configPadroes.pixIdentificador || '';
             document.getElementById('cfg-taxa-credito').value = configPadroes.taxaCredito || 0;
             document.getElementById('cfg-taxa-debito').value = configPadroes.taxaDebito || 0;
             document.getElementById('cfg-taxa-pix').value = configPadroes.taxaPix || 0;
@@ -1837,6 +1840,7 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 pixChave: document.getElementById('cfg-pix-chave').value.trim(),
                 pixNomeRecebedor: document.getElementById('cfg-pix-nome').value.trim(),
                 pixCidadeRecebedor: document.getElementById('cfg-pix-cidade').value.trim(),
+                pixIdentificador: document.getElementById('cfg-pix-identificador').value.trim(),
                 taxaCredito: parseFloat(document.getElementById('cfg-taxa-credito').value) || 0,
                 taxaDebito: parseFloat(document.getElementById('cfg-taxa-debito').value) || 0,
                 taxaPix: parseFloat(document.getElementById('cfg-taxa-pix').value) || 0
@@ -4033,13 +4037,16 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
             return crc.toString(16).toUpperCase().padStart(4, '0');
         }
 
-        function montarPayloadPix({ chave, nome, cidade, valor }) {
+        function montarPayloadPix({ chave, nome, cidade, valor, txid }) {
             const nomeLimpo = removerAcentosPix(nome).toUpperCase().replace(/[^A-Z0-9 ]/g, '').slice(0, 25).trim() || 'RECEBEDOR';
             const cidadeLimpa = removerAcentosPix(cidade).toUpperCase().replace(/[^A-Z0-9 ]/g, '').slice(0, 15).trim() || 'BRASIL';
             const valorStr = Number(valor).toFixed(2);
+            // txid só aceita alfanumérico (sem espaço/acento) — é o que aparece
+            // como identificador do Pix no extrato bancário de quem recebe.
+            const txidLimpo = removerAcentosPix(txid).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 25);
 
             const infoConta = tlvPix('00', 'br.gov.bcb.pix') + tlvPix('01', chave.trim());
-            const dadosAdicionais = tlvPix('05', '***'); // sem txid próprio — "***" é o valor padrão pra Pix estático
+            const dadosAdicionais = tlvPix('05', txidLimpo || '***'); // "***" é o valor padrão pra Pix estático sem txid
 
             let payload = ''
                 + tlvPix('00', '01')
@@ -4068,7 +4075,8 @@ import { resolverSessaoAtiva, usuarioTemAcesso, aplicarPermissoesNaUI, renderiza
                 chave: configPadroes.pixChave,
                 nome: configPadroes.pixNomeRecebedor,
                 cidade: configPadroes.pixCidadeRecebedor,
-                valor: total
+                valor: total,
+                txid: configPadroes.pixIdentificador
             });
 
             document.getElementById('pix-qrcode-valor').innerText = `R$ ${total.toFixed(2)}`;
